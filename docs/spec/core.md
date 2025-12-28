@@ -1,26 +1,34 @@
 # Bestie Core Language Specification
 
 This document defines the **Bestie core language**.
-Everything described here is **first-class**, **always available**, and **guaranteed stable** across Bestie versions.
 
-The core language is intentionally small, explicit, and performance-oriented.
-Higher-level capabilities are layered through `std-lib`, `std-api`, and `std-frameworks`.
+Everything described here is:
+
+* **First-class**
+* **Always available**
+* **Stable by design**
+* **Independent of libraries and frameworks**
+
+The core language is intentionally **explicit**, **performance-oriented**, and **semantically closed**.
+All higher-level capabilities are layered through `std-lib`, `std-api`, and `std-frameworks`.
 
 ---
 
-## 1. Design Principles
+## 1. Core Design Principles
 
-The Bestie core is governed by the following principles:
+The Bestie core is governed by the following non-negotiable principles:
 
-1. **Native performance is non-negotiable**
-2. **Compile-time resolution is preferred whenever possible**
-3. **Safety without unsafe escape hatches**
-4. **Explicit ownership and memory behavior**
-5. **OOP, functional, and low-level constructs coexist**
-6. **Convention over configuration**
-7. **No feature that is “better avoided”**
+1. **Native speed is mandatory**
+2. **Compile-time resolution whenever possible**
+3. **Explicit memory and ownership**
+4. **No garbage collection**
+5. **No hidden allocation**
+6. **No unsafe escape hatches**
+7. **Unified model for system and backend**
+8. **Convention over configuration**
+9. **Professional clarity over cleverness**
 
-If a feature exists in the core, it is expected to be used.
+If a feature exists in the core, it is intended to be used.
 
 ---
 
@@ -37,12 +45,14 @@ Examples:
 int32, int64, float32, bool, str, list, map, threadOS
 ```
 
+---
+
 ### 2.2 User-defined symbols
 
-* Classes, protocols, enums: **PascalCase**
+* Classes, enums, protocols: **PascalCase**
 * Functions, variables, properties: **camelCase**
 
-This follows Java/Kotlin conventions intentionally.
+Java/Kotlin conventions are followed intentionally.
 
 ---
 
@@ -63,13 +73,13 @@ str
 void
 ```
 
-All primitives are:
+Properties:
 
 * Value types
 * Inlined
-* Passed by value unless explicitly addressed
+* Passed by value unless explicitly referenced
 
-`void` is used for functions and methods that return no value.
+`void` is used for functions or methods that return no value.
 
 ---
 
@@ -81,7 +91,11 @@ ptr<T>
 function types
 ```
 
-Tuples are value types and support destructuring.
+Tuples:
+
+* Are value types
+* Support destructuring
+* Are stack-allocated when possible
 
 ---
 
@@ -89,7 +103,7 @@ Tuples are value types and support destructuring.
 
 ### 4.1 Class kinds
 
-Bestie supports the following class declarations:
+Bestie supports:
 
 ```
 data class
@@ -107,7 +121,7 @@ Rules:
 * All classes are **inlined by default**
 * `open class` may be non-inlined if required
 * Single inheritance only
-* Multiple protocol implementation is allowed
+* Multiple protocol implementation allowed
 
 ---
 
@@ -119,17 +133,120 @@ class A impl P1, P2
 class A impl GroupProtocol
 ```
 
+Rules:
+
 * No multiple inheritance
-* No method resolution order (MRO)
-* Conflicts are resolved explicitly, similar to Java 8
+* No MRO
+* Conflicts resolved explicitly (Java 8 style)
 
 ---
 
-## 5. Properties
+## 5. Object Lifecycle
 
-Properties provide structured state access and are compiled into methods.
+### 5.1 Initialization vs Allocation
 
-### 5.1 Basic property
+Bestie separates:
+
+* **Initialization** (value setup)
+* **Allocation** (memory reservation)
+
+There are no implicit constructors.
+
+---
+
+### 5.2 Initialization (`init`)
+
+Initialization functions:
+
+* Are explicit
+* Return `Self`
+* Do not allocate memory
+
+Example:
+
+```
+class User {
+    name: str
+    age: int
+
+    fun init(name: str, age: int): User {
+        this.name = name
+        this.age = age
+        return this
+    }
+}
+```
+
+Rules:
+
+* `init` may be overloaded
+* Compiler enforces full initialization
+* May be `priv`, `pkg`, `pub`
+
+---
+
+### 5.3 Allocation (`new()`)
+
+Allocation is explicit:
+
+```
+own u = User.new()
+```
+
+* Produces `own T`
+* Does not initialize fields
+* Uninitialized access is a compile-time error
+
+---
+
+### 5.4 Combined pattern (canonical)
+
+```
+own u = User.init(name = "Ali", age = 20).new()
+```
+
+Evaluation order:
+
+1. Initialize value
+2. Allocate memory
+3. Transfer ownership
+
+---
+
+## 6. `this` and `super`
+
+### 6.1 `this`
+
+* Refers to the current instance
+* Non-nullable
+* Explicit only
+
+---
+
+### 6.2 `super`
+
+* Explicit access to parent implementation
+* Required for parent initialization
+
+Example:
+
+```
+class User ext Person {
+    fun init(name: str, age: int): User {
+        super.init(name)
+        this.age = age
+        return this
+    }
+}
+```
+
+No implicit constructor chaining exists.
+
+---
+
+## 7. Properties
+
+### 7.1 Basic properties
 
 ```
 class Student {
@@ -137,21 +254,19 @@ class Student {
 }
 ```
 
-Compiles into:
+Compiled as methods:
 
 * `getName(): str`
 * `setName(str): void`
 
 ---
 
-### 5.2 Custom accessors
+### 7.2 Custom accessors
 
 ```
 class Student {
     name: str {
-        get() {
-            return name.firstName + " " + name.lastName
-        }
+        get() { return first + " " + last }
         set
     }
 }
@@ -159,91 +274,92 @@ class Student {
 
 Rules:
 
-* Properties participate in ownership rules
-* Properties may return `ref`, `own`, or value types
-* Properties are resolved at compile time
+* Properties obey ownership rules
+* Properties resolved at compile time
 * No properties in protocols
 
 ---
 
-## 6. Constants
+### 7.3 Property overriding
 
-Bestie does not support `static`.
+Allowed only if:
 
-Constants are declared at the file or package level:
+* Property is `open`
+* Type is identical
+* Ownership qualifier is identical
 
-```
-math.PI
-math.E
-```
-
-Constants are:
-
-* Compile-time resolved
-* Immutable
-* Namespaced by package
+Requires `@override`.
 
 ---
 
-## 7. Functions
+## 8. Inner Classes and Functions
 
-### 7.1 Function forms
+### 8.1 Inner classes
 
-```
-fun f(): int
-fun f(x: int): void
-fun f(x: int) = x + 1
-```
+Inner classes:
 
-Supported features:
+* Are full classes
+* Obey visibility modifiers
+* Are accessed via `Outer.Inner`
+
+Visibility:
+
+* Defaults to `priv` relative to outer class
+* May be declared `pub` or `pkg`
+
+No implicit binding to outer instance.
+
+---
+
+### 8.2 Inner functions
+
+Inner (local) functions:
+
+* Lexically scoped
+* Compile-time resolved
+* Cannot escape their scope
+
+Used for clarity and optimization.
+
+---
+
+## 9. Functions and Methods
+
+### 9.1 Function features
+
+Supported:
 
 * Inline functions
 * Concise bodies
 * Default parameters
+* Named arguments
 * Local functions
-* Multiple return values via tuples
-* `_` for unused parameters
+* Multiple return values (tuples)
 
----
-
-### 7.2 Lambdas
-
-Lambdas are resolved at compile time unless explicitly required otherwise.
+Example:
 
 ```
-val inc = { x: int -> x + 1 }
+fun sum(a: int, b: int = 0): int
 ```
 
 ---
 
-## 8. Control Flow
+### 9.2 Overloading
 
-All control structures are both **statements and expressions**.
+* **Method overloading**: allowed
+* **Function overloading**: allowed with restrictions
 
-```
-if / else
-switch (with pattern matching)
-while
-for
-for (in)
-```
+Rules:
 
-Examples:
-
-```
-val x = if a > b a else b
-val sum = for i = 0; i < 10; i++ i
-```
-
-All branches must be exhaustive.
+* Overloads must differ in arity
+* No ambiguous signatures
+* No implicit conversions
 
 ---
 
-## 9. Data Structures (First-Class Core Types)
+## 10. Data Structures (Core Language)
 
-Data structures are part of the **core language**, not libraries.
-
-### 9.1 Collections
+Data structures are **first-class language constructs**, not libraries.
 
 ```
 list<T>
@@ -253,51 +369,32 @@ deque<T>
 heap<T>
 ```
 
-### 9.2 Representations
-
-Each structure supports compile-time variants:
+Variants are compile-time selectable:
 
 ```
 list.asArray
 list.asMatrix
-list.asLinked
-
 set.asHash
-set.asTree
-set.asLinked
-
-map.asHash
 map.asTree
-map.asLinked
-
-deque.asStack
 deque.asQueue
-
-heap.asMin
-heap.asMax
 ```
 
-Defaults exist for all except `heap`.
-
-### 9.3 Literals and builders
+Literals:
 
 ```
 val l: list<int> = {1, 2, 3}
-val m = map<int, str>.of(1, "a", 2, "b")
 ```
-
-Builders and factories are enforced via protocols.
 
 ---
 
-## 10. Memory Model
+## 11. Memory and Ownership
 
-### 10.1 Core concepts
+Core constructs:
 
 ```
-ptr<T>
-ref
 own
+ref
+ptr<T>
 address()
 deref()
 free()
@@ -307,66 +404,63 @@ freeDeep()
 Rules:
 
 * Pass-by-value by default
-* References are explicit
 * Ownership is explicit
-* No null values
-* Compiler enforces lifetime correctness
+* No null
+* No use-after-free
+* Compiler enforces lifetimes
+
+(Full details in `memory-layout.md`)
 
 ---
 
-## 11. Error Handling
+## 12. Error Handling (Core)
 
-Bestie uses **typed error unions**, inspired by Zig.
-
-```
-fun readFile(path: str): File | IOError
-```
-
-Handling:
+Bestie uses **typed error unions**.
 
 ```
-val f = try readFile("a.txt")
-val f = readFile("a.txt") catch defaultFile
+fun read(): File | IOError
 ```
 
 Rules:
 
 * No exceptions
-* No unchecked errors
 * Errors must be handled or propagated
-* Fully compile-time enforced
+* Compile-time enforced
 
 ---
 
-## 12. Concurrency (Core Primitives)
+## 13. Concurrency (Core)
 
-Concurrency is a **first-class language feature**.
-
-### 12.1 Core primitives
+Concurrency primitives are part of the core language:
 
 ```
 threadOS
 threadLight
+channel<T>
+mutex<T>
+atomic<T>
 ```
 
-* OS threads and lightweight threads
-* CSP-style communication
-* Compile-time resolved where possible
+Rules:
 
-Advanced models live in `std-api`.
+* Ownership-aware
+* No data races
+* Deterministic by construction
+
+(Extended models live in `std-api.extended-concurrency`)
 
 ---
 
-## 13. Generics
+## 14. Generics
 
 * Compile-time only
-* No type erasure
-* No `extends` / `super`
-* Explicit and predictable instantiation
+* No erasure
+* No variance keywords
+* Explicit instantiation
 
 ---
 
-## 14. Modules and Visibility
+## 15. Modules and Visibility
 
 Visibility modifiers:
 
@@ -380,59 +474,69 @@ priv
 Rules:
 
 * `pub` and `protec` require export via `bestie.mod`
-* Package boundaries are strictly enforced
-* Modules are designed for long-term stability
+* Package boundaries are strict
+* No reflective access
 
 ---
 
-## 15. String Literals and Templates
+## 16. Strings and Templates
 
 * Double quotes (`"`) support interpolation
-* Single quotes (`'`) are literal-only
+* Single quotes (`'`) are literal only
 
 ```
-val s = "Hello ${user.name}"
-val t = 'Hello ${user.name}'
+"Hello ${user.name}"
+'Hello ${user.name}'
 ```
 
 ---
 
-## 16. Compile-Time Annotations
+## 17. Compile-Time Annotations
 
-Annotations are resolved at compile time only.
+Annotations:
 
-Example:
+* Are compile-time only
+* Cannot execute code
+* Cannot alter semantics implicitly
+
+Predefined annotations:
 
 ```
 @override
+@inline
+@noinline
+@deprecated
+@experimental
+@pure
 ```
 
 No runtime reflection exists in the core language.
 
 ---
 
-## 17. What the Core Explicitly Excludes
+## 18. Explicit Exclusions
 
 The core language does **not** include:
 
 * Garbage collection
 * Reflection
-* Unsafe blocks
 * Dynamic typing
-* Runtime metaprogramming
+* Unsafe blocks
+* Foreign code integration
 * Dependency injection
-* Framework-level abstractions
+* Framework abstractions
 
-These are layered above the core.
+Foreign interaction is handled **exclusively** by `std-api.foreign`.
 
 ---
 
-## 18. Stability Guarantee
+## 19. Stability Guarantee
 
-Changes to the core language:
+The core language:
 
-* Are rare
-* Require major version increments
-* Preserve source compatibility whenever possible
+* Changes rarely
+* Requires major version bumps
+* Preserves source compatibility whenever possible
 
-The core is designed to be **solid as a rock**.
+The core is designed to be **rock-solid and boring** — by intention.
+
