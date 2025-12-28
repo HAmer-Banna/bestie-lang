@@ -2,397 +2,278 @@
 
 This document defines the **Bestie Standard Library (std-lib)**.
 
-The standard library provides **foundational, portable, and deterministic functionality** built directly on top of the Bestie core language. It is **not a framework**, **not opinionated**, and **not magical**.
+The standard library provides **portable, deterministic, and non–system-dependent functionality** built on top of the Bestie **core language**.
+
+std-lib is intentionally **small**, **stable**, and **non-opinionated**.
+
+---
+
+## 1. Purpose of std-lib
 
 std-lib exists to:
 
-* Enable real-world programs
-* Provide canonical implementations
-* Preserve predictability and performance
-* Avoid fragmentation
+* Provide **canonical algorithms**
+* Offer **pure utility abstractions**
+* Avoid ecosystem fragmentation
+* Remain fully portable across platforms
+* Stay independent of OS, I/O, and runtime concerns
+
+std-lib is **not** a framework and **not** a runtime.
 
 ---
 
-## 1. Design Principles
+## 2. What std-lib Is *Not*
 
-The Bestie standard library follows these principles:
+std-lib explicitly does **not** include:
 
-1. **Explicit over implicit**
-2. **Deterministic behavior**
-3. **No hidden allocation**
-4. **No global mutable state**
-5. **No runtime reflection**
-6. **No dependency injection**
-7. **No background threads**
-8. **No magic defaults**
-
-If a behavior is not visible in the API, it does not happen.
+* Data structures (they are core language constructs)
+* Error handling primitives (core language)
+* Concurrency primitives (core language)
+* I/O, filesystem, or networking (std-api)
+* Dependency injection
+* Logging frameworks
+* Serialization frameworks
+* Reflection or metaprogramming
+* Background services or schedulers
 
 ---
 
-## 2. Scope of std-lib
+## 3. Design Principles
+
+std-lib strictly follows these rules:
+
+1. **Pure by default**
+2. **No hidden allocation**
+3. **No global mutable state**
+4. **Deterministic execution**
+5. **Explicit inputs and outputs**
+6. **No side effects unless clearly stated**
+7. **No OS assumptions**
+
+If behavior is not visible in the API, it does not exist.
+
+---
+
+## 4. Relationship to Core Language
+
+### 4.1 Core Language Responsibilities
+
+The core language provides:
+
+* Primitive and composite types
+* Data structures (`list`, `map`, `set`, etc.)
+* Error handling model (`Result`, pattern matching)
+* Concurrency primitives (`threadOS`, channels, mutexes)
+* Memory and ownership model
+* String type and templates
+
+std-lib **builds on these**, but does not redefine them.
+
+---
+
+### 4.2 std-lib Responsibilities
 
 std-lib provides:
 
-* Core data structures (beyond language primitives)
 * Algorithms
-* Concurrency primitives
-* Time and scheduling
-* I/O foundations
-* OS abstraction
-* Numeric utilities
-* String and text processing
-* Error types and result utilities
-
-std-lib does **not** provide:
-
-* Web frameworks
-* UI frameworks
-* ORM or database layers
-* Serialization frameworks
-* Dependency injection
-* Configuration systems
-* Logging frameworks (only primitives)
-
-These belong to **std-api** or **third-party libraries**.
+* Mathematical utilities
+* Text processing helpers
+* Deterministic helpers
+* Common patterns expressed as pure code
 
 ---
 
-## 3. Namespacing and Structure
+## 5. Namespacing Rules
 
-std-lib is organized into **flat, explicit namespaces**.
-
-Examples:
+std-lib uses **stable, explicit namespaces**:
 
 ```text
-std.lang
-std.collections
-std.concurrent
-std.time
-std.io
-std.fs
-std.net
+std.algorithms
 std.math
 std.text
-std.os
-std.error
+std.util
+std.compare
+std.pattern
 ```
 
 Rules:
 
 * No wildcard imports
 * No implicit re-exports
-* Namespaces are stable across versions
-* Symbols are not aliased implicitly
+* No aliasing of core symbols
+* Namespaces are version-stable
 
 ---
 
-## 4. Language-Level vs Library-Level
-
-Some concepts appear in both **core language** and **std-lib**:
-
-### 4.1 Core Language Provides
-
-* `int32`, `int64`, `float32`, `bool`
-* `str`
-* `list`, `map`, `set`
-* `threadOS`, `mutex`, `channel`
-* `own`, `ref`, `ptr`
-* `Result<T, E>` (type only)
-
-### 4.2 std-lib Provides
-
-* Implementations
-* Algorithms
-* Utilities
-* OS bindings
-* Extended variants
-
-The core defines **what exists**.
-std-lib defines **how it behaves**.
-
----
-
-## 5. Data Structures (std.collections)
-
-std-lib extends core collections with:
-
-* Specialized containers
-* Algorithms
-* Iteration utilities
-
-Examples:
-
-* `list`
-* `map`
-* `set`
-* `queue`
-* `deque`
-* `stack`
-* `ringBuffer`
-
-Rules:
-
-* Collections are **generic**
-* Allocation is explicit
-* Ownership rules are enforced
-* No hidden resizing strategies
-
-Example:
-
-```bestie
-val users = list<own User>.withCapacity(128)
-```
-
----
-
-## 6. Algorithms (std.algorithms)
+## 6. Algorithms (`std.algorithms`)
 
 Algorithms are:
 
-* Free functions
 * Stateless
+* Free functions
+* Generic
 * Deterministic
 
 Examples:
 
 * `sort`
+* `stableSort`
 * `binarySearch`
-* `map`
-* `filter`
-* `reduce`
+* `min`, `max`
+* `clamp`
+* `partition`
+* `fold`
+* `zip`
 
 Rules:
 
-* No allocation unless explicitly requested
-* Stable and unstable variants are distinct
-* Parallel variants require explicit opt-in
-
----
-
-## 7. Error Handling (std.error)
-
-std-lib formalizes error handling without exceptions.
-
-### 7.1 Result Type
-
-```bestie
-Result<T, E>
-```
-
-Properties:
-
-* Value-based
-* No stack unwinding
-* No hidden control flow
-
-Utilities include:
-
-* Mapping
-* Chaining
-* Pattern matching helpers
-
-### 7.2 Error Types
-
-Errors are:
-
-* Plain data
-* Immutable
-* Comparable
-* Serializable
-
-No error carries stack traces by default.
-
----
-
-## 8. Concurrency (std.concurrent)
-
-std-lib builds on core concurrency primitives.
-
-Provides:
-
-* Thread coordination utilities
-* Schedulers
-* Atomic operations
-* Thread-safe collections (explicit)
-
-Rules:
-
-* No green threads
-* No async runtime
-* No hidden thread pools
+* No allocation unless explicitly documented
+* Mutating and non-mutating variants are separate
+* No implicit parallelism
 
 Example:
 
 ```bestie
-val pool = threadPool.withSize(4)
+std.algorithms.sort(list)
 ```
 
-Concurrency is **opt-in and explicit**.
-
 ---
 
-## 9. Time and Scheduling (std.time)
-
-Provides:
-
-* `Instant`
-* `Duration`
-* Monotonic clocks
-* Sleep and timers
-
-Rules:
-
-* No wall-clock assumptions
-* No global time mutation
-* Deterministic APIs
-
----
-
-## 10. I/O Foundations (std.io)
-
-I/O is:
-
-* Blocking by default
-* Explicitly buffered
-* Explicitly flushed
-
-Provides:
-
-* Streams
-* Readers / Writers
-* Byte buffers
-
-No async I/O abstractions are provided here.
-
----
-
-## 11. File System (std.fs)
-
-Provides:
-
-* Files
-* Directories
-* Paths
-* Metadata
-
-Rules:
-
-* No implicit working directory changes
-* Errors are explicit
-* No global filesystem state
-
----
-
-## 12. Networking (std.net)
-
-Provides:
-
-* TCP
-* UDP
-* Sockets
-* Address handling
-
-Rules:
-
-* No HTTP abstraction
-* No TLS abstraction
-* No background event loops
-
-These are built in **std-api** or external libraries.
-
----
-
-## 13. Math and Numerics (std.math)
+## 7. Mathematics (`std.math`)
 
 Provides:
 
 * Mathematical constants
-* Numeric utilities
-* Deterministic algorithms
+* Deterministic numeric algorithms
+* Portable math utilities
 
 Examples:
 
 ```bestie
 math.PI
 math.sqrt(x)
+math.pow(a, b)
 ```
 
-No SIMD auto-vectorization is assumed.
+Rules:
+
+* No platform-specific behavior
+* No floating-point traps
+* No hidden precision changes
 
 ---
 
-## 14. Text and Strings (std.text)
+## 8. Text Utilities (`std.text`)
 
-Provides:
+Provides helpers for working with `str`:
 
-* String manipulation
-* Encoding utilities
-* Parsing helpers
+* Trimming
+* Splitting
+* Searching
+* Formatting helpers
+* Parsing primitives
 
 Rules:
 
 * `str` is UTF-8
 * No implicit encoding conversion
-* Explicit normalization
+* Explicit normalization functions only
+
+Example:
+
+```bestie
+std.text.trim(s)
+std.text.split(s, ",")
+```
 
 ---
 
-## 15. OS Abstraction (std.os)
+## 9. Comparison Utilities (`std.compare`)
 
 Provides:
 
-* Environment variables
-* Process execution
-* Signals
-* Platform detection
+* Total and partial ordering helpers
+* Equality utilities
+* Comparator builders
 
-Rules:
+Used by:
 
-* Thin abstraction
-* No policy
-* No lifecycle management
+* Sorting algorithms
+* Ordered data structures
+* User-defined ordering
 
 ---
 
-## 16. Versioning and Stability
+## 10. Utility Helpers (`std.util`)
 
-std-lib follows semantic versioning **independently**:
+Provides:
+
+* Range helpers
+* Optional helpers (if applicable)
+* Assertions (compile-time and runtime)
+* Deterministic random generators (explicit seed)
+
+Rules:
+
+* No global RNG
+* No hidden entropy sources
+
+---
+
+## 11. Patterns (`std.pattern`)
+
+Provides **pure, language-level representations** of common patterns:
+
+Examples:
+
+* Builder helpers
+* Visitor helpers
+* Strategy helpers
+
+Rules:
+
+* No inheritance hierarchies
+* No frameworks
+* Patterns remain opt-in and explicit
+
+---
+
+## 12. Versioning
+
+std-lib is versioned independently:
 
 ```text
-bestie <lang>.<core>.<std-lib>.<std-api>
+bestie <lang-version>.<core-version>.<std-lib-version>.<std-api-version>
 ```
 
 Rules:
 
-* Breaking changes increment std-lib version
-* APIs are stable within a major version
+* Breaking changes increment std-lib major version
+* Patch versions never change behavior
 * Experimental modules are explicitly marked
 
 ---
 
-## 17. What std-lib Explicitly Rejects
+## 13. Stability Guarantees
 
-std-lib does not include:
+Within a major version:
 
-* Reflection
-* Runtime code generation
-* Dependency injection
-* Global registries
-* Service locators
-* Hidden background services
+* APIs are stable
+* Semantics do not change
+* Performance regressions are treated as bugs
 
 ---
 
-## 18. Summary
+## 14. Summary
 
 The Bestie standard library is:
 
-* Small but complete
-* Explicit and predictable
-* Performance-oriented
-* Safe by construction
-* Free of hidden behavior
+* Small
+* Pure
+* Deterministic
+* Portable
+* Explicit
 
-std-lib is a **toolbox**, not a framework.
-It provides the **minimum necessary power** to build systems cleanly and deliberately.
+std-lib is a **mathematical and algorithmic foundation**, not a runtime.
+
+Everything that touches the OS, I/O, networking, or concurrency coordination belongs elsewhere.
