@@ -429,25 +429,226 @@ Rules:
 
 ---
 
-## 13. Concurrency (Core)
+## 13. Concurrency (Core Language)
 
-Concurrency primitives are part of the core language:
+Concurrency in Bestie is a **core language feature**, but the core provides only the **minimal primitives required to express parallel execution safely**.
+
+The core language does **not** provide:
+
+* Locks
+* Atomics
+* Shared-memory synchronization
+* Schedulers
+* Executors
+* Async/await
+* Futures or promises
+
+All advanced concurrency abstractions are defined in **`std-api.extended-concurrency`**.
+
+---
+
+## 13.1 Core Concurrency Primitives
+
+The core language defines exactly **two execution primitives**:
 
 ```
 threadOS
 threadLight
-channel<T>
-mutex<T>
-atomic<T>
+```
+
+These are **language-level constructs**, not library types.
+
+---
+
+### 13.1.1 `threadOS`
+
+`threadOS` represents a **native operating system thread**.
+
+Characteristics:
+
+* Maps 1:1 to an OS thread
+* Has its own stack
+* Is scheduled by the operating system
+* Has a stable identity
+
+Usage:
+
+```
+threadOS.spawn(fn)
 ```
 
 Rules:
 
-* Ownership-aware
-* No data races
-* Deterministic by construction
+* `threadOS` boundaries are **ownership boundaries**
+* Values passed into a `threadOS` must obey ownership transfer rules
+* No implicit sharing is allowed
 
-(Extended models live in `std-api.extended-concurrency`)
+---
+
+### 13.1.2 `threadLight`
+
+`threadLight` represents a **lightweight user-managed thread**.
+
+Characteristics:
+
+* Scheduled by the Bestie runtime
+* May multiplex over one or more `threadOS`
+* Has explicit yield points
+* No preemption guarantees
+
+Usage:
+
+```
+threadLight.spawn(fn)
+```
+
+Rules:
+
+* `threadLight` execution is deterministic when possible
+* Blocking OS calls are forbidden inside `threadLight`
+* Ownership rules are enforced identically to `threadOS`
+
+---
+
+## 13.2 Ownership as the Concurrency Model
+
+Bestie uses **ownership**, not synchronization, as its primary concurrency safety mechanism.
+
+### 13.2.1 Ownership Transfer
+
+Rules:
+
+* `own T` may be **moved** into a thread
+* After move, the original binding becomes invalid
+* Exactly one owner exists at any time
+
+Example:
+
+```
+own data = Data.init().new()
+
+threadOS.spawn(fn () {
+    consume(data)
+})
+```
+
+This is safe by construction.
+
+---
+
+### 13.2.2 Borrowing (`ref`)
+
+Rules:
+
+* `ref T` cannot cross thread boundaries
+* Borrowed references are **thread-local**
+* The compiler rejects cross-thread `ref` usage
+
+Example (compile-time error):
+
+```
+ref x = data
+threadOS.spawn(fn () {
+    use(x)   // ❌ illegal
+})
+```
+
+---
+
+## 13.3 Functions and Lambdas in Concurrency
+
+### 13.3.1 Function Passing Rules
+
+Functions passed to threads must:
+
+* Have fully resolved types
+* Capture values explicitly
+* Obey ownership rules
+
+There is no implicit capture.
+
+---
+
+### 13.3.2 Lambdas
+
+Lambdas are **explicit capture closures**.
+
+Example:
+
+```
+own v = Value.init().new()
+
+threadOS.spawn(fn [v] () {
+    process(v)
+})
+```
+
+Rules:
+
+* Captured `own` values are moved
+* Captured `ref` values are forbidden
+* Captures are explicit and visible
+
+---
+
+## 13.4 Memory Visibility
+
+Memory visibility rules are simple:
+
+* Ownership transfer establishes a happens-before boundary
+* No shared mutable memory exists in the core model
+* Data races are impossible by construction
+
+If shared state is required, it must be expressed through **higher-level APIs**.
+
+---
+
+## 13.5 What the Core Deliberately Excludes
+
+The core language does **not** include:
+
+* Mutexes
+* Spinlocks
+* Atomics
+* Condition variables
+* Channels
+* Message queues
+* Thread pools
+* Async runtimes
+* Structured concurrency
+
+These belong exclusively to:
+
+```
+std-api.extended-concurrency
+```
+
+---
+
+## 13.6 Rationale
+
+This design ensures that:
+
+* Concurrency safety is **compile-time enforced**
+* There are **no data races**
+* There is **no undefined behavior**
+* The core remains small and analyzable
+* Advanced concurrency remains opt-in
+
+The core language provides **execution**, not coordination.
+
+---
+
+## 13.7 Summary
+
+Core concurrency in Bestie consists of:
+
+* `threadOS`
+* `threadLight`
+* Ownership transfer
+* Explicit function and lambda execution
+
+Everything else is a **library-level abstraction**, not a language concern.
 
 ---
 
