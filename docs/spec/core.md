@@ -357,6 +357,194 @@ Rules:
 
 ---
 
+9.3 Unified Callable Model
+
+Bestie uses one keyword for all callable constructs:
+
+fun
+
+There is:
+
+No alternate lambda keyword
+
+No symbolic-only function definitions
+
+This unifies:
+
+Functions
+
+Methods
+
+Lambdas
+
+Function types
+
+9.4 Function Definitions
+Standard form
+fun add(x: int, y: int): int {
+    return x + y
+}
+Concise body (expression function)
+fun add(x: int, y: int) = x + y
+
+Rules:
+
+return may be omitted when the body is a single expression
+
+Return type may be inferred
+
+Semicolons follow Kotlin rules:
+
+Optional at line end
+
+Required only when multiple statements share one line
+
+Concise bodies are encouraged for clarity and readability.
+
+9.5 Function Types
+
+Function types explicitly use fun:
+
+fun(int, int): int
+fun(User): void
+
+Example:
+
+val op: fun(int, int): int = add
+
+This avoids symbolic ambiguity and improves tooling clarity.
+
+9.6 Lambdas (Fat Arrow Syntax)
+
+Lambdas are differentiated from concise function bodies using the fat arrow (=>).
+
+Anonymous lambda
+val sum = (x: int, y: int) => x + y
+Typed lambda
+val sum: fun(int, int): int = (x, y) => x + y
+Multi-line lambda
+val check = (age: int) => {
+    if age < 10 {
+        return error
+    }
+    return age
+}
+
+Rules:
+
+Lambdas cannot capture outer variables
+
+Only parameters and constants are allowed
+
+Multi-line lambdas must use braces and return
+
+Lambdas are inlined by default
+
+Zero allocation
+
+Compile-time resolved
+
+Illegal (capture):
+
+val x = 10
+val f = (y: int) => x + y   // compile-time error
+9.5 Method References
+
+Method references are supported when signatures match exactly:
+
+User::validate
+Math::sqrt
+
+Rules:
+
+No partial application
+
+No implicit this
+
+No capture
+
+Fully resolved at compile time
+
+9.7 Currying
+
+Currying is not implicit.
+
+Because closures are disallowed, curried functions must be expressed explicitly and statelessly.
+
+This prevents:
+
+Hidden allocations
+
+Lifetime complexity
+
+Implicit captures
+
+Bestie favors explicit data flow over functional cleverness.
+
+9.8 Extensible (Extension) Functions
+
+Bestie supports extensible functions as compile-time sugar.
+
+Example:
+
+fun list<int>.sum(): int {
+    var total = 0
+    for v in this {
+        total += v
+    }
+    return total
+}
+
+Rules:
+
+Resolved statically
+
+Do not modify the original type
+
+Respect package visibility
+
+Cannot access private members
+
+Must be imported explicitly if defined externally
+
+Extensible functions are encouraged for readability and domain modeling.
+
+9.9 Inlining Rules
+@inline
+
+Compile-time annotation
+
+Requests mandatory inlining
+
+If the compiler determines:
+
+The function is too large
+
+Inlining breaks guarantees
+
+➡ Compilation fails
+
+Automatic inlining
+
+Compiler may inline any suitable function
+
+Even without @inline
+
+Based on size, call-site clarity, and ownership safety
+
+Inlining is treated as a correctness feature, not only an optimization.
+
+9.10 Abstract Functions
+abstract fun compute(): int
+
+Rules:
+
+Allowed only in abstract class or protocol
+
+No body permitted
+
+---
+
 ## 10. Data Structures (Core Language)
 
 Data structures are **first-class language constructs**, not libraries.
@@ -652,12 +840,61 @@ Everything else is a **library-level abstraction**, not a language concern.
 
 ---
 
-## 14. Generics
+## 14 Generics
 
-* Compile-time only
-* No erasure
-* No variance keywords
-* Explicit instantiation
+14.1 Overview
+
+Bestie generics are:
+
+Compile-time only
+
+Fully monomorphized
+
+No type erasure
+
+Zero runtime overhead
+
+There are no variance keywords.
+
+14.2 Generic Class Example
+class Box<T> {
+    value: T
+
+    fun init(value: T): Box<T> {
+        this.value = value
+        return this
+    }
+}
+
+Usage:
+
+own b = Box<int>.init(10).new()
+14.3 Generic Function Example
+fun identity<T>(value: T): T = value
+14.4 Generic Enum Class
+enum class Result<T> {
+    Ok(T),
+    Err(str)
+}
+14.5 Why No Variance Keywords
+
+Variance:
+
+Increases cognitive load
+
+Encourages over-generalization
+
+Introduces runtime assumptions
+
+Bestie relies instead on:
+
+Ownership
+
+Explicit movement
+
+Value semantics
+
+This yields simpler, safer generics.
 
 ---
 
@@ -711,7 +948,21 @@ Predefined annotations:
 @pure
 ```
 
-No runtime reflection exists in the core language.
+17.3 Custom Compile-Time Annotations
+
+Definition
+annotation ValidateRange(min: int, max: int)
+Usage
+@ValidateRange(min = 0, max = 100)
+fun setScore(score: int): void
+
+Rules:
+
+Annotation arguments must be compile-time constants
+
+Enforcement is handled by the compiler or tooling
+
+No runtime presence
 
 ---
 
