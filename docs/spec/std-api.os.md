@@ -1,387 +1,236 @@
-1. Purpose and Scope
+# std-api.os — Operating System API
 
-The std-api.os module defines Bestie’s interaction surface with the operating system.
+This document defines the **Bestie Standard OS API (`std-api.os`)**.
 
-This module models OS concepts, not data flow and not application logic.
-It provides typed, explicit, override-friendly abstractions for:
+`std-api.os` provides **explicit, minimal, and structured access** to operating system services.
+It is **not** a framework, **not** a runtime, and **not** a replacement for the core language.
 
-Filesystem metadata
+The API is designed to:
 
-Processes and execution
+* Serve backend services, system tools, and infrastructure software
+* Support portability without hiding system reality
+* Avoid over-engineering and overlapping abstractions
 
-Environment variables
+---
 
-Signals and OS events
+## 1. Scope and Non-Goals
 
-Time sources backed by the OS
+### 1.1 What `std-api.os` Provides
 
-Users, permissions, and exit control
+* Process management
+* Environment variables
+* Signals
+* Time and clocks (OS-level)
+* Resource limits
+* OS capabilities and metadata
 
-This module does not provide:
+---
 
-File content IO (handled by std-api.io)
+### 1.2 What `std-api.os` Does *Not* Provide
 
-Networking
+* File I/O (see `std-api.io`)
+* Memory management or MMIO (see `std-api.memory`)
+* Networking (see `std-api.network`)
+* CLI parsing (see `std-api.cli`)
+* Concurrency primitives (core language / ext-concurrency)
+* Framework-level abstractions
 
-HTTP
+---
 
-Databases
+## 2. Design Principles
 
-Containers or virtualization
+1. **Explicit over implicit**
+2. **Classes for stateful OS concepts**
+3. **Functions for stateless queries**
+4. **No hidden background behavior**
+5. **Portable surface, platform-specific backends**
+6. **Zero overlap with core language**
 
-2. Design Philosophy
-2.1 Object-first OS Modeling
+---
 
-Operating-system entities have:
+## 3. Namespacing
 
-Identity
+All OS APIs live under:
 
-Lifetime
+```text
+std.api.os
+```
 
-State
+No re-exports. No wildcards.
 
-Side effects
+---
 
-Therefore, OS concepts are modeled as classes or protocols by default.
+## 4. Process Management
 
-Free functions are permitted only when:
+### 4.1 `Process`
 
-The operation is stateless
+Represents an OS process.
 
-There is no identity
+```bestie
+class Process {
+    pid: int
+    fun wait(): ExitStatus
+    fun kill(signal: Signal): void
+}
+```
 
-Overriding or substitution would be meaningless
+Processes are:
 
-This rule is mandatory and intentional.
+* Explicitly created
+* Explicitly waited upon
+* Never implicitly detached
 
-2.2 Avoiding the Python and Java Traps
+---
 
-Bestie explicitly avoids:
+### 4.2 Creating Processes
 
-Mixing half the API as functions and half as classes
-
-Multiple competing abstractions for the same concept
-
-Layered redesigns (IO, NIO, NIO2, etc.)
-
-Every OS concept has:
-
-One primary abstraction
-
-One obvious extension point
-
-2.3 OOP and FP Are Tools, Not Ideologies
-
-OOP is used for structure, identity, and extensibility
-
-FP is used for expression, callbacks, and local logic
-
-Lambdas, concise bodies, and method references are encouraged inside methods, not as the public OS API surface.
-
-3. Filesystem (Metadata Layer Only)
-
-File content reading/writing belongs to std-api.io.
-
-3.1 Path (class)
-
-Represents a filesystem path.
-
-Responsibilities:
-
-Normalization
-
-Resolution
-
-Comparison
-
-Platform abstraction
-
-class Path
-
+```bestie
+fun spawn(
+    path: str,
+    args: list<str>,
+    env: map<str, str> = {},
+): Process
+```
 
 Rules:
 
-No IO side effects
+* No shell expansion
+* No implicit PATH resolution unless requested
+* Errors are explicit
 
-No implicit filesystem access
+---
 
-Immutable
+## 5. Environment Variables
 
-3.2 FileInfo (value class)
+Stateless utilities:
 
-Immutable snapshot of filesystem metadata.
+```bestie
+fun getEnv(key: str): str | NotFound
+fun setEnv(key: str, value: str): void
+```
 
-Contains:
+No global mutable environment abstraction.
 
-Size
+---
 
-Permissions
+## 6. Signals
 
-Timestamps
+### 6.1 `Signal`
 
-Ownership
+```bestie
+enum Signal {
+    Term,
+    Kill,
+    Int,
+    Hup
+}
+```
 
-File kind (file, directory, link, etc.)
+Platform-specific signals may be conditionally available.
 
-value class FileInfo
+---
 
-3.3 FileSystem (protocol)
+### 6.2 Signal Handling
 
-Primary filesystem abstraction.
-
-Responsibilities:
-
-Metadata queries
-
-Creation and deletion
-
-Directory traversal
-
-protocol FileSystem
-
-
-Benefits:
-
-Enables in-memory filesystems
-
-Enables test doubles
-
-Enables OS-specific implementations
-
-4. Processes and Execution
-4.1 Process (class)
-
-Represents a running or completed OS process.
-
-Responsibilities:
-
-PID
-
-Exit status
-
-Lifecycle state
-
-class Process
-
+```bestie
+fun onSignal(sig: Signal, handler: fun(Signal): void): void
+```
 
 Rules:
 
-No global process state
+* Handlers are non-capturing lambdas
+* Execution context is explicit
+* No async magic
 
-No static process control functions
+---
 
-4.2 ProcessBuilder (class)
+## 7. Time and Clocks
 
-Explicit construction of a process.
+### 7.1 OS Clock Access
 
-Responsibilities:
-
-Command specification
-
-Environment injection
-
-IO wiring (via std-api.io)
-
-Working directory
-
-class ProcessBuilder
-
-
-Rationale:
-
-No hidden defaults
-
-No shell magic
-
-Fully testable
-
-4.3 Process Control
-
-Operations:
-
-start
-
-wait
-
-terminate
-
-signal
-
-Signals are typed, not integers.
-
-5. Environment Variables
-5.1 Environment (class)
-
-Represents an environment scope.
-
-Capabilities:
-
-Read-only view
-
-Mutable scoped view
-
-Snapshot vs live behavior
-
-class Environment
-
+```bestie
+fun now(): TimePoint
+fun monotonic(): Duration
+```
 
 Rules:
 
-No global getenv
+* No implicit time zones
+* No global mutable clock
 
-Explicit access required
+---
 
-Safe for testing
+## 8. Resource Limits
 
-6. Signals and OS Events
-6.1 Signal (enum)
+```bestie
+class ResourceLimit {
+    current: int
+    max: int
+}
+```
 
-Strongly typed representation of OS signals.
+```bestie
+fun getLimit(kind: ResourceKind): ResourceLimit
+fun setLimit(kind: ResourceKind, limit: ResourceLimit): void
+```
 
-enum Signal
+---
 
+## 9. Platform Introspection
 
-Mapped per platform at compile time.
+```bestie
+fun platform(): PlatformInfo
+```
 
-6.2 Signal Handling
+Includes:
 
-Handlers registered via methods
+* OS family
+* Architecture
+* Endianness
+* Capabilities
 
-Lambdas permitted
+---
 
-Lambdas must not capture state
+## 10. OOP vs Functions (Explicit Policy)
 
-Signature verified at compile time
+* **Classes** represent long-lived OS entities (Process, ResourceLimit)
+* **Functions** represent queries or actions
 
-No implicit signal hooks.
+This rule is intentional and enforced to prevent API fragmentation.
 
-7. Time and Clocks (OS-backed)
-7.1 Clock (protocol)
+---
 
-Represents a source of time.
+## 11. Error Model
 
-Kinds:
+All errors are:
 
-Monotonic
+* Typed
+* Explicit
+* Non-exceptional
 
-Wall-clock
+No hidden retries. No silent fallbacks.
 
-protocol Clock
+---
 
-7.2 Instant and Duration (value classes)
+## 12. Stability and Evolution
 
-Used consistently across:
+* APIs are additive within a major version
+* Platform-specific extensions are namespaced
+* No duplication of abstractions
 
-OS APIs
+---
 
-std-lib datetime
+## 13. Summary
 
-Scheduling
+`std-api.os` is:
 
-No primitive timestamps.
+* Minimal
+* Explicit
+* Practical
+* Predictable
 
-8. Users, Groups, and Permissions
-8.1 User and Group (value classes)
+It exposes OS power **without leaking OS chaos into the language**.
 
-Represent OS users and groups.
+---
 
-Contains:
-
-IDs
-
-Names
-
-Resolution APIs
-
-Immutable.
-
-8.2 Permissions (value class)
-
-Explicit permission modeling.
-
-No raw integers
-
-No bitwise user code
-
-Platform-mapped internally
-
-9. Exit and System Control
-9.1 ExitCode (value class)
-
-Strongly typed exit status.
-
-value class ExitCode
-
-9.2 Controlled Termination
-
-Explicit termination APIs
-
-Testable
-
-No hidden shutdown hooks
-
-10. Error Model
-
-OS errors are:
-
-Typed
-
-Explicit
-
-Non-string-based
-
-No unchecked global failures.
-
-11. What This Module Intentionally Does NOT Provide
-
-This module does not include:
-
-Shell scripting DSLs
-
-Process pipelines as syntax
-
-Platform-specific hacks
-
-Auto-parallel execution
-
-Async abstractions (handled by concurrency APIs)
-
-12. Extension Policy
-
-New OS-related features:
-
-Go into std-api.os only if general-purpose
-
-Otherwise live in external libraries
-
-This keeps the API:
-
-Small
-
-Predictable
-
-Long-lived
-
-13. Rationale: Practical Language Design
-
-Bestie:
-
-Is not anti-OOP
-
-Is not FP-only
-
-Is not minimal for the sake of minimalism
-
-Bestie is practical:
-
-Structured
-
-Explicit
-
-Fast
-
-Safe
-
-Extensible without chaos
-
-This module reflects that philosophy.
+This document is **finalized**.
