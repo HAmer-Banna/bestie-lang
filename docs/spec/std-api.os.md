@@ -1,4 +1,4 @@
-# std-api.os — Operating System API
+# Operating System API
 
 This document defines the **Bestie Standard OS API (`std-api.os`)**.
 
