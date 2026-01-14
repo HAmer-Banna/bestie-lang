@@ -1,181 +1,292 @@
-# Bestie Core Language Specification
+Bestie Core Language Specification
+
+This document defines the Bestie Core Language.
+
+The core is intentionally:
+	•	Small
+	•	Sealed
+	•	Performance-critical
+	•	Stable by design
 
-Everything described here is **first-class, always available, stable, and sealed**.  
-Higher-level capabilities are in `std-lib`, `std-api`, and `std-frameworks`.
+Everything outside this document belongs to std-lib, std-api, or std-framework.
 
----
+⸻
 
-## 1. Core Principles
+1. Core Philosophy
 
-1. Native speed mandatory
-2. Compile-time resolution
-3. Explicit memory & ownership
-4. No garbage collection
-5. No hidden allocation
-6. No unsafe escape hatches
-7. Unified system + backend model
-8. Professional clarity over cleverness
+Bestie is designed around the following principles:
+	1.	Native performance comparable to C, Zig, and Rust
+	2.	No garbage collection
+	3.	No null, none, or undefined
+	4.	No unsafe blocks
+	5.	Explicit ownership and lifetime awareness
+	6.	Compile-time enforcement over runtime checks
+	7.	No features users are told “not to use”
+	8.	OOP, FP, and procedural styles are tools, not paradigms
 
----
+Bestie is both a system programming language and a backend language at its core.
 
-## 2. Naming Conventions
+⸻
 
-* Keywords: lowercase
-* Types: lowercase
-* Classes/enums/protocols: PascalCase
-* Functions/variables/properties: camelCase
+2. Primitive Types
 
----
+Bestie provides a fixed set of primitive types:
+	•	int32, int64
+	•	uint32, uint64
+	•	float32, float64
+	•	bool
+	•	byte
+	•	char
+	•	str
+	•	void
 
-## 3. Types
+Rules:
+	•	All primitives are value types
+	•	Always inline
+	•	Never nullable
+	•	Passed by value
+	•	No implicit heap allocation
 
-### 3.1 Primitive Types
+⸻
 
-`int32, int64, uint, float32, float64, byte, bool, char, str, void`
+3. Variables
 
-### 3.2 Compound Types
+Bestie provides two variable declarations:
+	•	val — immutable
+	•	var — mutable
 
-`tuple, ptr<T>, function types`
+Rules:
+	•	val is immutable by default
+	•	var is mutable
+	•	Global var is prohibited
+	•	Global val is allowed but must be immutable
+	•	No const keyword exists
 
-* Tuples are value types, stack-allocated when possible.
+Immutability in Bestie is structural, not keyword-based.
 
----
+⸻
 
-## 4. Classes & Protocols
+4. Class Kinds
 
-### 4.1 Class Kinds
+Bestie supports the following class kinds:
+	•	Data classes (data class)
+	•	Value classes (value class)
+	•	Enum classes (enum, enum class)
+	•	Single classes (single class)
+	•	Closed classes (class)
+	•	Open classes (open class)
+	•	Abstract classes (abstract class)
 
-`data class, value class, single class, abstract class, open class, enum, enum class`
+Rules:
+	•	data, value, and enum classes are:
+	•	Immutable
+	•	Inline
+	•	Header-less
+	•	single defines exactly one instance
+	•	class is closed by default
+	•	open class allows inheritance
+	•	abstract class allows partial implementation
 
-* All classes inline by default
-* Single inheritance only
-* Multiple protocols allowed
-* Sealed classes supported
-* `@immutable` enforces immutability on close or abstract derived classes
-* Compiler warning if `@immutable` used on already immutable data/value/enum
+⸻
 
----
+5. Sealed Classes
 
-## 5. Memory & Ownership
+Sealed classes restrict inheritance to the same module.
+sealed class Result
 
-Core constructs:
+Rules:
+	•	All subclasses must be known at compile time
+	•	Exhaustive handling is enforced
+	•	Enables safe pattern matching
+	•	Commonly used for error and state modeling
 
-`own, ref, ptr<T>, address(), deref(), offset(), free(), freeDeep()`
+⸻
 
-### Rules
+6. Protocols
 
-1. `own` = sole owner, can move
-2. `ref` = borrowed, thread-local, cannot cross threads
-3. `ptr<T>` = low-level pointer, only necessary when direct memory access required
-4. `address()` returns address of any object or function
-5. Copy vs deepCopy behavior:
-   - Copy duplicates the value, deepCopy duplicates objects recursively
-   - Address of object may or may not change depending on allocation
+Protocols define behavior without state.
 
----
+protocol Serializable {
+    fun serialize(): str
+}
 
-## 6. Functions & Return Types
+Rules:
+	•	No fields
+	•	No state
+	•	No constructors
+	•	Only method signatures
+	•	Multiple protocols may be implemented
 
-### 6.1 Function Declaration
+Protocols express capability, not structure.
 
-```bestie
-fun name(params): T { ... }
-val lambda: fun(int, int): int = (x, y) => x + y
-Lambdas use ()=>{} syntax
+⸻
 
-No capture of outer variables
+7. Functions
 
-Fully resolved at compile-time
+7.1 Function Declaration
+fun add(x: int, y: int): int {
+    return x + y
+}
 
-Method references supported: Class::method
+Expression form:
+fun add(x: int, y: int) = x + y
 
-6.2 Return Types
-Complete: fun getUser(): User → always returns a value
+Rules:
+	•	Return types may be inferred
+	•	Expression bodies omit return
+	•	No hidden allocations
+	•	No implicit heap promotion
 
-Partial: fun getUser()?: User → caller must handle with if/switch
+⸻
 
-Option: Option<User> → two states: Present or Not_Present
+8. Lambdas
 
-Error: fun read(): File!IOError → Zig-style error union
+Lambdas use => syntax.
+val sum = (x: int, y: int) => x + y
 
-Compiler enforcement:
+Rules:
+	•	Compile-time resolved
+	•	Inlined by default
+	•	No implicit heap allocation
+	•	No implicit capture
 
-Partial functions (T?!) must be handled at call site
+⸻
 
-Option returns are explicit in std-lib
+9. Return Semantics (Core Rule)
 
-Compiler shows error if a partial function is called without handling
+Bestie defines four explicit return kinds.
 
-7. Annotations & Plugins
-Predefined: @inline, @noinline, @override, @pure, @deprecated, @experimental
+This is a core language guarantee.
 
-Custom plugins:
+⸻
 
-bestie
-Copy code
-annotation ValidateRange(min: int, max: int)
+9.1 Complete Return
 
-@ValidateRange(min=0, max=100)
-fun setScore(score: int)
-Compiler or plugin enforces semantics
+The function always returns a value.
 
-Compile-time only
+fun getUser(): User {
+    return user
+}
+Caller usage:
+val u = getUser()
+Always allowed.
 
-Cannot execute code directly
+⸻
 
-Example: @get, @post in std-framework.web for REST routing
+9.2 Partial Return (?)
 
-8. Concurrency Primitives
-threadOS → OS threads
+The function may return a value or return nothing.
+fun getUser()? : User {
+    if (found) return user
+}
 
-threadLight → lightweight user threads
+Rules:
+	•	The function must be marked with ?
+	•	Direct assignment is forbidden
 
-Ownership enforces thread safety
+Invalid:
+val u = getUser()   // compile error
 
-Ref cannot cross threads
+Valid:
+if (getUser()) {
+    val u = it
+}
+Partial behavior is explicit and visible in APIs.
 
-Own may be moved into threads
+⸻
 
-No shared mutable state in core
+9.3 Option Type
 
-9. Generics
-Fully monomorphized at compile-time
+Defined in std-lib:
+	•	Option<T>
 
-No type erasure
+States:
+	•	Present(T)
+	•	NotPresent
 
-Ownership + movement ensures safety
+Rules:
+	•	Used when values must be stored, passed, or composed
+	•	Returning Option should be rare but supported
 
-Zero runtime overhead
+⸻
 
-10. Error Handling
-Typed error unions
+9.4 Error Return
 
-No exceptions
+Errors are part of the type system.
+fun readFile(): File | IOError
 
-Errors must be handled or propagated
+Rules:
+	•	Errors must be handled or propagated
+	•	No exceptions
+	•	No hidden control flow
 
-11. Control Structures
-if(...) {} / for(...) {} / while(...) {} → parentheses required
+⸻
 
-Switch: no fall-through
+10. Annotations
 
-Operators: support both symbolic (&&) and word-based (and)
+Annotations are compile-time only.
+@get("/users")
+fun listUsers(): list<User>
 
-12. Stability & Exclusions
-Core does not include:
+Rules:
+	•	Core annotations are limited and sealed
+	•	Custom annotations require compiler plugins
+	•	No runtime reflection
+	•	No runtime overhead
 
-Garbage collection
+The compiler understands annotations only if:
+	•	They are built into the core, or
+	•	A plugin explicitly handles them
 
-Reflection
+⸻
 
-Dynamic typing
+11. Plugins
 
-Unsafe blocks
+Plugins:
+	•	Operate on compiler IR
+	•	Cannot modify core semantics
+	•	Are sandboxed
+	•	Cannot mutate compiler internals
+	•	Cannot inject unsafe behavior
 
-Global mutable vars (only val allowed)
+This prevents malicious or unstable extensions.
 
-Foreign code integration
+⸻
 
-Framework abstractions
+12. Concurrency (Core Level)
 
-All advanced features exist in std-api or std-frameworks.
+The core defines execution primitives only.
+	•	OS threads
+	•	Lightweight threads
+
+Rules:
+	•	No shared mutable state in core
+	•	No mutex or atomic in core
+	•	Ownership transfer enforces safety
+	•	Concurrency libraries live outside the core
+
+⸻
+
+13. Explicit Exclusions
+
+The core intentionally does not include:
+	•	Garbage collection
+	•	Unsafe blocks
+	•	Reflection
+	•	Macros
+	•	Dependency injection
+	•	IO abstractions
+	•	Framework logic
+
+These belong to higher layers.
+
+⸻
+
+14. Stability Guarantee
+
+The core is conservative by design.
+	•	Changes are rare
+	•	Breaking changes require major versions
+	•	The core is designed to survive future hardware evolution
+
+Bestie evolves around the core, not through it.
