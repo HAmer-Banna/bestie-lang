@@ -1,292 +1,264 @@
-Bestie Core Language Specification
+# Bestie Language — Core Specification
 
-This document defines the Bestie Core Language.
+## 1. Overview
 
-The core is intentionally:
-	•	Small
-	•	Sealed
-	•	Performance-critical
-	•	Stable by design
+Bestie is a **native, compiled, practical programming language** designed from day one to serve **both system programming and backend engineering**.
 
-Everything outside this document belongs to std-lib, std-api, or std-framework.
+Bestie is not built around a single paradigm. Instead, it provides **object-oriented programming, functional programming, and low-level control** as *tools*, not ideologies.
 
-⸻
+Design principles:
+- Fast compilation
+- Explicit behavior
+- No undefined behavior
+- No garbage collection
+- No nulls
+- Best-in-class memory layout
+- Small, sealed core
 
-1. Core Philosophy
+> Bestie aims to be: **Zig + Kotlin**, without inheriting the regrets of either.
 
-Bestie is designed around the following principles:
-	1.	Native performance comparable to C, Zig, and Rust
-	2.	No garbage collection
-	3.	No null, none, or undefined
-	4.	No unsafe blocks
-	5.	Explicit ownership and lifetime awareness
-	6.	Compile-time enforcement over runtime checks
-	7.	No features users are told “not to use”
-	8.	OOP, FP, and procedural styles are tools, not paradigms
+---
 
-Bestie is both a system programming language and a backend language at its core.
+## 2. Language Structure
 
-⸻
+A Bestie program is composed of:
+- Packages
+- Modules
+- Types
+- Functions
+- Protocols
+- Annotations
+- Explicit APIs layered on top of a minimal core
 
-2. Primitive Types
+The core language is **intentionally small**. Advanced abstractions live in:
+- `std-lib`
+- `std-api`
+- `std-framework`
 
-Bestie provides a fixed set of primitive types:
-	•	int32, int64
-	•	uint32, uint64
-	•	float32, float64
-	•	bool
-	•	byte
-	•	char
-	•	str
-	•	void
+---
 
-Rules:
-	•	All primitives are value types
-	•	Always inline
-	•	Never nullable
-	•	Passed by value
-	•	No implicit heap allocation
+## 3. Basic Types
 
-⸻
+Bestie provides a minimal but expressive set of built-in types.
 
-3. Variables
+### 3.1 Primitive Value Types
 
-Bestie provides two variable declarations:
-	•	val — immutable
-	•	var — mutable
+All primitives are **value types**:
 
-Rules:
-	•	val is immutable by default
-	•	var is mutable
-	•	Global var is prohibited
-	•	Global val is allowed but must be immutable
-	•	No const keyword exists
+- `int`, `int8`, `int16`, `int32`, `int64`
+- `uint`, `uint8`, `uint16`, `uint32`, `uint64`
+- `float`, `float32`, `float64`
+- `bool`
+- `char`
 
-Immutability in Bestie is structural, not keyword-based.
+These types:
+- Are stack-friendly
+- Have no hidden headers
+- Do not require manual deallocation
 
-⸻
+---
 
-4. Class Kinds
+### 3.2 Core Value Types
 
-Bestie supports the following class kinds:
-	•	Data classes (data class)
-	•	Value classes (value class)
-	•	Enum classes (enum, enum class)
-	•	Single classes (single class)
-	•	Closed classes (class)
-	•	Open classes (open class)
-	•	Abstract classes (abstract class)
+The following are also **value classes**:
 
-Rules:
-	•	data, value, and enum classes are:
-	•	Immutable
-	•	Inline
-	•	Header-less
-	•	single defines exactly one instance
-	•	class is closed by default
-	•	open class allows inheritance
-	•	abstract class allows partial implementation
+- `str`
+- `tuple`
+- `ptr<T>`
+- `option<T>` (enum class)
+- collection literals (`list`, `set`, `map` — immutable by default)
 
-⸻
+Value classes:
+- Are immutable by default
+- Can be copied cheaply
+- Do not require `free()` unless they own heap memory internally
 
-5. Sealed Classes
+---
 
-Sealed classes restrict inheritance to the same module.
-sealed class Result
+## 4. Generics
 
-Rules:
-	•	All subclasses must be known at compile time
-	•	Exhaustive handling is enforced
-	•	Enables safe pattern matching
-	•	Commonly used for error and state modeling
+Bestie supports **compile-time generics** with no runtime overhead.
+
+```bestie
+fun max<T>(a: T, b: T): T
+Properties:
+	•	Monomorphized at compile time
+	•	No type erasure
+	•	No runtime RTTI requirement
+	•	Compatible with static polymorphism
+
+Generics are part of the core language and do not depend on OOP or FP features.
 
 ⸻
 
-6. Protocols
+5. Functions and Lambdas (Overview)
 
-Protocols define behavior without state.
-
-protocol Serializable {
-    fun serialize(): str
+Functions are declared using fun:
+fun add(a: int, b: int): int {
+    return a + b
 }
 
-Rules:
-	•	No fields
-	•	No state
-	•	No constructors
-	•	Only method signatures
-	•	Multiple protocols may be implemented
+Lambda syntax:
+val f = (x: int) => x * 2
 
-Protocols express capability, not structure.
+Bestie supports:
+	•	Overloading
+	•	Static dispatch by default
+	•	Explicit dynamic dispatch (@virtual)
+	•	Partial functions (?)
+	•	Option returns
+	•	Error returns
 
-⸻
+Full details are specified in:
 
-7. Functions
-
-7.1 Function Declaration
-fun add(x: int, y: int): int {
-    return x + y
-}
-
-Expression form:
-fun add(x: int, y: int) = x + y
-
-Rules:
-	•	Return types may be inferred
-	•	Expression bodies omit return
-	•	No hidden allocations
-	•	No implicit heap promotion
+➡ [fp.md] — Functional Programming in Bestie
 
 ⸻
 
-8. Lambdas
+6. Object-Oriented Programming (Overview)
 
-Lambdas use => syntax.
-val sum = (x: int, y: int) => x + y
+Bestie supports OOP as a controlled, explicit toolset.
 
-Rules:
-	•	Compile-time resolved
-	•	Inlined by default
-	•	No implicit heap allocation
-	•	No implicit capture
+Core concepts:
+	•	Classes (closed by default)
+	•	Data / value / enum classes
+	•	Single classes
+	•	Protocols (static and virtual)
+	•	Group protocols
+	•	Explicit inheritance rules
+	•	Explicit polymorphism
 
-⸻
+Bestie avoids:
+	•	Implicit virtual dispatch
+	•	Inheritance ambiguity
+	•	Fragile base classes
 
-9. Return Semantics (Core Rule)
+Full specification lives in:
 
-Bestie defines four explicit return kinds.
-
-This is a core language guarantee.
-
-⸻
-
-9.1 Complete Return
-
-The function always returns a value.
-
-fun getUser(): User {
-    return user
-}
-Caller usage:
-val u = getUser()
-Always allowed.
+➡ [oop.md] — Object-Oriented Programming in Bestie
 
 ⸻
 
-9.2 Partial Return (?)
+7. Memory Model (Overview)
 
-The function may return a value or return nothing.
-fun getUser()? : User {
-    if (found) return user
-}
+Bestie is manual-memory, safety-oriented, and deterministic.
 
-Rules:
-	•	The function must be marked with ?
-	•	Direct assignment is forbidden
+Core concepts:
+	•	ptr<T>
+	•	own<T>
+	•	ref<T>
+	•	Explicit allocation via .new()
+	•	Explicit deallocation via .free() / .freeDeep()
+	•	No garbage collection
+	•	No null values
+	•	No undefined behavior
 
-Invalid:
-val u = getUser()   // compile error
+Memory APIs exist to reduce boilerplate, not to hide behavior.
 
-Valid:
-if (getUser()) {
-    val u = it
-}
-Partial behavior is explicit and visible in APIs.
+Full rules and guarantees are defined in:
 
-⸻
-
-9.3 Option Type
-
-Defined in std-lib:
-	•	Option<T>
-
-States:
-	•	Present(T)
-	•	NotPresent
-
-Rules:
-	•	Used when values must be stored, passed, or composed
-	•	Returning Option should be rare but supported
+➡ [memory.md] — Memory Core & Memory API
 
 ⸻
 
-9.4 Error Return
+8. Concurrency Model (Overview)
 
-Errors are part of the type system.
-fun readFile(): File | IOError
+Concurrency in Bestie is:
+	•	Explicit
+	•	Compile-time validated
+	•	Free of hidden synchronization
+	•	Separate from memory ownership
 
-Rules:
-	•	Errors must be handled or propagated
-	•	No exceptions
-	•	No hidden control flow
-
-⸻
-
-10. Annotations
-
-Annotations are compile-time only.
-@get("/users")
-fun listUsers(): list<User>
-
-Rules:
-	•	Core annotations are limited and sealed
-	•	Custom annotations require compiler plugins
-	•	No runtime reflection
-	•	No runtime overhead
-
-The compiler understands annotations only if:
-	•	They are built into the core, or
-	•	A plugin explicitly handles them
-
-⸻
-
-11. Plugins
-
-Plugins:
-	•	Operate on compiler IR
-	•	Cannot modify core semantics
-	•	Are sandboxed
-	•	Cannot mutate compiler internals
-	•	Cannot inject unsafe behavior
-
-This prevents malicious or unstable extensions.
-
-⸻
-
-12. Concurrency (Core Level)
-
-The core defines execution primitives only.
+Core primitives:
 	•	OS threads
 	•	Lightweight threads
+	•	Explicit scheduling
+	•	No implicit shared mutable state
 
-Rules:
-	•	No shared mutable state in core
-	•	No mutex or atomic in core
-	•	Ownership transfer enforces safety
-	•	Concurrency libraries live outside the core
+High-level abstractions (actors, pools, etc.) live in APIs, not the core.
+
+Full details in:
+
+➡ [concurrency.md] — Concurrency Core & API
 
 ⸻
 
-13. Explicit Exclusions
+9. Annotations and Plugins (Overview)
 
-The core intentionally does not include:
+Annotations in Bestie:
+	•	Are resolved at compile time
+	•	Do not introduce runtime overhead
+	•	Do not mutate the core language
+
+Examples:
+	•	@virtual
+	•	@override
+	•	@immutable
+	•	@inline
+	•	@expose
+
+Custom annotations require compiler plugins and cannot alter core semantics.
+
+Full specification:
+
+➡ [annotation.md] — Annotations & Compiler Plugins
+
+⸻
+
+10. Error Handling and Exceptions (Overview)
+
+Bestie does not use:
+	•	Null
+	•	Nil
+	•	Undefined
+	•	Implicit exceptions
+
+Error handling options:
+	1.	Complete return
+	2.	Partial return (?)
+	3.	option<T>
+	4.	Error returns (Zig-style)
+
+Errors are explicit and enforced by the compiler.
+
+Detailed rules are documented in:
+
+➡ [errors.md]
+
+⸻
+
+11. What Is Intentionally Not in Core
+
+The following are deliberately excluded:
 	•	Garbage collection
-	•	Unsafe blocks
-	•	Reflection
 	•	Macros
-	•	Dependency injection
-	•	IO abstractions
-	•	Framework logic
+	•	Reflection
+	•	Unsafe blocks
+	•	Runtime metaprogramming
+	•	Implicit dynamic dispatch
+	•	Global mutable state
 
-These belong to higher layers.
+If something exists in Bestie, it must:
+	1.	Be useful
+	2.	Be safe by default
+	3.	Not hurt performance
+	4.	Never become “don’t use this” advice
 
 ⸻
 
-14. Stability Guarantee
+12. Specification Stability
+	•	The core is sealed
+	•	Behavior is explicit
+	•	Backward compatibility is a priority
+	•	Advanced features evolve via APIs and frameworks
 
-The core is conservative by design.
-	•	Changes are rare
-	•	Breaking changes require major versions
-	•	The core is designed to survive future hardware evolution
+⸻
 
-Bestie evolves around the core, not through it.
+13. Next Documents
+	•	oop.md — Classes, Protocols, Inheritance, Polymorphism
+	•	fp.md — Functions, Lambdas, Partial Functions
+	•	memory.md — Ownership, Pointers, Allocation
+	•	concurrency.md — Threads and Scheduling
+	•	annotation.md — Compile-Time Extensions
+	•	errors.md — Error Model
+	•	effective-bestie/ — Best Practices & Guidelines
