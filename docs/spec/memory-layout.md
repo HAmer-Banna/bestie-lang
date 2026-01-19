@@ -1,432 +1,356 @@
-# Memory Layout and Ownership Model
+Bestie Memory Model (memory.md)
 
-This document defines how memory is **laid out**, **owned**, **passed**, and **freed** in Bestie.
+This document defines the core memory model of Bestie.
+It is one of the foundational pillars of the language and is intentionally strict.
 
-Memory behavior in Bestie is:
+Bestie is a native, no-GC, no-null, no-unsafe language with a memory model designed around:
+	•	Minimal allocation
+	•	Predictable lifetimes
+	•	Explicit ownership
+	•	Strong compile-time guarantees
 
-* Explicit
-* Predictable
-* Compile-time enforced
-* Unified across system and backend domains
+⸻
 
-There is **one memory model**.
+1. Design Goals
 
----
+Bestie’s memory model guarantees:
+	1.	No memory leaks
+	2.	No null references
+	3.	No undefined behavior
+	4.	No hidden allocations
+	5.	No runtime ownership checks
+	6.	No GC pauses
+	7.	Best possible memory layout
 
-## 1. Design Goals
+All guarantees are enforced at compile time.
 
-The memory model exists to satisfy the following constraints:
+⸻
 
-1. **Native performance**
-2. **Deterministic layout and lifetime**
-3. **No garbage collection**
-4. **No unsafe escape hatches**
-5. **Minimal cognitive overhead**
-6. **Uniform rules for all domains**
+2. Memory Regions
 
-Bestie rejects designs where:
+Bestie uses three memory regions:
 
-* Safety is optional
-* Allocation is implicit
-* Different subsystems use different memory rules
+Region	Description
+Stack	Default for values, locals, temporaries
+Heap	Used only when ownership requires it
+Arena	Optional, explicit, API-level
 
----
 
-## 2. Memory Regions
+⸻
 
-Bestie recognizes three conceptual memory regions.
-These are **semantic**, not exposed as language modes.
+3. Core Memory Types
 
-### 2.1 Stack
+3.1 Value Types
 
-Used for:
+The following are value types:
+	•	int, float, bool, char
+	•	str
+	•	tuple
+	•	enum
+	•	value class
+	•	data class (when fields are value or owned)
 
-* Value types
-* Inlined classes
-* Function-local variables
-* Temporaries
+Characteristics:
+	•	Stored inline
+	•	Copied by value
+	•	No headers
+	•	No vtables
+	•	No allocation by default
 
-Properties:
+val x: int = 10
+val p: Point = Point(1, 2)
 
-* Deterministic lifetime
-* Compile-time known layout
-* Zero allocation cost
 
-All values are stack-allocated unless explicitly moved elsewhere.
+⸻
 
----
+3.2 ptr
 
-### 2.2 Heap
+ptr<T> is the only raw memory primitive.
 
-Used only when:
-
-* `new()` or `allocate()` is explicitly invoked
-* Ownership must outlive the current scope
-* Dynamic size requires it
-
-Heap allocation is **never implicit**.
-
-Example:
-
-```bestie
-own user = User.new()
-```
-
----
-
-### 2.3 Static / Read-only Memory
-
-Used for:
-
-* Constants
-* Immutable literals
-* Compile-time known values
-
-Example:
-
-```bestie
-math.PI
-```
-
----
-
-## 3. Value Semantics vs Reference Semantics
-
-### 3.1 Value Types
-
-Includes:
-
-* All primitives
-* Tuples
-* `data class`
-* `value class`
-* Immutable collections
-
-Properties:
-
-* Copied on assignment
-* Safe to pass across threads
-* No ownership tracking needed
-
----
-
-### 3.2 Reference Types
-
-Reference semantics exist **only** via explicit constructs:
-
-```
-own T
-ref T
-ptr<T>
-```
-
-There is no implicit reference behavior.
-
----
-
-## 4. Ownership (`own`)
-
-### 4.1 Definition
-
-`own T` represents **exclusive ownership** of a heap-allocated object.
+val p: ptr<int>
 
 Rules:
+	•	Never nullable
+	•	Never dangling
+	•	Never implicitly dereferenced
+	•	Arithmetic is explicit
+	•	Lifetime is checked at compile time
 
-* Exactly one owner at a time
-* Ownership is moved, never copied
-* Owner is responsible for freeing
+⸻
 
-Example:
+3.3 dereferencing and value access
 
-```bestie
-own user = User.new()
-```
+Bestie uses one unified rule:
 
----
+p.val()
 
-### 4.2 Ownership Transfer
+	•	.val() reads the value pointed to
+	•	Works for both ptr<T> and ref T
+	•	No *, no deref, no magic
 
-Ownership may be transferred via `move`:
+val x: int = p.val()
 
-```bestie
-own a = User.new()
-own b = move a
-```
 
-After move:
+⸻
 
-* `a` becomes invalid
-* Any use is a compile-time error
+4. Ownership Model
 
----
+4.1 own
 
-### 4.3 Destruction
+own T means exclusive ownership.
 
-Owners must be freed explicitly:
-
-```bestie
-user.free()
-```
-
-For deep structures:
-
-```bestie
-user.freeDeep()
-```
+val own u: User = User.of(...)
 
 Rules:
+	•	Exactly one owner
+	•	Owner is responsible for destruction
+	•	Ownership can be moved, not copied
+	•	Default for heap-allocated objects
 
-* `free()` frees the object itself
-* `freeDeep()` recursively frees owned fields
-* Compiler enforces correct destruction order
+⸻
 
----
+4.2 ref
 
-## 5. References (`ref`)
+ref T means borrowed reference.
 
-### 5.1 Definition
-
-`ref T` is a **non-owning**, temporary reference.
-
-Rules:
-
-* Cannot outlive the owner
-* Cannot cross thread boundaries
-* Cannot be stored in heap objects unless immutable
-
-Example:
-
-```bestie
-fun printUser(ref u: User): void
-```
-
----
-
-### 5.2 Lifetime Enforcement
-
-The compiler ensures:
-
-* The owner outlives all references
-* No dangling references are possible
-* No reference cycles exist
-
----
-
-## 6. Raw Pointers (`ptr<T>`)
-
-### 6.1 Definition
-
-`ptr<T>` represents a **memory address**, not ownership.
+fun printUser(u: ref User) { ... }
 
 Rules:
+	•	Cannot outlive the owner
+	•	Cannot free
+	•	Cannot move ownership
+	•	Zero runtime cost
 
-* No implicit dereference
-* Must be explicitly obtained via `address()`
-* Dereferencing requires `deref()`
+⸻
 
-Example:
+4.3 Ownership Moves
 
-```bestie
-ptr<int> p = x.address()
-val v = p.deref()
-```
+val own a = User.of(...)
+val own b = move a   // a is invalid after this
 
----
+Compile-time enforced.
 
-### 6.2 Pointer Arithmetic
+⸻
 
-Allowed only when:
+5. Binding vs Ownership
 
-* Offset is known at compile time
-* Bounds can be proven safe
+Keyword	Meaning
+val	Immutable binding
+var	Mutable binding
+own	Ownership
+ref	Borrow
 
-```bestie
-p.offset(2).deref()
-```
+These are orthogonal.
 
-Out-of-bounds access is a **compile-time error** whenever provable.
+val own u: User
+var ref r: User
 
----
 
-## 7. Classes and Memory Layout
+⸻
 
-### 7.1 Inlining Rules
+6. Function & Lambda Memory Rules
 
-By default:
+6.1 Complete Functions
 
-* `data class`, `value class`, `class` → inlined
-* `open class` → inlined if possible
-
-Inlining means:
-
-* No hidden pointers
-* Predictable field layout
-* Cache-friendly memory access
-
----
-
-### 7.2 Field Ownership
-
-Fields must declare ownership intent explicitly:
-
-```bestie
-class Student {
-    ref course: Course
-    own address: Address
+fun getUser(): User {
+  return User.of(...)
 }
-```
+
+	•	Must return in all paths
+	•	No empty return
+	•	No implicit default
+
+⸻
+
+6.2 Partial Functions
+
+fun getUser()? : User {
+  if (exists) return user
+}
+
+Rules:
+	•	? is mandatory
+	•	Caller must handle absence
+	•	No empty value is ever returned
+
+⸻
+
+6.3 Lambda Capture Rules
+
+val f = () => {
+  print(x)
+}
+
+Rules:
+	•	Captured values are copied
+	•	Captured refs must outlive the lambda
+	•	Captured owns are forbidden unless moved
+
+⸻
+
+7. Automatic Destruction Rules
+
+7.1 Scope-Based Destruction
+
+Everything allocated inside a function or lambda:
+	•	Is automatically destroyed
+	•	In reverse order
+	•	Without user intervention
+
+fun f() {
+  val own u = User.of(...)
+} // destroyed here
+
+
+⸻
+
+7.2 free vs freeDeep
+
+Bestie does not expose free() in core.
 
 Destruction rules:
+	•	Value types: no-op
+	•	Owned objects: destructor
+	•	Containers: recursive destruction
 
-* `free()` requires owned fields to be freed first
-* `freeDeep()` handles this automatically
+freeDeep() exists only in memory API, not core.
 
----
+⸻
 
-## 8. Collections and Memory
+8. Containers & Memory
 
-### 8.1 Collection Ownership
+8.1 Immutable by Default
 
-Collections own their elements **only if element type is `own T`**.
+val l: list<int> = {1,2,3}
 
-Example:
+	•	Immutable
+	•	Inline where possible
+	•	Adding returns a new list
 
-```bestie
-list<own User> users
-```
+⸻
 
-* `users.freeDeep()` frees all users
-* `users.free()` frees only the container
+8.2 Mutable via Builders
 
----
+val l = list<int>.of(1,2,3)
+l.add(4) // returns new list
 
-### 8.2 Copying Collections
 
-* Value collections → deep copy
-* Reference collections → reference copy
-* Ownership collections → move only
+⸻
 
-Illegal:
+8.3 Containers of Pointers / Objects
 
-```bestie
-val a: list<own User>
-val b = a   // compile-time error
-```
-
----
-
-### 8.3 Immutable & Concurrent Variants
-
-```bestie
-val l = list<int>.asArray.asImmutable
-```
+list<own User>
+list<ptr<int>>
 
 Rules:
+	•	list<own T> owns its elements
+	•	Destruction is recursive
+	•	No leaks by design
 
-* Immutable collections may be shared across threads
-* No mutation APIs are available
-* Compile-time enforced
+⸻
 
----
+9. Copy Semantics
 
-## 9. Function Calls and Memory
+9.1 Shallow Copy
 
-### 9.1 Parameter Passing
+Default assignment:
 
-Default: pass by value
+val a = b
 
-Explicit:
+Rules:
+	•	Value types: bitwise copy
+	•	Own types: forbidden
+	•	Ref types: copy reference
 
-* `ref` → borrow
-* `own` → move
+⸻
 
-Example:
+9.2 Deep Copy
 
-```bestie
-fun process(own data: Data)
-```
+Explicit only:
 
----
+val c = b.copy()
 
-### 9.2 Return Values
+Rules:
+	•	Must be explicitly implemented
+	•	Often provided by std-lib for containers
+	•	No implicit deep copies
 
-* Returning `own` transfers ownership
-* Returning `ref` requires owner to outlive caller
-* Returning values copies
+⸻
 
----
+10. new(), init(), and Allocation
 
-## 10. Scope-Based Cleanup
+10.1 Allocation Rules
 
-Bestie allows **explicit scope-based cleanup**, but never implicit GC.
+Bestie does not encourage new().
+	•	Objects are created via factories
+	•	Builders handle complex allocation
+	•	Compiler decides layout and placement
 
-Example:
+User.of(...)
+File.open(...)
 
-```bestie
-{
-    own file = File.open()
-    // use file
-    file.free()
-}
-```
 
-Leaving scope without freeing is a compile-time error unless:
+⸻
 
-* Ownership was moved
-* Ownership was returned
+10.2 new() and init()
 
----
+Rules:
+	•	new() and init() are restricted
+	•	Not part of public APIs
+	•	Can be blocked via annotations
+	•	Enforced by compiler
 
-## 11. No Null, No Undefined Behavior
+This is documented in oop.md, not here.
 
-Bestie guarantees:
+⸻
 
-* No null references
-* No use-after-free
-* No double free
-* No uninitialized memory access
+11. malloc / realloc / calloc
 
-Violations are caught at **compile time**, not runtime.
+Bestie does not expose raw allocators in core.
 
----
+Instead:
+	•	new() implicitly knows size
+	•	Layout is compile-time known
+	•	Reallocation is container-level
 
-## 12. Relation to Concurrency
+Low-level allocation helpers live in memory-api, not core.
 
-Memory rules integrate directly with concurrency:
+⸻
 
-* Only immutable or owned data may cross threads
-* References cannot escape thread boundaries
-* Pointer usage is restricted in concurrent contexts
+12. Concurrency & Memory
 
-This ensures:
+Rules:
+	•	own cannot be shared across threads
+	•	ref requires lifetime & thread validation
+	•	Immutable objects are thread-safe by design
+	•	single, data, value, enum are thread-safe
 
-* Data-race freedom
-* Deterministic memory behavior
+⸻
 
----
+13. What Bestie Explicitly Rejects
 
-## 13. What This Model Rejects
+Bestie does not have:
+	•	null
+	•	none
+	•	nil
+	•	undefined
+	•	unsafe
+	•	GC
+	•	Runtime ownership checks
+	•	Implicit heap allocation
 
-Explicitly rejected designs:
+⸻
 
-* Garbage collection
-* Implicit reference counting
-* Arena sublanguages
-* Unsafe blocks
-* Borrow inference complexity
-* Runtime lifetime tracking
+14. Summary
 
----
+Bestie’s memory model is:
+	•	Explicit
+	•	Minimal
+	•	Predictable
+	•	Safe
+	•	Fast
 
-## 14. Summary
+It gives system-level control without system-level footguns.
 
-Bestie’s memory model provides:
-
-* C-level control
-* Rust-like safety (without complexity)
-* Backend-friendly predictability
-* Compile-time guarantees
-* A single mental model
-
-Memory is not managed *for* the developer.
-Memory is managed **with** the developer — explicitly, safely, and deterministically.
+Bestie does not try to hide memory.
+Bestie makes memory impossible to misuse accidentally.
