@@ -1,110 +1,111 @@
-# Bestie Language — Object-Oriented Programming (OOP)
+Bestie Language — Object-Oriented Programming (OOP)
 
-This document defines **Object-Oriented Programming in Bestie**.
+This document defines Object-Oriented Programming in Bestie.
 
 OOP in Bestie is:
-- Explicit
-- Compile-time driven
-- Static by default
-- Dynamic only when requested
-- Memory-aware
-- Concurrency-safe by design
+	•	Explicit
+	•	Compile-time driven
+	•	Static by default
+	•	Dynamic only when explicitly requested
+	•	Memory-aware
+	•	Concurrency-safe by construction
 
-Bestie treats OOP as a **tool**, not a paradigm.
+Bestie treats OOP as a controlled toolset, not a dominant paradigm.
 
----
+⸻
 
-## 1. Core OOP Philosophy
+1. Core OOP Philosophy
 
-Bestie rejects:
-- Implicit dynamic dispatch
-- “Everything is an object”
-- Inheritance-heavy design
-- Runtime polymorphic surprises
+Bestie explicitly rejects:
+	•	Implicit dynamic dispatch
+	•	“Everything is an object”
+	•	Inheritance-heavy hierarchies
+	•	Runtime polymorphic surprises
 
 Bestie enforces:
-- Static dispatch by default
-- Explicit polymorphism
-- Ownership-aware object graphs
-- Clear memory and concurrency semantics
+	•	Static dispatch by default
+	•	Explicit polymorphism
+	•	Ownership-aware object graphs
+	•	Deterministic memory layout
+	•	Compile-time resolvable semantics
 
-If OOP exists in Bestie, it must:
-1. Be analyzable at compile time
-2. Preserve performance
-3. Preserve memory layout guarantees
-4. Not hide behavior
+Golden Rule
 
----
+If behavior can be resolved at compile time, it must be resolved at compile time.
 
-## 2. Class Kinds
+Any OOP feature violating this rule is excluded from the core language.
 
-Bestie supports the following **class kinds**:
+⸻
 
-### 2.1 `data class`
+2. Class Kinds
 
-Purpose:
-- Pure data aggregation
-- Structural equality
-- Domain modeling
+Bestie supports multiple explicit class kinds, each with strict guarantees.
 
-Properties:
-- Fields only
-- No mutable state by default
-- No inheritance
-- No virtual methods
+⸻
 
-Example:
-```bestie
+2.1 data class
+
+Purpose
+	•	Pure data aggregation
+	•	Structural equality
+	•	Domain modeling
+
+Properties
+	•	Fields only
+	•	Immutable by default
+	•	No identity semantics
+	•	No inheritance
+	•	No virtual methods
+
 data class User {
     id: int
     name: str
 }
 
-Rules:
+Rules
 	•	Cannot be open
-	•	Cannot have protected members
-	•	Inner classes must be priv value classes only
+	•	Cannot be inherited
+	•	Cannot declare protected members
+	•	Inner classes must be priv value class only
 
 ⸻
 
 2.2 value class
 
-Purpose:
+Purpose
 	•	Lightweight, inlineable objects
 	•	Zero or near-zero overhead
 
-Properties:
+Properties
 	•	No identity
-	•	Copy by value
+	•	Copy-by-value
 	•	No inheritance
 	•	No virtual dispatch
 
-Example:
 value class Point {
     x: int
     y: int
 }
 
-Rules:
+Rules
 	•	Cannot contain own fields
 	•	Cannot be open
-	•	Inner classes forbidden
+	•	Inner classes are forbidden
 
 ⸻
 
 2.3 enum / enum class
 
-Purpose:
+Purpose
 	•	Closed sets of values
 	•	Compile-time exhaustiveness
 
-Example:
 enum class Status {
     Active,
     Disabled
 }
 
-Rules:
+Rules
 	•	No inheritance
 	•	No mutable state
 	•	Always thread-safe
@@ -113,21 +114,20 @@ Rules:
 
 2.4 single class
 
-Purpose:
+Purpose
 	•	Process-level singleton
 	•	Global coordination point
 
-Example:
 single class Config {
     port: int
 }
 
-Properties:
+Properties
 	•	Exactly one instance per process
-	•	getInstance() is implicit and thread-safe
-	•	Lazy, safe initialization
+	•	Implicit, thread-safe access
+	•	Lazy and deterministic initialization
 
-Rules:
+Rules
 	•	Cannot be open
 	•	Cannot be inherited
 	•	Inner classes must be priv
@@ -135,68 +135,68 @@ Rules:
 
 ⸻
 
-2.5 class (closed by default)
+2.5 class (Closed by Default)
 
-Purpose:
+Purpose
 	•	Standard object with identity
 
-Example:
 class File {
     path: str
 }
 
-Properties:
+Properties
 	•	Closed by default
-	•	No inheritance unless explicitly allowed
 	•	Static dispatch
+	•	No inheritance unless explicitly enabled
 
 ⸻
 
 2.6 open class
 
-Purpose:
+Purpose
 	•	Explicit inheritance root
 	•	Explicit polymorphic intent
 
-Example:
 open class Shape {
     @virtual fun area(): int
 }
 
-Rules:
+Rules
 	•	Must be explicitly marked open
 	•	Virtual methods must be explicitly annotated
-	•	Inheritance is single-only
+	•	Single inheritance only
 
 ⸻
 
 2.7 abstract class
 
-Purpose:
+Purpose
 	•	Partial implementation
 	•	Shared logic
 
-Rules:
+Rules
 	•	May contain abstract methods
 	•	Cannot be instantiated
-	•	Follows same rules as open class
+	•	Follows all open class rules
 
 ⸻
 
 3. Visibility Modifiers
 
 Bestie supports:
-pub | pkg | protec | priv
-Rules:
-	•	Top-level classes cannot be priv
-	•	pkg is the default
-	•	protec only applies to inheritance
-	•	Inner members cannot widen visibility beyond their outer scope
 
-Example (illegal):
+pub | pkg | protec | priv
+
+Rules
+	•	Top-level declarations cannot be priv
+	•	pkg is the default
+	•	protec applies only to inheritance
+	•	Inner declarations cannot widen visibility
+
 pkg class A {
     pub class B {}   // ❌ illegal
 }
+
 
 ⸻
 
@@ -204,110 +204,183 @@ pkg class A {
 
 Inner classes are lexically nested, not implicitly bound.
 
-Rules:
-	•	No implicit access to outer instance
-	•	No hidden captures
-	•	Must obey outer visibility
+Rules
+	•	No implicit capture of outer instance
+	•	No hidden references
+	•	Explicit qualification required
+	•	Visibility constrained by outer declaration
 
-Inner classes may have:
-	•	Methods
-	•	Properties
-	•	Annotations
-
-Inner classes may not:
-	•	Be open if outer is single or data
-	•	Escalate visibility
+Inner classes:
+	•	May declare methods and properties
+	•	May use annotations
+	•	Cannot be open if outer is data, value, or single
 
 ⸻
 
-5. Properties (Fields with Accessors)
+5. this and super Resolution Rules
 
-Property syntax:
-val name: str => { get }
-var age: int => { get; set }
+5.1 this
+
+this always resolves statically.
 
 Rules:
-	•	Properties compile to methods
-	•	No backing field magic
-	•	Ownership rules apply
+	•	Refers to the lexically enclosing instance
+	•	Resolution is compile-time
+	•	No implicit rebinding
 
-Ownership example:
-val own address: Address => { get }
-Properties:
-	•	Allowed in classes and single classes
-	•	Allowed in inner classes
-	•	Forbidden in protocols
-	•	Discouraged in data/value classes (prefer direct fields)
+class Outer {
+    val x: int
 
-⸻
-
-6. Protocols (Interfaces)
-
-Protocols define behavior contracts.
-
-Example:
-protocol Serializable {
-    fun serialize(): str
+    class Inner {
+        fun f(o: Outer) {
+            this      // Inner
+            o          // Outer (explicit)
+        }
+    }
 }
+
+There is no implicit Outer.this.
+All outer access must be explicit and type-safe.
+
+⸻
+
+5.2 super
+
+super is allowed only when inheritance exists and is fully resolvable at compile time.
+
 Rules:
+	•	Refers to the immediate parent class
+	•	Cannot be dynamic
+	•	Cannot cross containment boundaries
+
+open class A {
+    fun f(): int
+}
+
+class B : A {
+    fun g(): int {
+        return super.f()
+    }
+}
+
+Invalid cases:
+	•	super in non-inheriting classes
+	•	super inside inner classes
+	•	super targeting protocol defaults directly
+
+Protocol default resolution follows explicit rules (see Section 8).
+
+⸻
+
+6. Properties (Fields with Accessors)
+
+Properties compile to explicit getter/setter methods.
+
+val name: str => { get }
+var age: int  => { get; set }
+
+Rules
+	•	No implicit backing fields
+	•	Ownership rules apply
+	•	Mutation must be explicit
+
+Allowed in
+	•	class
+	•	open class
+	•	single class
+	•	Inner classes
+
+Forbidden in
+	•	protocol
+	•	Discouraged in data / value classes
+
+⸻
+
+7. Protocols (Behavior Contracts)
+
+Protocols define behavioral contracts, not state.
+
+protocol Printable {
+    fun print(): str
+}
+
+Rules
 	•	No fields
 	•	Methods only
 	•	Default implementations allowed
-	•	No state
+	•	No instance state
 	•	Static dispatch by default
 
 ⸻
 
-7. Group Protocols
+7.1 Protocol Inheritance
 
-Group protocols aggregate protocols:
-group protocol Persistable {
-    Readable,
-    Writable
+Protocols may extend other protocols.
+
+protocol Hashable {
+    fun hash(): int
 }
-Rules:
-	•	No methods of their own
-	•	No state
-	•	Dispatch rules inherited from members
-	•	May mix static and virtual protocols
+
+protocol Comparable {
+    fun compare(other: Self): int
+}
+
+protocol Printable {
+    fun print(): str
+}
+
+protocol Object : Hashable, Comparable, Printable
+
+Rules
+	•	All parent protocol methods are included
+	•	Method resolution is compile-time
+	•	No diamond ambiguity (no state, no fields)
+	•	Conflicting defaults must be resolved explicitly by implementors
+
+Protocols do not form runtime hierarchies.
 
 ⸻
 
 8. Polymorphism Model
 
-Bestie supports three forms of polymorphism:
+Bestie supports three explicit forms of polymorphism.
+
+⸻
 
 8.1 Overloading (Static)
+
 fun draw(x: int)
 fun draw(x: Point)
 
-Resolved at compile time.
+Resolved entirely at compile time.
 
 ⸻
 
 8.2 Static Protocol Polymorphism (Default)
+
 protocol Logger {
     fun log(msg: str)
 }
 
-Dispatch:
-	•	Compile-time
+	•	Compile-time dispatch
 	•	No vtables
-	•	Zero overhead
+	•	Zero runtime cost
 
 ⸻
 
 8.3 Dynamic Polymorphism (Explicit)
 
 Dynamic dispatch requires @virtual.
+
 protocol Shape {
     @virtual fun area(): int
 }
 
-Rules:
-	•	@virtual must be explicit
-	•	@override required
-	•	Vtables only generated when needed
+Rules
+	•	@virtual is mandatory
+	•	@override is mandatory
+	•	Vtables generated only when required
+	•	Dynamic dispatch is opt-in and localized
 
 ⸻
 
@@ -315,7 +388,7 @@ Rules:
 
 9.1 Override Rules
 	•	@override is mandatory
-	•	Applies to both static and virtual methods
+	•	Applies to static and virtual methods
 	•	Signature must match exactly
 
 ⸻
@@ -327,55 +400,51 @@ If:
 	•	Implements protocols C, D
 	•	All define method m
 
-Then:
-	1.	Class B implementation wins
-	2.	If B.m is abstract → A must implement
-	3.	Protocol defaults are secondary
+Resolution order:
+	1.	Class B
+	2.	Concrete implementation in A
+	3.	Protocol default implementations
 
-This rule is non-negotiable.
+Protocol defaults are never implicitly chained.
 
 ⸻
 
 10. Construction Rules (init / new)
 
 Bestie separates:
-	•	Initialization (init)
 	•	Allocation (new)
+	•	Initialization (init)
 
-Rules:
+Rules
 	•	Class.new() is canonical
 	•	init() never allocates
-	•	Factories/builders should hide both
+	•	Builders/factories may hide both
 
-Preventing misuse:
+Restrictions:
 	•	@noNew
 	•	@noInit
 	•	@noConstruct
-
-These annotations may be applied to:
-	•	Classes
-	•	Protocols
 
 Enforced at compile time.
 
 ⸻
 
-11. Design Patterns in OOP Core
+11. Design Patterns in Core
 
-Included in core:
+Included:
 	•	single class (Singleton)
 
-Included in std-lib:
+In std-lib:
 	•	Factory (protocol)
 	•	Builder (protocol)
 
 Excluded:
 	•	Observer
 	•	Strategy
-	•	Command
 	•	Visitor
+	•	Command
 
-These are expressible using:
+These are expressible via:
 	•	Protocols
 	•	Functions
 	•	Lambdas
@@ -387,13 +456,14 @@ These are expressible using:
 Always thread-safe:
 	•	data class
 	•	value class
-	•	enum
+	•	enum/enum class
 	•	single class (initialization)
 	•	@immutable classes
+	•	Effectively immutable classes (all instance members are val)
 
 User responsibility:
 	•	open class
-	•	Mutable closed classes
+	•	Classes with var instance members
 
 Concurrency safety is ownership-driven, not lock-driven.
 
@@ -413,9 +483,8 @@ Concurrency safety is ownership-driven, not lock-driven.
 Bestie OOP is:
 	•	Explicit
 	•	Predictable
-	•	Fast
+	•	Compile-time resolvable
 	•	Memory-safe
 	•	Concurrency-aware
 
-OOP exists to model reality, not to impress frameworks.
-
+OOP in Bestie exists to model reality clearly, not to enable accidental complexity.
