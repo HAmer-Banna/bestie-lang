@@ -65,7 +65,6 @@ The following are also **value classes**:
 - `str`
 - `tuple`
 - `ptr<T>`
-- `option<T>` (enum class)
 - collection literals (`list`, `set`, `map` — immutable by default)
 
 Value classes:
@@ -124,7 +123,6 @@ Core concepts:
 	•	Data / value / enum classes
 	•	Single classes
 	•	Protocols (static and virtual)
-	•	Group protocols
 	•	Explicit inheritance rules
 	•	Explicit polymorphism
 
