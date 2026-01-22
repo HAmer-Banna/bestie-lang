@@ -1,238 +1,366 @@
-Functional Programming (FP) in Bestie
+Bestie Language — Functional Programming (FP)
 
-This document defines the functional programming model of the Bestie language. FP in Bestie is explicit, statically analyzable, and compile-time enforced, with no reliance on runtime magic, nullability, or implicit control flow.
+This document defines Functional Programming constructs in Bestie.
 
-Bestie FP is designed to:
-	•	Be predictable at compile time
-	•	Compose naturally with OOP and systems programming
-	•	Avoid hidden allocations and runtime penalties
-	•	Eliminate ambiguity between “no value” and “not returned”
+Functional programming in Bestie is:
+	•	Explicit
+	•	Compile-time driven
+	•	Allocation-aware
+	•	Side-effect explicit
+	•	Fully compatible with OOP and systems programming
+
+FP in Bestie is not a separate paradigm.
+It is a set of composable tools that integrate seamlessly with the core language.
 
 ⸻
 
-1. Functions
+1. FP Philosophy
 
-1.1 Function Declaration
+Bestie rejects:
+	•	Hidden closures
+	•	Implicit heap allocation
+	•	Lazy evaluation by default
+	•	Runtime-only abstractions
+	•	Magical type inference
 
-Functions are declared using the fun keyword.
+Bestie enforces:
+	•	Explicit data flow
+	•	Compile-time resolution
+	•	Ownership-aware functions
+	•	Deterministic execution
+	•	Zero-cost abstractions
+
+Golden Rule
+
+If a function call, binding, or dispatch can be resolved at compile time, it must be.
+
+⸻
+
+2. Functions
+
+Functions are first-class values, but not implicitly heap-allocated.
+
+2.1 Function Declaration
 
 fun add(a: int, b: int): int {
     return a + b
 }
 
-Rules:
-	•	fun is the only function keyword
-	•	Return types are explicit (except for void)
-	•	There is no function-level type inference for return types
+Properties:
+	•	Static dispatch by default
+	•	No implicit captures
+	•	No hidden allocation
+	•	Explicit return types
 
 ⸻
 
-1.2 Void Functions
+2.2 Expression Functions
 
-Functions that do not return a value use void:
+Single-expression functions may omit braces:
 
-fun log(msg: str): void {
-    println(msg)
-}
-
-Notes:
-	•	return; is allowed but discouraged
-	•	The compiler emits a warning if return; is used in void
-
-⸻
-
-2. Complete vs Partial Functions
-
-Bestie replaces null, nil, undefined, and sentinel values with a compile-time distinction between complete and partial functions.
-
-There is no runtime empty value.
-
-⸻
-
-2.1 Complete Functions
-
-A complete function guarantees that it returns a value on all execution paths.
-
-fun getUser(id: int): User {
-    return repository.find(id)
-}
-
-Rules:
-	•	All control-flow paths must return a value
-	•	The compiler proves completeness
-	•	Consumers do not need guards
-
-Invalid:
-
-fun f(): int {
-    if (cond) {
-        return 1
-    }
-}
-
-Compile-time error: not all paths return a value.
-
-⸻
-
-2.2 Partial Functions
-
-A partial function explicitly declares that it may not return a value.
-
-Syntax:
-
-fun getUser(id: int): User ?
-
-With body:
-
-fun getUser(id: int): User ? {
-    if (exists(id)) {
-        return repository.find(id)
-    }
-    return
-}
-
-Rules:
-	•	? marks partiality
-	•	return; is only valid in partial or void functions
-	•	No runtime representation of absence exists
-
-⸻
-
-2.3 Calling Partial Functions
-
-Calling a partial function forces the caller to handle control flow explicitly.
-
-fun process(id: int): void {
-    val user = getUser(id)
-    if (user ?) {
-        sendEmail(user)
-    }
-}
-
-The compiler enforces:
-	•	Partial calls cannot be used as complete expressions
-	•	Results must be guarded or transformed
-
-⸻
-
-2.4 Lambdas and Partiality
-
-Lambdas may also be complete or partial.
-
-Complete lambda:
-
-val inc = (x: int) => x + 1
-
-Partial lambda:
-
-val find = (x: int) => User ? {
-    if (x > 0) return repo.get(x)
-    return
-}
+fun square(x: int): int = x * x
 
 
 ⸻
 
 3. Lambdas
 
-3.1 Syntax
+Lambdas are anonymous functions with explicit capture rules.
 
-Lambdas use the fat arrow =>.
+val f = (x: int): int => x * 2
 
-val sum = (a: int, b: int) => a + b
-
-Block form:
-
-val f = (x: int) => {
-    val y = x * 2
-    return y + 1
-}
-
+Rules:
+	•	Parameter types are explicit
+	•	Return type inferred from body
+	•	Captures must be explicit
+	•	No implicit heap allocation
 
 ⸻
 
-3.2 Lambda Rules
-	•	Lambdas are values
-	•	Capture is explicit and immutable
-	•	No implicit heap allocation
+3.1 Capture Rules
+
+By default, lambdas capture nothing.
+
+Explicit capture syntax is required:
+
+val factor: int = 3
+val f = [factor](x: int) => x * factor
+
+Rules:
+	•	Captured values are copied
+	•	own values cannot be captured
+	•	Captures are immutable
+	•	Capture layout is compile-time known
 
 ⸻
 
 4. Higher-Order Functions
 
-Functions can accept and return functions.
+Functions may accept or return other functions.
 
-fun apply(x: int, f: (int) => int): int {
+fun apply(f: (int) -> int, x: int): int {
     return f(x)
 }
 
-Partial higher-order example:
-
-fun tryApply(x: int, f: (int) => int ?): int ? {
-    return f(x)
-}
-
+Rules:
+	•	Function types are compile-time types
+	•	No runtime boxing
+	•	No dynamic dispatch unless explicitly annotated
 
 ⸻
 
-5. Function Overloading
+5. Partial Functions
 
-Bestie supports compile-time overloading.
+Bestie supports partial functions, denoted by ?.
 
-fun print(x: int): void
-fun print(x: str): void
+fun parseInt(s: str): int?
 
 Rules:
-	•	Resolution is static
-	•	No runtime dispatch
-	•	No implicit coercion
+	•	Caller must handle partiality
+	•	Compiler enforces exhaustiveness
+	•	No implicit exceptions
 
 ⸻
 
-6. Methods vs Functions
+6. Option and Error-Oriented FP
 
-Methods are functions bound to a type.
+Bestie avoids exceptions and nulls.
 
-fun User.fullName(): str {
-    return first + " " + last
-}
+Preferred FP-style returns:
+	•	option<T>
+	•	T?
+	•	Error returns
+
+Example:
+
+fun findUser(id: int): option<User>
 
 Rules:
-	•	Same rules as functions
-	•	Can be complete or partial
+	•	Errors are values
+	•	Control flow is explicit
+	•	No hidden stack unwinding
 
 ⸻
 
-7. Purity and Side Effects
+7. Immutability in FP
 
-Bestie does not enforce purity, but encourages it.
+FP in Bestie strongly prefers immutability.
 
 Guidelines:
-	•	Prefer complete functions
-	•	Isolate side effects
-	•	Use partial functions to express absence, not failure
+	•	Use val by default
+	•	Prefer value types
+	•	Avoid var in functional code
+	•	Favor transformation over mutation
+
+val users = users.map(u => u.withName("Alice"))
+
+Immutability is enforced by:
+	•	Type system
+	•	Ownership rules
+	•	Compile-time checks
 
 ⸻
 
-8. Relationship to std-lib FP Utilities
+8. Extension Functions
 
-Higher-level FP utilities (map, filter, fold, etc.) live in:
+Bestie supports extension functions, similar in spirit to Kotlin, but with stricter compile-time guarantees.
 
-std-lib.functional
-
-The FP core defines:
-	•	Function semantics
-	•	Lambda behavior
-	•	Partiality
-
-The standard library provides combinators, not language magic.
+Extension functions allow adding behavior to existing types without modifying them and without runtime cost.
 
 ⸻
 
-9. Design Principles
-	•	No null
-	•	No runtime emptiness
-	•	No implicit control flow
-	•	Everything is proven at compile time
+8.1 Declaring Extension Functions
 
-Bestie FP is intentionally small, explicit, and predictable.
+Syntax:
+
+fun TypeName.functionName(params): ReturnType
+
+Example:
+
+fun str.isEmpty(): bool {
+    return this.length == 0
+}
+
+Usage:
+
+val s: str = "hello"
+val empty = s.isEmpty()
+
+
+⸻
+
+8.2 Compilation Model
+
+Extension functions are:
+	•	Statically resolved
+	•	Compiled as plain functions
+	•	Desugared at compile time
+
+The above call is equivalent to:
+
+isEmpty(s)
+
+There is:
+	•	No virtual dispatch
+	•	No vtables
+	•	No runtime lookup
+	•	No modification of the original type
+
+⸻
+
+8.3 this in Extension Functions
+
+Inside an extension function:
+	•	this refers to the receiver parameter
+	•	this is immutable unless the receiver type allows mutation
+	•	Resolution is compile-time
+
+fun Point.magnitude(): float {
+    return sqrt(this.x * this.x + this.y * this.y)
+}
+
+
+⸻
+
+8.4 Extension Functions vs Member Functions
+
+Rules:
+	•	Member functions always win over extensions
+	•	No override is possible
+	•	No polymorphism through extensions
+
+class A {
+    fun f(): int
+}
+
+fun A.f(): int   // ❌ illegal (name collision)
+
+This prevents ambiguity and preserves compile-time determinism.
+
+⸻
+
+8.5 Extension Functions and Protocols
+
+Extension functions do not participate in protocol dispatch.
+
+protocol Printable {
+    fun print(): str
+}
+
+fun Printable.debug(): str {
+    return "debug: " + this.print()
+}
+
+Rules:
+	•	Extensions are not protocol implementations
+	•	They cannot satisfy protocol requirements
+	•	They are resolved statically at call site
+
+⸻
+
+8.6 Generic Extension Functions
+
+Extensions may be generic:
+
+fun <T> list<T>.head(): T? {
+    return if (this.size > 0) this[0] else none
+}
+
+Rules:
+	•	Fully monomorphized
+	•	No type erasure
+	•	No runtime overhead
+
+⸻
+
+9. Function Composition
+
+Bestie supports explicit composition via functions.
+
+fun compose<A, B, C>(
+    f: (B) -> C,
+    g: (A) -> B
+): (A) -> C {
+    return (x: A) => f(g(x))
+}
+
+Composition is:
+	•	Explicit
+	•	Type-safe
+	•	Compile-time resolvable
+
+⸻
+
+10. Recursion
+
+Recursion is supported but explicit.
+
+Rules:
+	•	No implicit tail-call optimization guarantee
+	•	Tail recursion may be optimized by the compiler
+	•	Stack usage is deterministic
+
+fun fact(n: int): int {
+    if (n <= 1) return 1
+    return n * fact(n - 1)
+}
+
+
+⸻
+
+11. FP and Memory Model
+
+FP in Bestie respects ownership.
+
+Rules:
+	•	own<T> cannot cross function boundaries implicitly
+	•	Passing ownership must be explicit
+	•	Closures cannot capture owning references
+
+This ensures FP remains compatible with:
+	•	Manual memory management
+	•	Concurrency guarantees
+
+⸻
+
+12. FP vs OOP Interoperability
+
+FP and OOP are fully interoperable.
+	•	Methods are functions with receivers
+	•	Extension functions bridge FP and OOP
+	•	Protocols define behavior contracts
+	•	Lambdas replace many classic OO patterns
+
+FP does not replace OOP.
+It reduces accidental complexity.
+
+⸻
+
+13. What Bestie Deliberately Avoids in FP
+	•	Implicit currying
+	•	Lazy evaluation by default
+	•	Runtime monads
+	•	Effect systems hidden from the type system
+	•	Reflection-based functional dispatch
+
+⸻
+
+14. Summary
+
+Functional Programming in Bestie is:
+	•	Explicit
+	•	Compile-time resolvable
+	•	Allocation-aware
+	•	Ownership-safe
+	•	Zero-cost by design
+
+FP in Bestie exists to compose behavior clearly, not to obscure execution.
+
+⸻
+
+Next Documents
+	•	oop.md — Object-Oriented Programming
+	•	core.md — Language Core
+	•	memory.md — Ownership & Allocation
+	•	errors.md — Error Model
+	•	effective-bestie/ — Practical FP & OOP Guidelines
