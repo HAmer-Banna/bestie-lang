@@ -393,28 +393,7 @@ Cycles break:
 
 ---
 
-## 12. Local and Internal Code
-
-### 12.1 Local Classes
-
-Classes declared inside functions:
-
-```bestie
-fun f() {
-    class Temp { }
-}
-```
-
-Rules:
-
-* Always `priv`
-* Never exported
-* Cannot implement `pub` protocols
-* Cannot affect module API
-
----
-
-## 13. Compilation Model
+## 12. Compilation Model
 
 Bestie uses **Ahead-Of-Time (AOT) compilation**.
 
@@ -436,7 +415,7 @@ There is:
 
 ---
 
-## 14. Linking Model
+## 13. Linking Model
 
 Bestie uses a **static linking model**.
 
@@ -455,7 +434,7 @@ This enables:
 
 ---
 
-## 15. Metadata and Reflection
+## 14. Metadata and Reflection
 
 Rules:
 
@@ -470,7 +449,7 @@ Optional compile-time metadata:
 
 ---
 
-## 16. REPL and Interactive Mode
+## 15. REPL and Interactive Mode
 
 REPL operates in a **virtual module**:
 
@@ -482,7 +461,7 @@ REPL semantics match the language model.
 
 ---
 
-## 17. Design Rationale
+## 16. Design Rationale
 
 This system ensures:
 
@@ -495,7 +474,7 @@ This system ensures:
 
 ---
 
-## 18. Summary
+## 17. Summary
 
 * Source files are **code**
 * Modules are **architecture**
