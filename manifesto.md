@@ -1,83 +1,125 @@
-
-```md
 # The Bestie Manifesto
 
 Bestie is a practical programming language.
 
-Not ideological.
+Not academic.
 Not experimental.
-Not clever.
+Not clever for its own sake.
 
-Practical.
+Practical by design.
 
 ---
 
 ## What Bestie Is
 
-Bestie is a native, compiled language designed for:
+Bestie is a native, ahead-of-time compiled language built for:
 
-- Systems programming
-- Backend services
-- Bare metal
-- High-performance applications
+* Systems programming
+* Backend and distributed services
+* Bare-metal and embedded software
+* Performance-critical applications
 
-With one codebase.
-One mental model.
-One toolchain.
+With:
+
+* One language
+* One mental model
+* One deterministic toolchain
+
+No split between “low-level” and “high-level” modes.
 
 ---
 
 ## What Bestie Believes
 
-### Performance Is a Feature
+### Performance Is a First-Class Feature
 
-If a language is slow by design, no amount of tooling can save it.
+Performance is not an optimization phase.
+It is a design constraint.
 
 Bestie compiles to native code.
-No GC.
-No hidden costs.
+There is no garbage collector.
+There are no hidden runtime costs.
+
+If performance is optional, it will eventually be ignored.
 
 ---
 
-### Safety Is Not Protection
+### Safety Means Predictability, Not Restriction
 
-Bestie does not protect the programmer from intent.
+Bestie does not prevent programmers from making choices.
 
-It protects the programmer from accidents.
+It prevents:
 
-No null.
-No undefined behavior.
-No silent failure.
+* Accidents
+* Ambiguity
+* Undefined behavior
+
+There is:
+
+* No null
+* No silent failure
+* No undefined execution
+
+Safety exists to make intent explicit, not to forbid power.
 
 ---
 
-### Memory Is a Compiler Responsibility
+### Memory Is a Language Responsibility
 
-Programmers should control memory.
-They should not micromanage layout.
+Programmers must control *when* memory is allocated and released.
 
-Bestie guarantees optimal memory layout by default.
+They should not be forced to manage:
+
+* Padding
+* Layout
+* Hidden metadata
+
+Bestie guarantees:
+
+* Deterministic memory behavior
+* Optimal layout by default
+* Compile-time validated lifetimes
+
+Memory is something you reason about, not something you hope works.
 
 ---
 
-### Paradigms Are Tools
+### Abstractions Must Be Zero-Cost
 
-OOP is useful.
-FP is useful.
-Procedural code is useful.
+Abstractions exist to improve clarity.
+They must not impose runtime penalties.
 
-Dogma is not.
+If an abstraction cannot be compiled away,
+it does not belong in the core language.
 
-Bestie uses what works.
+---
+
+### Paradigms Are Tools, Not Identities
+
+Object-oriented programming is useful.
+Functional programming is useful.
+Procedural programming is useful.
+
+Bestie supports all of them.
+
+It enforces none of them.
+
+Dogma does not scale.
 
 ---
 
 ## What Bestie Is Not
 
-- Not a scripting language
-- Not a minimal language
-- Not a research language
-- Not a framework-driven language
+Bestie is:
+
+* Not a scripting language
+* Not a minimal or “tiny” language
+* Not a research experiment
+* Not framework-driven
+* Not runtime-centric
+
+There is no hidden magic.
+Everything that matters is visible.
 
 ---
 
@@ -85,12 +127,19 @@ Bestie uses what works.
 
 Because:
 
-- C gives control but no safety
-- Java gives safety but no control
-- Rust gives safety with cognitive overhead
-- Modern hardware deserves better tools
+* C gives control but no safety
+* C++ gives power but no predictability
+* Java gives safety but removes control
+* Rust gives safety with high cognitive cost
 
-Bestie exists to close that gap.
+Modern systems demand:
+
+* Native performance
+* Predictable behavior
+* Explicit control
+* Reasonable complexity
+
+Bestie exists to meet those demands without compromise.
 
 ---
 
@@ -98,18 +147,23 @@ Bestie exists to close that gap.
 
 Bestie promises:
 
-1. Native speed
-2. Explicit memory control
+1. Native performance
+2. Explicit and deterministic memory control
 3. Zero undefined behavior
-4. Professional ergonomics
+4. Professional-grade ergonomics
 5. Long-term stability
 
-And nothing more.
+Nothing hidden.
+Nothing implied.
+Nothing extra.
 
 ---
 
 ## Final Word
 
-Bestie is not trying to be everything.
+Bestie is not trying to cover every idea in programming.
 
-It is trying to be **right**.
+It is trying to get the fundamentals exactly right.
+
+Once the fundamentals are right,
+everything else becomes possible.
