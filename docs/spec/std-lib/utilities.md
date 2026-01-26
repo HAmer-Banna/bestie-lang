@@ -1,0 +1,224 @@
+# Bestie Standard Library — Utility Package
+
+This document defines the **utility package** of the Bestie standard library. These types form the foundation for memory management, error modeling, and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
+
+This package is part of the **core**. It does not depend on threading primitives, atomics, or runtime services beyond threadOS / threadLight.
+
+---
+
+## 1. StringBuilder
+
+`StringBuilder` is the canonical utility for efficient string construction.
+
+### Design
+
+* Mutable
+* Identity-based
+* Explicit allocation behavior
+* No implicit copies
+
+`StringBuilder` is intended for performance-sensitive paths where repeated string concatenation would otherwise cause unnecessary allocations.
+
+### Characteristics
+
+* Backed by a contiguous buffer
+* Growth strategy is deterministic
+* Conversion to `String` is explicit
+
+```bestie
+var sb = StringBuilder.new()
+sb.append("Hello")
+sb.append(" ")
+sb.append("World")
+
+val s = sb.toString()
+```
+
+---
+
+## 2. Arena
+
+`Arena` is a **value class** that provides region-based allocation.
+
+It allows fast allocation and bulk deallocation with well-defined lifetime semantics.
+
+### Construction
+
+```bestie
+val arena = Arena.of(1, MB)
+```
+
+* `size: int` — numeric size
+* `unit: SizeUnit` — enum (`KB`, `MB`, `GB`)
+
+### Allocation
+
+```bestie
+arena.add(42)
+arena.add(listOfInts)
+```
+
+* `add(T)` allocates a single value
+* `add(List<T>)` allocates a contiguous sequence
+
+All allocations belong to the arena and share the same lifetime.
+
+### Lifetime Control
+
+```bestie
+arena.reset()   // reuse memory
+arena.release() // invalidate arena
+```
+
+* `reset()` clears all allocations but keeps the arena usable
+* `release()` permanently invalidates the arena; further use is a compile-time error
+
+### Rules
+
+* Arenas do not move memory
+* Arenas do not escape their owning scope
+* Arenas do not participate in ownership transfer
+
+---
+
+## 3. Option<T>
+
+`Option<T>` represents **explicit presence or absence** of a value.
+
+Bestie does not use null, none, or nil.
+
+### Definition
+
+```bestie
+enum class Option<T> {
+  Present(T)
+  Not_Present
+}
+```
+
+### Usage
+
+```bestie
+fun findUser(id: int): Option<User> {
+  if exists(id) {
+    return Option.Present(loadUser(id))
+  }
+  return Option.Not_Present
+}
+```
+
+### Properties
+
+* Fully type-safe
+* Exhaustive pattern matching enforced
+* No implicit unwrapping
+
+---
+
+## 4. Result<T, E>
+
+`Result<T, E>` represents an operation that may succeed or fail with a typed error.
+
+### Definition
+
+```bestie
+enum class Result<T, E> {
+  Ok(T)
+  Err(E)
+}
+```
+
+### Usage
+
+```bestie
+fun parseInt(s: String): Result<int, ParseError> {
+  if valid(s) {
+    return Result.Ok(convert(s))
+  }
+  return Result.Err(ParseError.InvalidFormat)
+}
+```
+
+### Guidelines
+
+* Prefer `Result` for expected, recoverable failures
+* Do not mix `Result` and `throw` without justification
+
+---
+
+## 5. Comparable Protocol
+
+`Comparable` defines a total ordering between values.
+
+### Definition
+
+```bestie
+protocol Comparable<T> {
+  fun compareTo(other: T): int
+}
+```
+
+### Rules
+
+* Must be antisymmetric, transitive, and total
+* Used by sorting and ordering utilities
+* Resolved at compile time
+
+---
+
+## 6. Hashable Protocol
+
+`Hashable` defines a stable hash for a value.
+
+### Definition
+
+```bestie
+protocol Hashable {
+  fun hash(): int
+}
+```
+
+### Rules
+
+* Equal values must produce equal hashes
+* Hash must be stable for the value’s lifetime
+* No runtime reflection
+
+---
+
+## 7. rawAddress
+
+`rawAddress` exposes the raw memory address of a value or function.
+
+```bestie
+val addr = rawAddress(f)
+```
+
+### Purpose
+
+* FFI
+* Debugging
+* Tooling
+* Low-level interop
+
+### Rules
+
+* Unsafe by definition
+* Not ownership-aware
+* Cannot be used to bypass the type system
+
+`rawAddress` exists as an **explicit escape hatch**, not as a general-purpose API.
+
+---
+
+## Summary
+
+The utility package provides:
+
+* Explicit memory construction (`Arena`)
+* Explicit absence modeling (`Option`)
+* Typed failure (`Result`)
+* Structural contracts (`Comparable`, `Hashable`)
+* Controlled low-level access (`rawAddress`)
+
+These utilities establish the rhythm of Bestie’s standard library: **explicit, orthogonal, and compiler-verifiable**.
