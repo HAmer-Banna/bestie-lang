@@ -1,276 +1,197 @@
-# Bestie Standard Library — Functional Utilities (functional.md)
+# Functional Programming
 
-This document defines the **functional utilities** provided by the Bestie standard library.
-
-Functional utilities in Bestie are:
-
-* Explicit
-* Compile-time resolvable
-* Allocation-aware
-* Ownership-safe
-* Free of hidden runtime behavior
-
-They are designed to **compose with core collections**, not replace them, and to preserve Bestie’s core rhythm: *what happens in code is exactly what happens in memory*.
+This document defines the functional programming (FP) model in Bestie. FP in Bestie is intentionally **library-driven**, not runtime-driven, and avoids embedding behavior into data structures. Collections do **not** own methods such as `map` or `filter`; instead, functional operations are **free functions** imported from the standard functional library.
 
 ---
 
-## 1. Design Philosophy
+## Design Principles
 
-Bestie functional utilities deliberately avoid:
+Bestie’s functional model is guided by the following principles:
 
-* Lazy magic
-* Implicit allocations
-* Hidden iterators
-* Runtime closures with captured heap state
+1. **No Runtime Dependency**
+   Functional features are resolved at compile time and do not rely on a VM or runtime scheduler.
 
-Instead, they provide:
+2. **Functions Over Methods**
+   Operations such as `map`, `filter`, and `fold` are functions, not member methods. This preserves a clear separation between data and behavior.
 
-* Explicit transformation pipelines
-* Compiler-visible ownership flow
-* Predictable allocation behavior
-* Zero-cost abstractions where possible
+3. **Explicit Imports**
+   Functional capabilities are opt-in via imports. There is no implicit functional behavior on collections.
 
-Golden Rule:
+4. **Immutability by Default**
+   Functional operations never mutate inputs. New values are always produced.
 
-> If a functional operation allocates, moves, or copies data, it must be visible in the type signature.
+5. **Zero Magic**
+   No implicit lifting, no hidden iterators, and no implicit parallelism.
 
 ---
 
-## 2. Scope of Functional Utilities
+## Functional Library
 
-Functional utilities are provided as **free functions**, not methods.
-
-Reasons:
-
-* Avoid bloating core collection APIs
-* Preserve static dispatch
-* Enable specialization by the compiler
-* Prevent implicit `this` capture
-
-All functions live under:
+All functional operations are defined in:
 
 ```
-std::functional
+import bestie.lib.functional;
 ```
+
+Without this import, none of the functional symbols are visible.
 
 ---
 
-## 3. Core Functional Operations
+## Core Functional Operations
 
-### 3.1 map
+### map
 
 Transforms each element of a collection into a new value.
 
-Signature:
+```
+val xs = list<int>.of(1, 2, 3);
+val ys = map(xs, x => x * 2);
+```
+
+* `xs` is not modified
+* `ys` is a new collection
+* `map` is a free function
+
+---
+
+### filter
+
+Selects elements that satisfy a predicate.
 
 ```
-fun map<T, U>(
-    src: ref List<T>,
-    f: fn(T) -> U
-): List<U>
+val xs = list<int>.of(1, 2, 3, 4);
+val ys = filter(xs, x => x % 2 == 0);
+```
+
+---
+
+### fold
+
+Reduces a collection into a single value.
+
+```
+val sum = fold(xs, 0, (acc, x) => acc + x);
+```
+
+* The initial value is mandatory
+* No implicit identity is assumed
+
+---
+
+## Lambdas
+
+Lambdas are anonymous functions with explicit parameters.
+
+```
+(x, y) => x + y
 ```
 
 Rules:
 
-* Always produces a new collection
-* Allocation is explicit and visible
-* Source collection is never mutated
-* Function `f` must be pure (no side effects enforced by convention)
-
-Example:
-
-```
-val nums = List.of(1, 2, 3)
-val squares = map(nums, fn(x: int) -> int { x * x })
-```
+* Lambdas are expressions
+* Lambdas are strongly typed
+* No implicit `this`
 
 ---
 
-### 3.2 filter
+## Higher-Order Functions
 
-Selects elements based on a predicate.
-
-Signature:
+Functions can accept and return other functions.
 
 ```
-fun filter<T>(
-    src: ref List<T>,
-    predicate: fn(T) -> bool
-): List<T>
+val twice = f => x => f(f(x));
 ```
 
-Rules:
-
-* Produces a new collection
-* Preserves element order
-* Does not mutate the source
-* Allocation behavior is explicit
-
-Example:
-
-```
-val evens = filter(nums, fn(x: int) -> bool { x % 2 == 0 })
-```
+Higher-order behavior is resolved entirely at compile time.
 
 ---
 
-### 3.3 fold (reduce)
+## Partial Application
 
-Aggregates elements into a single value.
-
-Signature:
+Bestie supports partial application explicitly.
 
 ```
-fun fold<T, R>(
-    src: ref List<T>,
-    init: R,
-    f: fn(R, T) -> R
-): R
+val add = (a, b) => a + b;
+val add10 = partial(add, 10);
 ```
 
-Rules:
-
-* No allocation by default
-* Deterministic traversal order
-* Suitable for numeric and structural reduction
-
-Example:
-
-```
-val sum = fold(nums, 0, fn(acc: int, x: int) -> int { acc + x })
-```
+* `partial` is a standard library function
+* Partial application never captures mutable state
 
 ---
 
-### 3.4 forEach
+## Currying
 
-Applies a function to each element for side effects.
-
-Signature:
+Currying is supported through function definitions, not syntax sugar.
 
 ```
-fun forEach<T>(
-    src: ref List<T>,
-    f: fn(T) -> void
-): void
+val add = a => b => a + b;
 ```
 
-Rules:
-
-* Does not allocate
-* Used for IO or mutation outside the collection
-* Explicitly signals side effects
-
-Example:
-
-```
-forEach(nums, fn(x: int) { print(x) })
-```
+Currying is explicit and intentional.
 
 ---
 
-## 4. Allocation-Aware Variants
+## Composition
 
-### 4.1 mapInto (Arena-backed)
-
-Maps elements into a destination arena.
-
-Signature:
+Function composition is provided as a library utility.
 
 ```
-fun mapInto<T, U>(
-    src: ref List<T>,
-    arena: ref Arena,
-    f: fn(T) -> U
-): List<U>
+val f = x => x + 1;
+val g = x => x * 2;
+val h = compose(f, g);
 ```
 
-Rules:
-
-* All allocations occur inside the provided arena
-* Returned list is invalid after arena.reset() or arena.release()
-* Enables batch allocation patterns
-
-Example:
-
-```
-val arena = Arena.of(1, MB)
-val result = mapInto(nums, arena, fn(x: int) -> int { x * 2 })
-```
+Execution order is explicit and left-to-right.
 
 ---
 
-## 5. Ownership & Lifetime Rules
+## Functional Collections
 
-* Functional utilities never steal ownership implicitly
-* Returned collections own their elements unless arena-backed
-* `ref` inputs guarantee no mutation or ownership transfer
-* Arena-backed results are explicitly scoped
+Functional operations work on any collection type that satisfies the **iterable protocol**.
 
-Invalid cases (compile-time errors):
+* `list`
+* `set`
+* `queue`
+* `tree`
 
-* Returning arena-backed collections from longer-lived scopes
-* Capturing owned values inside functional callbacks
-
----
-
-## 6. No Lazy Evaluation
-
-Bestie does **not** provide lazy streams in core std-lib.
-
-Reasons:
-
-* Lazy evaluation hides control flow
-* Breaks predictability of allocation
-* Complicates debugging and reasoning
-
-Lazy abstractions may exist in **opt-in libraries**, never in core std-lib.
+Collections themselves remain structurally simple and behavior-free.
 
 ---
 
-## 7. Error Handling Integration
+## No Method Chaining
 
-Functional utilities compose with:
-
-* `Option<T>`
-* `Result<T, E>`
-
-Example:
+The following is **intentionally invalid**:
 
 ```
-val valid = filter(users, fn(u: User) -> bool {
-    u.age > 18
-})
+xs.map(x => x * 2)
 ```
 
-No implicit short-circuiting is performed.
+This restriction:
 
-Explicit variants may exist:
-
-* `mapResult`
-* `filterPresent`
-
-These must be named explicitly.
+* Prevents hidden allocations
+* Keeps data structures minimal
+* Avoids fluent-style overengineering
 
 ---
 
-## 8. What Bestie Deliberately Avoids
+## Error Handling
 
-* Implicit iterators
-* Monad syntax sugar
-* Operator overloading for pipelines
-* Runtime closures with captured heap state
-* Hidden allocation via lambdas
+Functional error handling is expressed via explicit types, not exceptions.
+
+```
+val result = map(xs, x => safeDivide(10, x));
+```
+
+Propagation rules are defined by the involved types, not by the functional system.
 
 ---
 
-## 9. Summary
+## Summary
 
-Bestie functional utilities:
+* Functional programming in Bestie is **explicit, minimal, and compile-time driven**
+* Collections do not own behavior
+* All functional power lives in `bestie.lib.functional`
+* No runtime, no magic, no implicit parallelism
 
-* Favor explicitness over cleverness
-* Preserve ownership and lifetime guarantees
-* Compose naturally with core collections
-* Scale from backend logic to systems code
-
-They provide the *benefits* of functional programming without sacrificing the **predictability required for system-level correctness**.
+This model keeps Bestie predictable, portable, and suitable for environments ranging from bare metal to large-scale systems.
