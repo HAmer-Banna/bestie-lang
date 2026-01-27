@@ -384,7 +384,7 @@ Extensions:
 
 ```bestie
 fun <T> list<T>.head(): T? {
-    return if (this.size > 0) this[0] else none
+    return if (this.size > 0) this[0]
 }
 ```
 
@@ -503,14 +503,4 @@ Functional programming in Bestie is:
 * Zero-cost by design
 
 FP in Bestie exists to **compose behavior clearly**, not to obscure execution.
-
----
-
-## Next Documents
-
-* `core.md`
-* `oop.md`
-* `memory.md`
-* `errors.md`
-* `effective-bestie/`
 
