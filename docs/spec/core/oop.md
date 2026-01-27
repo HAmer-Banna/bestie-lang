@@ -462,6 +462,3 @@ Bestie OOP is:
 * Concurrency-aware
 
 OOP exists to **model reality clearly**, not to enable accidental complexity.
-
-
-Do you want me to create that diagram next?
