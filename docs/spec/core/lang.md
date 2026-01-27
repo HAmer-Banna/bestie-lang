@@ -142,14 +142,13 @@ Disallowed:
 
 Primitive value types map directly to machine types:
 
-* `int8`, `int16`, `int32`, `int64`
-* `uint8`, `uint16`, `uint32`, `uint64`
-* `int`, `uint` (width inferred by target)
+* `byte`
+* `int32`, `int64`
+* `uint32`, `uint64`
 * `float32`, `float64`
+* `int`, `uint`, `float` (width inferred by target)
 * `bool`
 * `char`
-
-`double` does not exist.
 
 All primitives:
 
@@ -331,17 +330,4 @@ If a feature exists, it must:
 * Backward compatibility is mandatory
 * Experimental features require compiler flags
 * APIs evolve without breaking core guarantees
-
----
-
-## 15. Next Documents
-
-* `core.md` (this document)
-* `oop.md`
-* `fp.md`
-* `memory.md`
-* `concurrency.md`
-* `annotation.md`
-* `errors.md`
-* `effective-bestie/`
 
