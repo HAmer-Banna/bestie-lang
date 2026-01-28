@@ -205,13 +205,13 @@ Partial functions and methods are defined formally in **fp.md**.
 
 ---
 
-### 6.2 `switch` Expression
+### 6.2 `switch` as Statement and Expression
 
-`switch` is expression‑based and **has no fallthrough**.
+`switch` is both a **control statement** and an **expression**. and **has no fallthrough**.
 
 Properties:
 
-* Compact syntax (similar to modern Java switch)
+* Compact syntax
 * Exhaustiveness enforced when used as an expression
 * No implicit control flow
 
@@ -227,7 +227,7 @@ Bestie supports:
 
 ### 7.1 Loop `else`
 
-Loops may include an `else` clause, similar to Python:
+Loops may include an `else` clause:
 
 * Executed only if the loop completes normally
 * Skipped if the loop exits via `break`
