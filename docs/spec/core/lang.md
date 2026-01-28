@@ -135,6 +135,124 @@ Disallowed:
 
 ---
 
+### 4.4 Multiple Value Declarations
+
+Bestie makes a **strict distinction** between *multiple value declarations* and *tuples*.
+
+Multiple value declarations are a **binding convenience**, not a data structure.
+
+```bestie
+val x, y, z = 5, 6, 3
+```
+
+This is equivalent to:
+
+```bestie
+val x: int = 5
+val y: int = 6
+val z: int = 3
+```
+
+Rules:
+
+* All values on the right-hand side **must have the same type**
+* The common type may be inferred or explicitly annotated
+* Heterogeneous values are **not allowed**
+* No tuple value is created
+* Binding is positional and resolved at compile time
+
+Explicit typing is allowed:
+
+```bestie
+val x, y, z: int = 5, 6, 3
+```
+
+Invalid example (heterogeneous values):
+
+```bestie
+val x, y, z = 5, 6, 'c'    // ❌ illegal
+```
+
+Binding form restrictions:
+
+* All bindings in a declaration **must use the same keyword**
+* Mixing `val`, `var`, and `const` in a single declaration is illegal
+
+Invalid examples:
+
+```bestie
+val x, var y = 1, 2        // ❌ illegal
+const x, y = 1, 2         // ❌ illegal (runtime values)
+```
+
+Valid examples:
+
+```bestie
+val a, b = getPairInts()
+var i, j = 0, 1
+```
+
+Multiple value declarations are **pure syntax sugar** and are lowered by the compiler into independent bindings with no runtime cost.
+
+---
+
+### 4.5 Tuples and Destructuring Bindings
+
+Tuples are **first-class value types** that may contain **heterogeneous values**.
+
+```bestie
+val t: tuple = (5, 6, 'c')
+```
+
+Tuple destructuring creates bindings from a tuple value:
+
+```bestie
+val (x, y, z) = (5, 6, 'c')
+```
+
+Or with explicit type:
+
+```bestie
+val (x, y, z): tuple = (5, 6, 'c')
+```
+
+Rules:
+
+* Tuples may contain values of different types
+* Destructuring requires a tuple value
+* Parentheses **explicitly signal tuple semantics**
+* Tuple layout and arity are compile-time known
+
+This distinction ensures that **binding convenience never replaces data modeling**.
+
+---
+
+### 4.6 Ignoring Values with `_`
+
+Bestie allows the underscore identifier `_` to explicitly **ignore values** wherever a binding would otherwise be required.
+
+```bestie
+val x, _, z = 1, 2, 3
+val (_, y, _) = 5, 6, 'c'
+```
+
+Rules:
+
+* `_` introduces **no binding** and no lifetime
+* `_` may appear in any position
+* `_` is allowed in multiple declarations and tuple destructuring
+* `_` is allowed wherever ignoring a value does not violate Bestie’s type, ownership, or mutability rules
+* `_` suppresses unused-value diagnostics
+
+Restrictions:
+
+* `_` cannot be read from or assigned to
+* `_` is not a valid identifier
+
+All `_` usage is **compile-time only** and introduces no runtime behavior.
+
+---
+
 ## 5. Types
 
 ### 5.1 Primitive Types
