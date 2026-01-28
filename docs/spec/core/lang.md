@@ -4,15 +4,16 @@
 
 Bestie is a native, compiled programming language designed from first principles for **systems programming and backend engineering**.
 
-Bestie is not built around a single paradigm. Object‑oriented programming, functional programming, and low‑level control are treated as **explicit tools**, not ideologies.
+Bestie is not built around a single paradigm.
+Object-oriented programming, functional programming, and low-level control are treated as **explicit tools**, not ideologies.
 
 Bestie prioritizes:
 
-* Compile‑time resolution
+* Compile-time resolution
 * Deterministic execution
 * Predictable memory layout
-* Zero‑cost abstractions
-* Long‑term stability
+* Zero-cost abstractions
+* Long-term stability
 
 Bestie is conceptually:
 **Zig + Kotlin**, without inheriting the weaknesses of either.
@@ -32,7 +33,7 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 * Ownership validation
 * Pointer safety
 * Builder chains
-* Error‑handling paths
+* Error handling paths
 * Loop lowering and unrolling opportunities
 * Devirtualization
 * Concurrency safety (races, deadlocks, sharing rules)
@@ -58,13 +59,14 @@ A Bestie program consists of:
 
 The core language is **small and sealed**.
 
-Higher‑level abstractions live in:
+Higher-level abstractions live in:
 
 * `std-lib`
 * `std-api`
 * `std-framework`
 
-The core defines guarantees. APIs define convenience.
+The core defines guarantees.
+APIs define convenience.
 
 ---
 
@@ -72,7 +74,7 @@ The core defines guarantees. APIs define convenience.
 
 Bestie provides three binding forms.
 
-### 4.1 `const` — Compile‑Time Constant
+### 4.1 `const` — Compile-Time Constant
 
 `const` defines an immutable binding and immutable value resolved entirely at compile time.
 
@@ -94,6 +96,12 @@ Invalid scopes:
 * Function parameters
 * Runtime locals
 
+Intended use:
+
+* Mathematical constants
+* Compile-time configuration
+* Type-level invariants
+
 ---
 
 ### 4.2 `val` — Immutable Binding (Default)
@@ -106,7 +114,7 @@ Properties:
 * Preferred default
 * Encourages immutability
 
-File‑level `val` must be annotated with `@immutable`.
+File-level `val` must be annotated with `@immutable`.
 
 ---
 
@@ -144,7 +152,7 @@ Primitive value types map directly to machine types:
 All primitives:
 
 * Have no headers
-* Are stack‑friendly
+* Are stack-friendly
 * Require no deallocation
 
 ---
@@ -153,7 +161,7 @@ All primitives:
 
 Value types include:
 
-* `str` (UTF‑8, immutable)
+* `str` (UTF-8, immutable)
 * `tuple`
 * `ptr<T>`
 * Immutable collection literals
@@ -166,58 +174,74 @@ Value types:
 
 ---
 
-## 6. Control Flow Expressions
+## 6. Generics
 
-### 6.1 `if` as Statement and Expression
+Generics in Bestie are **compile-time constructs**, not runtime abstractions.
 
-In Bestie, `if` is both a **control statement** and an **expression**.
+Characteristics:
 
-#### Expression Form
+* Full specialization (monomorphization)
+* No type erasure
+* No variance keywords
+* No `extends?` or `super?`
+* No wildcard types
 
-When used as a value, `if` **must produce a value**:
+Despite this, generics remain expressive through:
+
+* Protocol constraints
+* Explicit type relationships
+* Compile-time resolution and diagnostics
+
+Every generic instantiation produces concrete, optimized code with predictable layout and performance.
+
+---
+
+## 7. Control Flow: `if` and `switch`
+
+### 7.1 `if` as Statement and Expression
+
+In Bestie, `if` is both a **statement** and an **expression**.
+
+As an expression, `if` must produce a value:
 
 ```bestie
 val x: int = if (cond) 4 else 0
 ```
 
-For primitive defaults:
+If a value does not have a natural empty representation, `option<T>` must be used.
 
-* `int` → `0`
-* `float` → `0.0`
-* `bool` → `false`
-* `char` → `''`
-* `str` → `""`
-
-If no natural empty value exists, an `option<T>` must be used.
-
----
-
-#### Partial Function Form
-
-Inside functions, `if` may omit `else`. In that case the function becomes **partial**:
+As a statement, `if` may omit `else`.
+When used inside a function without `else`, the function becomes **partial**:
 
 ```bestie
-fun check(x: int): bool? =
-    if (x > 0) true
+fun f(): bool? = if (cond) return true
 ```
 
-Partial functions and methods are defined formally in **fp.md**.
+See **fp.md** for partial functions.
 
 ---
 
-### 6.2 `switch` as Statement and Expression
+### 7.2 `switch` as Statement and Expression
 
-`switch` is both a **control statement** and an **expression**. and **has no fallthrough**.
+`switch` is both a **statement** and an **expression**.
 
 Properties:
 
-* Compact syntax
-* Exhaustiveness enforced when used as an expression
-* No implicit control flow
+* No fallthrough
+* Exhaustiveness checked when used as an expression
+* Compact syntax (similar to modern Java switch)
+
+```bestie
+val x = switch (v) {
+  1 => 10
+  2 => 20
+  else => 0
+}
+```
 
 ---
 
-## 7. Loops
+## 8. Loops
 
 Bestie supports:
 
@@ -225,135 +249,142 @@ Bestie supports:
 * `for in`
 * `while`
 
-### 7.1 Loop `else`
+Loops may include an `else` clause, similar to Python.
 
-Loops may include an `else` clause:
-
-* Executed only if the loop completes normally
-* Skipped if the loop exits via `break`
-
----
-
-### 7.2 Loops as Expressions
-
-Loops may be **assigned to values or collections** when resolvable at compile time.
+Loops may also be used as **expressions** when resolvable at compile time:
 
 ```bestie
 val x: int = for (i = 0; i < 5; i++) i + 5
-
-val xs: list<int> = for (i = 0; i < 5; i++) i * 2
+val xs: list<int> = for (i in 0..3) i * 2
 ```
 
-This is conceptually similar to streams or comprehensions, but:
-
-* Fully compile‑time lowered
-* No iterator allocation
-* No runtime abstraction cost
+This provides comprehension-style behavior without stream abstractions.
 
 ---
 
-## 8. Syntax Rules
+## 9. Syntax Rules
 
-### 8.1 Parentheses and Braces
-
-* `()` are **always required** after `if`, `for`, `while`
-* `{}` are **required** when the body is not on the same line
-
-Valid:
+* Parentheses `()` are required after `if`, `switch`, and loop keywords
+* Braces `{}` are required when the body is not on the same line
 
 ```bestie
 if (cond) doSomething() else doOther()
-```
 
-Invalid:
-
-```bestie
 if (cond)
-  doSomething()   // compiler error
+  doSomething() // ❌ compiler error
 ```
 
----
-
-### 8.2 Brace Placement
-
-Bestie does **not** require `{` to be on the same line (unlike Go).
-
-Formatting is standardized by the `bestie fmt` tool.
+Bestie does **not** require `{` to be on the same line.
+Formatting is enforced by the `fmt` tool.
 
 ---
 
-## 9. Operators
+## 10. Operators
 
-### 9.1 Logical Operators
+Bestie supports a balanced mix of symbolic and word-based operators.
+
+### Logical and Bitwise
 
 * `&&`, `||`, `!`
-* Short‑circuit semantics
+* `&`, `|`, `^`, `~`, `<<`, `>>`
 
-### 9.2 Bitwise Operators
+### Introspection and Identity
 
-* `&`, `|`, `^`, `~`
-* `<<`, `>>`
-
-### 9.3 Type & Introspection Operators
-
-* `is` — type check (compile‑time when possible)
-* `typeOf(T)` — compile‑time type token
-* `sizeOf(T)` — compile‑time size in bytes
+* `is` — identity comparison
+* `typeOf(x)` — compile-time type query
+* `sizeOf(T)` — compile-time size query
 
 ---
 
-## 10. Words vs Symbols
+## 11. Functions (Overview)
 
-Bestie intentionally balances **symbols and keywords**.
+Functions are declared using `fun`.
+
+Properties:
+
+* Static dispatch by default
+* Explicit dynamic dispatch via annotations
+* No implicit heap allocation
+
+➡ See **fp.md**
+
+---
+
+## 12. Object-Oriented Programming (Overview)
+
+Bestie supports OOP with explicit control:
+
+* Closed classes by default
+* Explicit inheritance
+* Protocol-based polymorphism
+
+➡ See **oop.md**
+
+---
+
+## 13. Memory Model (Overview)
+
+Bestie uses manual, deterministic memory management:
+
+* `ptr<T>`
+* `own<T>`
+* `ref<T>`
+
+➡ See **memory.md**
+
+---
+
+## 14. Concurrency (Overview)
+
+Concurrency is:
+
+* Explicit
+* Compile-time validated
+* Free of hidden sharing
+
+➡ See **concurrency.md**
+
+---
+
+## 15. Collections (Overview)
+
+Core collections are deterministic, generic, and ownership-aware.
+
+➡ See **collections.md**
+
+---
+
+## 16. Annotations
+
+Annotations are compile-time only and introduce no runtime cost.
 
 Examples:
 
-* Uses symbols: `&&`, `||`, `==`
-* Uses words: `ext`, `impl`
+* `@inline`
+* `@virtual`
+* `@override`
+* `@immutable`
 
-Bestie avoids:
-
-* Python‑style fully word‑based logic (`and`, `or`, `not`)
-* Symbol‑heavy DSL‑like syntax
-
-The goal is **clarity without ceremony**.
+➡ See **annotation.md**
 
 ---
 
-## 11. Equality and Identity
+## 17. Error Handling (Overview)
 
-### 11.1 `==` — Structural Equality
+Bestie avoids nulls and implicit exceptions.
 
-* Value‑based comparison
-* Lowered at compile time
-* Uses `Equable.equal` when available
-* Otherwise compiler‑generated for value types
+Mechanisms:
 
-### 11.2 `is` — Identity / Type Relation
+* Complete returns
+* Partial returns (`?`)
+* `option<T>`
+* Explicit error values
 
-* For value types: structural identity
-* For reference types: identity comparison
-* For types: subtype relation
-
-No runtime reflection is involved.
+➡ See **errors.md**
 
 ---
 
-## 12. What Is Intentionally Excluded
-
-Bestie deliberately excludes:
-
-* Garbage collection
-* Reflection
-* Macros
-* Unsafe blocks
-* Runtime metaprogramming
-* Implicit dynamic dispatch
-* Global mutable state
-
----
-
-## 13. Stability & Versioning
+## 18. Stability & Versioning
 
 * Core language is sealed
 * Backward compatibility is mandatory
