@@ -1,154 +1,239 @@
 # Bestie Core Collections
 
-This document defines the **core collections** in Bestie. Collections are **generic, type-safe, deterministic, and ownership-aware**, constructed using the **builder/factory pattern**.
+This document defines the **core collections** in Bestie.
+Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
+
+Collections are value-oriented by default and integrate tightly with Bestie’s memory and concurrency model.
 
 ---
 
 ## 1. Supported Core Collections
 
-| Collection | Variations / Views    | Default                          |
-| ---------- | --------------------- | -------------------------------- |
-| `list<T>`  | array, matrix, linked | array                            |
-| `set<T>`   | tree, hash, linked    | hash                             |
-| `map<K,V>` | tree, hash, linked    | hash                             |
-| `deque<T>` | queue, stack          | as-is                            |
-| `heap<T>`  | max, min              | ❌ No default — user must specify |
+| Collection | Variations         | Default |
+| ---------- | ------------------ | ------- |
+| `list<T>`  | array, linked      | array   |
+| `set<T>`   | hash, tree, linked | hash    |
+| `map<K,V>` | hash, tree, linked | hash    |
+| `deque<T>` | queue, stack       | as-is   |
+| `heap<T>`  | max, min           | ❌ none  |
 
-All collections are **generic** (`<T>`). Builders provide a consistent, fluent construction pattern.
+All collections are **generic** (`<T>`).
+All variations are **explicit** and **compile-time validated**.
 
 ---
 
-## 2. Builder Pattern & Construction
+## 2. Construction Model
 
-Collections are created using **builders/factories**:
+Collections are created using **builders**, **size annotations**, or **literals**, depending on intent.
+
+There is no implicit allocation and no hidden resizing.
+
+---
+
+### 2.1 Builder Construction
 
 ```bestie
-val xs : list<int> = list<int>.of(1,2,3)
+val xs = list<int>.build()
 val ys = set<int>.tree().add(1).add(2)
 val zs = map<int,str>.hash().put(1,"a").put(2,"b")
 ```
 
-### 2.1 Defaults
+Rules:
 
-* `list.array`
-* `list.matrix` (C-style, flat memory layout)
-* `list.linked`
-* `set.hash`
-* `map.hash`
-* `deque` (as-is)
-* `heap` must specify `max` or `min`
+* Builders are explicit
+* Builder chains are resolved at compile time
+* Allocation strategy is known before code generation
+
+---
+
+### 2.2 Sized Arrays (No Matrix Type)
+
+Bestie does **not** provide a separate `matrix` collection.
+
+Instead, **fixed-size and multi-dimensional arrays** are expressed using **bracket syntax**, applicable **only to array-backed lists**.
+
+#### Fixed-size array
 
 ```bestie
-val xs : list<int> = list<int>.array().build() // same as list<int>.build()
+val a = list<int>[10].build()
 ```
 
-### 2.2 Conflicting Variations
-
-If multiple variations are chained **within the same category**, the **last variation wins**:
+#### Dynamic-size array
 
 ```bestie
-val x = list<int>.array.linked()  // equivalent to list<int>.linked
-val y = list<int>.concurrent.copyOnWrite() // equivalent to copyOnWrite
+val n = readInt()
+val b = list<int>[n].build()
+```
+
+#### Two-dimensional array (flat, C-style layout)
+
+```bestie
+val m = list<int>[2][3].build()
+```
+
+Properties:
+
+* `[n]`, `[r][c]` are part of the **type**
+* Memory is **contiguous and flat**
+* Indexing is row-major
+* No matrix object exists in the core language
+
+---
+
+### 2.3 Validity Rules for Brackets
+
+Brackets are valid **only** for array-backed lists.
+
+| Expression             | Result               |
+| ---------------------- | -------------------- |
+| `list<int>[10]`        | ✅ valid              |
+| `list<int>.array[10]`  | ✅ valid              |
+| `list<int>.linked[10]` | ❌ compile-time error |
+| `set<int>[10]`         | ❌ compile-time error |
+
+This rule is strict and enforced by the compiler.
+
+---
+
+## 3. Defaults and Variations
+
+### 3.1 Defaults
+
+* `list<T>` → array
+* `set<T>` → hash
+* `map<K,V>` → hash
+* `deque<T>` → as declared
+* `heap<T>` → **must specify `max` or `min`**
+
+```bestie
+val xs : list<int> = list<int>.build()  // array-backed
 ```
 
 ---
 
-### 2.3 Immutability & Concurrency
+### 3.2 Conflicting Variations
 
-* `immutable()` — returns a copy-on-write collection; mutation creates a new collection
-* `concurrent()` — provides thread-safe iteration with weaker guarantees
-* `copyOnWrite()` — optional specialized builder for high concurrency
+If multiple variations from the **same category** are chained, the **last one wins**.
+
+```bestie
+val x = list<int>.array.linked().build()   // linked
+val y = set<int>.hash.tree().build()       // tree
+```
+
+Conflicts across incompatible categories are **compile-time errors**.
 
 ---
 
-## 3. Collection Literals
+## 4. Immutability and Concurrency
 
-Literals use `{}` syntax. Type is resolved by compiler:
+Collections support explicit mutation and concurrency semantics.
+
+### 4.1 Mutation Semantics
+
+* `mutable` — default
+* `immutable` — value-based, mutation creates a new collection
+* `copyOnWrite` — lazy copying on mutation
+
+### 4.2 Concurrency Semantics
+
+* `concurrent` — thread-safe mutable access with defined guarantees
+
+### 4.3 Resolution Rules
+
+* `immutable` **dominates all other mutation or concurrency modifiers**
+* `concurrent` has no effect on immutable collections
+* `copyOnWrite` is ignored if `immutable` is present
 
 ```bestie
-val x : list<int> = {1,2,3,3} // ✅ duplicates allowed in list
-val y : set<int> = {1,2,3}    // ✅ unique
-val z : set<int> = {1,2,2,3}  // ❌ compiler error: duplicate elements
+list<int>.concurrent.copyOnWrite.immutable.build()
 ```
 
-* **Set duplicates** are **not automatically removed**. Developers must resolve duplicates; IDE can suggest fixes.
-* Type must **match declared collection variant**:
+Resolves to:
 
-```bestie
-val x : list<int>.linked = list<int>.of(1,2,3) // ❌ error
+```text
+immutable list
 ```
 
-Use either the variant in declaration or let compiler infer type.
+Optional compiler warnings may be emitted for redundant modifiers.
 
 ---
 
-## 4. Collection Methods
+## 5. Collection Literals and `const`
 
-All collections share **consistent method names**:
+Collection literals use `{}` syntax and are **fully compile-time constructs**.
+
+```bestie
+val a : list<int> = {1,2,3}
+val b : set<int>  = {1,2,3}
+```
+
+### 5.1 Literal Rules
+
+* `list` literals allow duplicates
+* `set` literals **reject duplicates at compile time**
+* No automatic deduplication is performed
+
+```bestie
+val x : set<int> = {1,2,2} // ❌ compile-time error
+```
+
+---
+
+### 5.2 `const` Collections
+
+A collection may be declared `const` **only if** it is created via a literal.
+
+```bestie
+const xs : list<int> = {1,2,3}
+const ys : list<int>[2][2] = {1,0,0,1}
+```
+
+Invalid:
+
+```bestie
+const a = list<int>.build()        // ❌ runtime allocation
+const b = list<int>[n].build()    // ❌ runtime size
+```
+
+`const` collections:
+
+* Are fully immutable
+* Have no heap allocation
+* Reside in read-only memory
+* Cannot be mutated or copied
+
+---
+
+## 6. Collection Methods
+
+All collections use **consistent method naming**.
 
 | Collection    | Methods                                            |
 | ------------- | -------------------------------------------------- |
-| list/set/heap | `add(element)`, `remove(element)`                  |
+| list/set/heap | `add`, `remove`                                    |
 | deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast` |
-| map           | `put(key,value)`, `remove(key)`                    |
+| map           | `put`, `remove`                                    |
 
-All collections implement **efficient iterators**. No `Map.Entry` indirection like Java.
+All collections provide **efficient iterators** with no hidden indirection.
 
----
-
-## 5. Matrix
-
-`list.matrix` is **C-style (flat memory layout)**:
-
-* Stored in a **single contiguous block**
-* Row/column access via helper methods (`matrix[row, col]`)
-* Fully compatible with **Arena allocation**
-* Provides predictable memory layout and high performance
-
-> Advanced linear algebra operations are in the **std-lib math package**, where matrices are treated as first-class objects with linear algebra support.
+There is no `Map.Entry` abstraction.
 
 ---
 
-## 6. Variations & Views
+## 7. Functional Operations
 
-### List Variations
+Core collections **do not include functional methods** (`map`, `filter`, `fold`).
 
-* `array` — default, contiguous memory
-* `matrix` — C-style flat matrix
-* `linked` — linked list
+Functional behavior is provided by:
 
-### Set Variations
-
-* `hash` — default
-* `tree` — ordered
-* `linked` — insertion-ordered
-
-### Map Variations
-
-* `hash` — default
-* `tree` — ordered
-* `linked` — insertion-ordered
-
-### Deque Variations
-
-* `queue`
-* `stack`
-
-### Heap Variations
-
-* `max` — maximum at root
-* `min` — minimum at root
-
----
-
-## 7. Functional Methods
-
-Collections **do not provide built-in functional methods** (map, filter, fold).
-Use the **std-lib functional package** or **extension functions**:
+* `std-lib functional`
+* Extension functions
 
 ```bestie
-val sum = list<int>.of(1,2,3).sum()  // sum as extension
+val sum = list<int>.of(1,2,3).sum()
 ```
+
+This keeps the core minimal and zero-cost.
 
 ---
 
@@ -156,11 +241,12 @@ val sum = list<int>.of(1,2,3).sum()  // sum as extension
 
 Bestie collections are:
 
-* Generic, type-safe, and consistent
-* Built using **builder/factory patterns**
-* Deterministic memory layout and ownership-safe
-* Immutable and concurrent variants available
-* Conflicting builder variations resolve to the last variation
-* Minimal in the core, expressive through std-lib and extensions
+* Generic and type-safe
+* Explicitly constructed
+* Deterministic in memory layout
+* Ownership-aware
+* Compile-time validated
+* Free of hidden allocation or resizing
+* Immutable-by-design when declared as values or constants
 
-> Collections in Bestie are **predictable and rhythmic**, matching the language’s philosophy: explicit, safe, and consistent.
+> Collections in Bestie are **explicit tools**, not abstractions with surprises — matching the language’s core philosophy of predictability, safety, and control.
