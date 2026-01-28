@@ -115,7 +115,92 @@ Default parameters and keyword arguments are **purely syntactic conveniences** a
 
 ---
 
-## 3. Function Types
+## 3. Multiple Return Values and Tuples
+
+Bestie allows functions to return **multiple values** using **tuples**.
+
+### 3.1 Tuple Return Types
+
+```bestie
+fun divMod(x: int, y: int): (int, int) {
+    return (x / y, x % y)
+}
+```
+
+Rules:
+
+* Tuples are value types
+* Tuple layout is compile-time known
+* No heap allocation is required
+* Fully compatible with ownership and immutability rules
+
+---
+
+### 3.2 Tuple Return Shortcut
+
+As a convenience, tuple construction may be omitted in `return` statements.
+
+```bestie
+fun stats(x: int): (int, int, int) {
+    return x, x * 2, x * 3
+}
+```
+
+This is **exactly equivalent** to:
+
+```bestie
+return (x, x * 2, x * 3)
+```
+
+Rules:
+
+* The function return type must be a tuple
+* The number and order of returned values must match the tuple type
+* No runtime transformation is introduced
+
+---
+
+### 3.3 Tuple Destructuring (Capture Shortcut)
+
+Tuple values may be destructured directly at the binding site.
+
+```bestie
+val a, b = divMod(10, 3)
+```
+
+Equivalent to:
+
+```bestie
+val tmp = divMod(10, 3)
+val a = tmp.0
+val b = tmp.1
+```
+
+Rules:
+
+* Destructuring is compile-time only
+* No intermediate allocation is required
+* Order is positional
+
+---
+
+### 3.4 Ignoring Values with `_`
+
+Unused tuple values may be ignored using `_`.
+
+```bestie
+val quotient, _ = divMod(10, 3)
+```
+
+Rules:
+
+* `_` introduces no binding
+* Ignored values are not accessible
+* Helps document intent and avoid unused-variable diagnostics
+
+---
+
+## 4. Function Types
 
 Function types are **explicit and structural**.
 
@@ -138,11 +223,11 @@ Rules:
 
 ---
 
-## 4. Lambdas
+## 5. Lambdas
 
 Lambdas are anonymous functions with **explicit and restricted semantics**.
 
-### 4.1 Lambda Syntax
+### 5.1 Lambda Syntax
 
 ```bestie
 val f = (x: int): int => x * 2
@@ -157,7 +242,7 @@ Properties:
 
 ---
 
-### 4.2 Non-Closure Rule (Core Guarantee)
+### 5.2 Non-Closure Rule (Core Guarantee)
 
 **Lambdas in Bestie are not closures by default.**
 
@@ -186,7 +271,7 @@ This guarantees:
 
 ---
 
-### 4.3 Explicit Capture (Restricted)
+### 5.3 Explicit Capture (Restricted)
 
 Explicit capture is allowed with strict rules.
 
@@ -207,7 +292,7 @@ This preserves determinism while allowing controlled FP composition.
 
 ---
 
-### 4.4 Lambda Allocation Model
+### 5.4 Lambda Allocation Model
 
 By default:
 
@@ -219,7 +304,7 @@ Heap allocation for lambdas is **not part of the core language**.
 
 ---
 
-## 5. Higher-Order Functions
+## 6. Higher-Order Functions
 
 Bestie fully supports higher-order functions.
 
@@ -238,11 +323,40 @@ Rules:
 
 ---
 
-## 6. Method References
+## 7. Variable Arguments (Varargs)
+
+Bestie supports **variable-length argument lists** using explicit vararg parameters.
+
+```bestie
+fun sum(var xs: int): int {
+    var total = 0
+    for x in xs {
+        total += x
+    }
+    return total
+}
+```
+
+Usage:
+
+```bestie
+sum(1, 2, 3, 4)
+```
+
+Rules:
+
+* Varargs are explicit via `var`
+* Element type must be specified
+* Argument sequence is stack-allocated when possible
+* No implicit heap allocation is introduced
+
+---
+
+## 8. Method References
 
 Bestie supports explicit, safe method references.
 
-### 6.1 Unbound Method References
+### 8.1 Unbound Method References
 
 ```bestie
 val f: (User) -> str = User::getName
@@ -262,7 +376,7 @@ Rules:
 
 ---
 
-### 6.2 Bound Method References (Restricted)
+### 8.2 Bound Method References (Restricted)
 
 ```bestie
 own u = User.init(...).new()
@@ -278,11 +392,11 @@ Rules:
 
 ---
 
-## 7. Partial Functions and Errors
+## 9. Partial Functions and Errors
 
 Bestie avoids nulls and implicit exceptions.
 
-### 7.1 Partial Functions
+### 9.1 Partial Functions
 
 ```bestie
 fun parseInt(s: str): int?
@@ -296,7 +410,7 @@ Rules:
 
 ---
 
-### 7.2 Option and Error-Oriented FP
+### 9.2 Option and Error-Oriented FP
 
 Preferred FP-style returns:
 
@@ -313,7 +427,7 @@ Control flow is explicit.
 
 ---
 
-## 8. Immutability in FP
+## 10. Immutability in FP
 
 FP in Bestie strongly prefers immutability.
 
@@ -336,11 +450,11 @@ Immutability is enforced by:
 
 ---
 
-## 9. Extension Functions
+## 11. Extension Functions
 
 Extension functions add behavior **without modifying types** and **without runtime cost**.
 
-### 9.1 Declaration
+### 11.1 Declaration
 
 ```bestie
 fun str.isEmpty(): bool {
@@ -357,7 +471,7 @@ val empty = s.isEmpty()
 
 ---
 
-### 9.2 Compilation Model
+### 11.2 Compilation Model
 
 Extension functions are:
 
@@ -377,7 +491,7 @@ There is:
 
 ---
 
-### 9.3 `this` Semantics
+### 11.3 `this` Semantics
 
 Inside an extension:
 
@@ -387,7 +501,7 @@ Inside an extension:
 
 ---
 
-### 9.4 Extensions vs Members
+### 11.4 Extensions vs Members
 
 Rules:
 
@@ -399,7 +513,7 @@ Name collisions are illegal.
 
 ---
 
-### 9.5 Extensions and Protocols
+### 11.5 Extensions and Protocols
 
 Extensions:
 
@@ -409,7 +523,7 @@ Extensions:
 
 ---
 
-### 9.6 Generic Extensions
+### 11.6 Generic Extensions
 
 ```bestie
 fun <T> list<T>.head(): T? {
@@ -425,7 +539,7 @@ Rules:
 
 ---
 
-## 10. Function Composition
+## 12. Function Composition
 
 Composition is explicit and type-safe.
 
@@ -442,9 +556,9 @@ No implicit currying or composition exists.
 
 ---
 
-## 11. Currying and Partial Application
+## 13. Currying and Partial Application
 
-### 11.1 No Implicit Currying
+### 13.1 No Implicit Currying
 
 Automatic currying is not supported.
 
@@ -452,7 +566,7 @@ Capturing-based currying is illegal.
 
 ---
 
-### 11.2 Explicit Partial Application
+### 13.2 Explicit Partial Application
 
 Partial application is performed via **compile-time transformations**:
 
@@ -468,7 +582,7 @@ Rules:
 
 ---
 
-## 12. Recursion
+## 14. Recursion
 
 Recursion is explicit.
 
@@ -480,7 +594,7 @@ Rules:
 
 ---
 
-## 13. FP and Memory Model
+## 15. FP and Memory Model
 
 FP fully respects ownership.
 
@@ -497,7 +611,7 @@ This ensures:
 
 ---
 
-## 14. FP and OOP Interoperability
+## 16. FP and OOP Interoperability
 
 * Methods are functions with receivers
 * Extension functions bridge FP and OOP
@@ -509,7 +623,7 @@ It does not replace OOP.
 
 ---
 
-## 15. What Bestie Deliberately Avoids in FP
+## 17. What Bestie Deliberately Avoids in FP
 
 * Implicit currying
 * Lazy evaluation by default
@@ -520,7 +634,7 @@ It does not replace OOP.
 
 ---
 
-## 16. Summary
+## 18. Summary
 
 Functional programming in Bestie is:
 
