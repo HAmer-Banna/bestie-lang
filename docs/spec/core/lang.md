@@ -148,6 +148,7 @@ Primitive value types map directly to machine types:
 * `int`, `uint`, `float` (width inferred by target)
 * `bool`
 * `char`
+* `void`
 
 All primitives:
 
