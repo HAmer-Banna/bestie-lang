@@ -23,7 +23,7 @@ This package is part of the **core**. It does not depend on threading primitives
 
 * Backed by a contiguous buffer
 * Growth strategy is deterministic
-* Conversion to `String` is explicit
+* Conversion to `str` is explicit
 
 ```bestie
 var sb = StringBuilder.new()
@@ -59,7 +59,7 @@ arena.add(listOfInts)
 ```
 
 * `add(T)` allocates a single value
-* `add(List<T>)` allocates a contiguous sequence
+* `add(list<T>)` allocates a contiguous sequence
 
 All allocations belong to the arena and share the same lifetime.
 
@@ -131,7 +131,7 @@ enum class Result<T, E> {
 ### Usage
 
 ```bestie
-fun parseInt(s: String): Result<int, ParseError> {
+fun parseInt(s: str): Result<int, ParseError> {
   if valid(s) {
     return Result.Ok(convert(s))
   }
@@ -146,7 +146,45 @@ fun parseInt(s: String): Result<int, ParseError> {
 
 ---
 
-## 5. Comparable Protocol
+## 5. Equable Protocol
+
+`Equable` defines **structural equality** between two values of the same type.
+
+It is the foundational protocol behind `==` semantics in Bestie.
+
+### Definition
+
+```bestie
+protocol Equable<T> {
+  fun equal(other: T): bool
+}
+```
+
+### Semantics
+
+* `equal` must be **reflexive**, **symmetric**, and **transitive`
+* Equality is **value-based**, not identity-based
+* The method must not mutate either operand
+* Resolution is static and compile-time driven
+
+### Interaction with `==`
+
+If a type implements `Equable`, the `==` operator is lowered to:
+
+```bestie
+lhs.equal(rhs)
+```
+
+If `Equable` is not implemented:
+
+* Value types fall back to compiler-generated structural comparison
+* Reference types fall back to identity comparison
+
+No dynamic dispatch is introduced.
+
+---
+
+## 6. Comparable Protocol
 
 `Comparable` defines a total ordering between values.
 
@@ -166,27 +204,30 @@ protocol Comparable<T> {
 
 ---
 
-## 6. Hashable Protocol
+## 7. Hashable Protocol
 
-`Hashable` defines a stable hash for a value.
+`Hashable` defines a stable hash for a value and **extends `Equable`**.
 
 ### Definition
 
 ```bestie
-protocol Hashable {
+protocol Hashable ext Equable<T> {
   fun hash(): int
 }
 ```
 
 ### Rules
 
-* Equal values must produce equal hashes
+* If `a == b` is true, then `a.hash() == b.hash()` must be true
 * Hash must be stable for the value’s lifetime
+* `equal` defines equality semantics; `hash` must be consistent with it
 * No runtime reflection
+
+`Hashable` is used by hash-based collections and lookup structures.
 
 ---
 
-## 7. rawAddress
+## 8. rawAddress
 
 `rawAddress` exposes the raw memory address of a value or function.
 
@@ -215,10 +256,13 @@ val addr = rawAddress(f)
 
 The utility package provides:
 
+* Canonical utility for efficient string construction (`StringBuilder`)
 * Explicit memory construction (`Arena`)
 * Explicit absence modeling (`Option`)
 * Typed failure (`Result`)
-* Structural contracts (`Comparable`, `Hashable`)
+* Structural equality (`Equable`)
+* Ordering contracts (`Comparable`)
+* Hash-based identity (`Hashable`)
 * Controlled low-level access (`rawAddress`)
 
 These utilities establish the rhythm of Bestie’s standard library: **explicit, orthogonal, and compiler-verifiable**.
