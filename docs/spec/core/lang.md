@@ -15,7 +15,7 @@ Bestie prioritizes:
 * Zero-cost abstractions
 * Long-term stability
 
-Bestie is conceptually:
+Conceptually, Bestie can be viewed as:
 **Zig + Kotlin**, without inheriting the weaknesses of either.
 
 ---
@@ -41,7 +41,7 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 
 The runtime is intentionally minimal.
 
-**Golden Rule**
+### Golden Rule
 
 > If something can be resolved at compile time, it must be.
 
@@ -58,7 +58,7 @@ A Bestie program consists of:
 * Protocols
 * Annotations
 
-The core language is **small and sealed**.
+The core language is **small, sealed, and stable**.
 
 Higher-level abstractions live in:
 
@@ -66,8 +66,8 @@ Higher-level abstractions live in:
 * `std-api`
 * `std-framework`
 
-The core defines guarantees.
-APIs define convenience.
+The core defines **guarantees**.
+APIs define **convenience**.
 
 ---
 
@@ -81,10 +81,10 @@ Bestie provides three binding forms.
 
 Properties:
 
-* Immutable binding and value
+* Immutable binding and immutable value
 * No runtime allocation
 * No mutation through references
-* Cannot reference mutable memory
+* Cannot reference mutable or runtime memory
 
 Valid scopes:
 
@@ -102,6 +102,7 @@ Invalid scopes:
 * Mathematical constants
 * Compile-time configuration
 * Type-level invariants
+* Compile-time collection literals
 
 ---
 
@@ -114,6 +115,7 @@ Properties:
 * Runtime values allowed
 * Preferred default
 * Encourages immutability
+* Binding cannot be reassigned
 
 File-level `val` must be annotated with `@immutable`.
 
@@ -155,6 +157,7 @@ All primitives:
 * Have no headers
 * Are stack-friendly
 * Require no deallocation
+* Are compared by value
 
 ---
 
@@ -164,18 +167,86 @@ Value types include:
 
 * `str` (UTF-8, immutable)
 * `tuple`
-* `ptr<T>`
+* Fixed-size and dynamic arrays
 * Immutable collection literals
 
 Value types:
 
 * Are immutable by default
+* Have value semantics
 * Are copied efficiently
 * Have no hidden allocation
+* Do not carry identity
 
 ---
 
-## 6. Functions (Overview)
+## 6. Equality and Identity
+
+Bestie defines **two distinct comparison operators**, each with precise semantics.
+
+### 6.1 `==` — Structural Equality
+
+`==` performs **structural (value) equality**.
+
+Rules:
+
+* Compares values, not identities
+* Deterministic and side-effect free
+* Fully resolved at compile time when possible
+
+Semantics by category:
+
+* **Primitive types**: value comparison
+* **`str`**: content comparison
+* **Tuples**: element-wise comparison
+* **Collections**: element-wise comparison (order-sensitive where applicable)
+* **User-defined types**: field-by-field comparison, or protocol-defined equality
+
+Examples:
+
+```bestie
+{1,2,3} == {1,2,3}   // true
+{1,2,3} == {1,2,4}   // false
+```
+
+There is no distinction between “shallow” and “deep” equality in Bestie.
+All value equality is **structural by definition**.
+
+---
+
+### 6.2 `is` — Identity Equality
+
+`is` performs **identity comparison**.
+
+Rules:
+
+* Checks whether two references point to the **same memory identity**
+* Valid only for:
+
+  * `own<T>`
+  * `ref<T>`
+  * `ptr<T>`
+* Compile-time error for value types
+
+Examples:
+
+```bestie
+a is b    // true only if both refer to the same object
+```
+
+Properties:
+
+* No runtime type inspection
+* No RTTI
+* No inheritance checks
+* No implicit identity semantics
+
+`is` is **not** a type test.
+It is strictly an identity comparison.
+
+---
+
+## 7. Functions (Overview)
 
 Functions are declared using `fun`.
 
@@ -191,16 +262,16 @@ Full specification:
 
 ---
 
-## 7. Object-Oriented Programming (Overview)
+## 8. Object-Oriented Programming (Overview)
 
 Bestie supports OOP with explicit control.
 
 Core concepts:
 
 * Classes are closed and inlined by default
-* Explicit inheritance
-* Explicit polymorphism
-* Protocols for behavior
+* Inheritance is explicit
+* Polymorphism is explicit
+* Protocols define behavior
 
 There is no implicit virtual dispatch.
 
@@ -209,7 +280,7 @@ Full specification:
 
 ---
 
-## 8. Memory Model (Overview)
+## 9. Memory Model (Overview)
 
 Bestie uses **manual, deterministic memory management** with compile-time safety.
 
@@ -223,7 +294,7 @@ Properties:
 
 * Explicit `.new()` allocation
 * Explicit `.free()` / `.freeDeep()`
-* No GC
+* No garbage collection
 * No null
 * No undefined behavior
 * No dangling pointers (compile-time enforced)
@@ -233,12 +304,12 @@ Full specification:
 
 ---
 
-## 9. Performance Guarantees
+## 10. Performance Guarantees
 
 Bestie guarantees performance equivalent to hand-written C by design:
 
 * Classes are inlined by default
-* No GC
+* No garbage collection
 * No hidden indirection
 * No implicit virtual dispatch
 * Optimal memory layout (padding & alignment)
@@ -248,26 +319,26 @@ Bestie guarantees performance equivalent to hand-written C by design:
 * Bounds checks elided when provably safe
 * No runtime type system
 
-These are guarantees, not optimizations.
+These are **guarantees**, not optimizations.
 
 ---
 
-## 10. Concurrency (Overview)
+## 11. Concurrency (Overview)
 
-Concurrency is:
+Concurrency in Bestie is:
 
 * Explicit
 * Compile-time validated
 * Free of hidden sharing
 
-No implicit locks or shared mutable state exist.
+There are no implicit locks or shared mutable state.
 
 Full specification:
 ➡ `concurrency.md`
 
 ---
 
-## 11. Annotations
+## 12. Annotations
 
 Annotations:
 
@@ -287,7 +358,7 @@ Full specification:
 
 ---
 
-## 12. Error Handling (Overview)
+## 13. Error Handling (Overview)
 
 Bestie does not use nulls or implicit exceptions.
 
@@ -303,7 +374,7 @@ Full specification:
 
 ---
 
-## 13. What Is Intentionally Excluded
+## 14. What Is Intentionally Excluded
 
 Bestie deliberately excludes:
 
@@ -324,10 +395,11 @@ If a feature exists, it must:
 
 ---
 
-## 14. Stability & Versioning
+## 15. Stability & Versioning
 
 * Core language is sealed
 * Backward compatibility is mandatory
 * Experimental features require compiler flags
 * APIs evolve without breaking core guarantees
-
+* Locking down **slice/view semantics**
+* Or formalizing **protocol-based equality fallback rules** in a separate `equality.md`
