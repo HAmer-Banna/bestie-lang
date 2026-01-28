@@ -1,6 +1,6 @@
 # Bestie Language — Functional Programming (FP) & Functions Core Specification
 
-This document defines **functional programming constructs**, **functions**, and **lambdas** in the Bestie core language.
+This document defines **functional programming constructs**, **functions**, **lambdas**, and **function invocation semantics** in the Bestie core language.
 
 Functional programming in Bestie is:
 
@@ -12,7 +12,7 @@ Functional programming in Bestie is:
 * Fully interoperable with OOP and systems programming
 
 FP in Bestie is **not a separate paradigm**.
-It is a set of disciplined tools integrated into the core language.
+It is a disciplined set of tools integrated directly into the core language.
 
 Bestie is **multi-paradigm**, but **single-runtime**.
 
@@ -65,7 +65,7 @@ Properties:
 Functions may be:
 
 * Top-level
-* Class members
+* Class members (methods)
 * Extension functions
 
 ---
@@ -83,6 +83,35 @@ Rules:
 * Single expression only
 * No hidden allocation
 * Inlined when possible
+
+---
+
+### 2.3 Default Parameters and Keyword Arguments
+
+Functions and methods in Bestie may define **default parameter values** and may be called using **keyword arguments**.
+
+```bestie
+fun connect(host: str = "localhost", port: int = 5432, secure: bool = true): connection
+```
+
+Valid calls:
+
+```bestie
+connect()
+connect("db.local")
+connect(port = 5433)
+connect(host = "db.local", secure = false)
+```
+
+Rules:
+
+* Default values are compile-time constants or compile-time evaluable expressions
+* Keyword arguments are resolved at compile time
+* Argument reordering is allowed only when using keywords
+* No runtime dispatch or allocation is introduced
+* Defaults are applied at the call site during compilation
+
+Default parameters and keyword arguments are **purely syntactic conveniences** and have **zero runtime cost**.
 
 ---
 
@@ -503,4 +532,3 @@ Functional programming in Bestie is:
 * Zero-cost by design
 
 FP in Bestie exists to **compose behavior clearly**, not to obscure execution.
-
