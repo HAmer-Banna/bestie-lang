@@ -227,31 +227,6 @@ protocol Hashable ext Equable<T> {
 
 ---
 
-## 8. rawAddress
-
-`rawAddress` exposes the raw memory address of a value or function.
-
-```bestie
-val addr = rawAddress(f)
-```
-
-### Purpose
-
-* FFI
-* Debugging
-* Tooling
-* Low-level interop
-
-### Rules
-
-* Unsafe by definition
-* Not ownership-aware
-* Cannot be used to bypass the type system
-
-`rawAddress` exists as an **explicit escape hatch**, not as a general-purpose API.
-
----
-
 ## Summary
 
 The utility package provides:
@@ -263,6 +238,5 @@ The utility package provides:
 * Structural equality (`Equable`)
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)
-* Controlled low-level access (`rawAddress`)
 
 These utilities establish the rhythm of Bestie’s standard library: **explicit, orthogonal, and compiler-verifiable**.
