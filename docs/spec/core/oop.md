@@ -426,7 +426,100 @@ Excluded (expressible via protocols/lambdas):
 
 ---
 
-## 12. Thread Safety Guarantees
+12. Sealed Declarations (Java-Style File Closure)
+
+Bestie supports Java-style sealing to define closed, finite sets of declarations.
+
+Sealing applies to a list of declarations, not a single type, and does not introduce new kinds.
+
+Sealing may target:
+
+classes
+
+protocols
+
+file-level functions
+
+Sealing is file-scoped and compile-time only.
+
+12.1 Sealed Classes
+
+A sealed declaration explicitly enumerates which classes may extend a base class.
+
+sealed Shape permits Circle, Rectangle, Triangle
+
+
+open class Shape
+class Circle : Shape
+class Rectangle : Shape
+class Triangle : Shape
+
+Properties:
+
+Only listed classes may extend the sealed base
+
+All permitted classes must be in the same file
+
+Enables exhaustive match checking
+
+No runtime registration or reflection
+
+Rules:
+
+Base must be open or abstract
+
+No implicit inheritance outside the permit list
+
+Sealing does not affect dispatch or memory layout
+
+12.2 Sealed Protocols
+
+Protocols may also be sealed with an explicit implementor list.
+
+sealed protocol Token permits NumberToken, StringToken
+
+
+class NumberToken : Token
+class StringToken : Token
+
+Properties:
+
+Only permitted types may implement the protocol
+
+All implementors are known at compile time
+
+Enables exhaustive protocol-based matching
+
+Rules:
+
+Protocol rules still apply (no state, no fields)
+
+Default implementations remain static
+
+12.3 Sealed File-Level Functions
+
+File-level functions may be sealed to define a closed overload set.
+
+sealed fun parse(str: str): Token
+sealed fun parse(int: int): Token
+
+Properties:
+
+Only declared overloads are allowed
+
+No external extension or overloading
+
+Resolution remains compile-time
+
+Rules:
+
+All sealed overloads must appear in the same file
+
+Prevents accidental API extension
+
+---
+
+## 13. Thread Safety Guarantees
 
 Always thread-safe:
 
@@ -441,7 +534,7 @@ User responsibility:
 
 ---
 
-## 13. What Bestie Deliberately Avoids
+## 14. What Bestie Deliberately Avoids
 
 * Implicit virtual methods
 * Multiple inheritance
@@ -451,7 +544,7 @@ User responsibility:
 
 ---
 
-## 14. Summary
+## 15. Summary
 
 Bestie OOP is:
 
