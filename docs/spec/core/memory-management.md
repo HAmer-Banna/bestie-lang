@@ -1,6 +1,6 @@
 # Bestie Language — Memory Management & Ownership Model
 
-This document defines Bestie’s memory model, ownership qualifiers, pointer semantics, and deallocation rules.
+This document defines how memory is **laid out**, **owned**, **passed**, and **freed** in Bestie.
 
 Memory management in Bestie is:
 
@@ -10,12 +10,33 @@ Memory management in Bestie is:
 * Compile-time validated
 * Systems-grade
 
-Bestie does **not** hide memory.
+Bestie does **not** hide memory.  
 It makes memory **predictable, inspectable, and intentional**.
+
+There is **one memory model**, unified across system and backend domains.
 
 ---
 
-## 1. Why Bestie Has an Ownership System
+## 1. Design Goals
+
+The memory model exists to satisfy the following constraints:
+
+1. **Native performance**
+2. **Deterministic layout and lifetime**
+3. **No garbage collection**
+4. **No unsafe escape hatches**
+5. **Minimal cognitive overhead**
+6. **Uniform rules for all domains**
+
+Bestie rejects designs where:
+
+* Safety is optional
+* Allocation is implicit
+* Different subsystems use different memory rules
+
+---
+
+## 2. Why Bestie Has an Ownership System
 
 Bestie was designed for **systems programmers and backend engineers**.
 
@@ -26,7 +47,7 @@ class Student {
     val address: Address
     val course: Course
 }
-```
+````
 
 What should happen when we call:
 
@@ -44,7 +65,7 @@ Should it:
 Different languages answer this implicitly.
 Bestie refuses to.
 
-### 1.1 The Core Problem
+### 2.1 The Core Problem
 
 In real systems:
 
@@ -61,7 +82,7 @@ Making this implicit leads to:
 * Hidden sharing
 * Runtime ownership bugs
 
-### 1.2 The Explicit Answer
+### 2.2 The Explicit Answer
 
 Bestie introduces **ownership qualifiers** to make intent unambiguous:
 
@@ -81,7 +102,99 @@ Now the behavior of `student.free()` is obvious.
 
 ---
 
-## 2. `own` and `ref` — What They Mean
+## 3. Memory Regions
+
+Bestie recognizes three conceptual memory regions.
+These are **semantic**, not exposed as language modes.
+
+### 3.1 Stack
+
+Used for:
+
+* Value types
+* Inlined classes
+* Function-local variables
+* Temporaries
+
+Properties:
+
+* Deterministic lifetime
+* Compile-time known layout
+* Zero allocation cost
+
+All values are stack-allocated unless explicitly moved elsewhere.
+
+---
+
+### 3.2 Heap
+
+Used only when:
+
+* `new()` or `allocate()` is explicitly invoked
+* Ownership must outlive the current scope
+* Dynamic size requires it
+
+Heap allocation is **never implicit**.
+
+Example:
+
+```bestie
+own user = User.new()
+```
+
+---
+
+### 3.3 Static / Read-only Memory
+
+Used for:
+
+* Constants
+* Immutable literals
+* Compile-time known values
+
+Example:
+
+```bestie
+math.PI
+```
+
+---
+
+## 4. Value Semantics vs Reference Semantics
+
+### 4.1 Value Types
+
+Includes:
+
+* All primitives
+* Tuples
+* `data class`
+* `value class`
+* Immutable collections
+
+Properties:
+
+* Copied on assignment
+* Safe to pass across threads
+* No ownership tracking needed
+
+---
+
+### 4.2 Reference Types
+
+Reference semantics exist **only** via explicit constructs:
+
+```
+own T
+ref T
+ptr<T>
+```
+
+There is no implicit reference behavior.
+
+---
+
+## 5. Ownership Qualifiers — `own` and `ref`
 
 `own` and `ref` are **ownership qualifiers**, not containers and not types.
 
@@ -101,7 +214,7 @@ All forms are equivalent.
 
 ---
 
-### 2.1 `own` — Ownership
+### 5.1 `own` — Ownership
 
 `own` means:
 
@@ -125,7 +238,23 @@ Rules:
 
 ---
 
-### 2.2 `ref` — Borrowed Reference
+### 5.2 Ownership Transfer
+
+Ownership may be transferred via `move`:
+
+```bestie
+own a = User.new()
+own b = move a
+```
+
+After move:
+
+* `a` becomes invalid
+* Any use is a compile-time error
+
+---
+
+### 5.3 `ref` — Borrowed Reference
 
 `ref` means:
 
@@ -147,16 +276,34 @@ Rules:
 * `ref` cannot be stored
 * `ref` cannot escape scope
 * `ref` never implies ownership
+* `ref` cannot cross thread boundaries
 
 ---
 
-## 3. Why Functions Return `own` by Default
+## 6. Function Calls and Ownership
+
+### 6.1 Parameter Passing
+
+Default: pass by value
+
+Explicit:
+
+* `ref` → borrow
+* `own` → move
+
+Example:
+
+```bestie
+fun process(own data: Data)
+```
+
+---
+
+### 6.2 Return Values
 
 When a function creates or produces a value, **someone must own it**.
 
-Returning `ref` by default would be unsafe and misleading.
-
-Therefore:
+Therefore, functions return `own` by default:
 
 ```bestie
 fun createUser(): User {
@@ -164,7 +311,7 @@ fun createUser(): User {
 }
 ```
 
-Desugars conceptually to:
+Conceptually:
 
 ```bestie
 fun createUser(): own User
@@ -173,10 +320,11 @@ fun createUser(): own User
 Rules:
 
 * Returned objects are **owned by the caller**
-* Ownership transfer is explicit and visible
-* Lifetimes remain local and predictable
+* Ownership transfer is explicit
+* Returning `ref` requires the owner to outlive the caller
+* Returning values copies
 
-This rule eliminates:
+This eliminates:
 
 * Escaping borrows
 * Hidden heap sharing
@@ -184,9 +332,9 @@ This rule eliminates:
 
 ---
 
-## 4. Deallocation: `free()` vs `freeDeep()`
+## 7. Deallocation: `free()` vs `freeDeep()`
 
-### 4.1 `free()`
+### 7.1 `free()`
 
 ```bestie
 student.free()
@@ -198,15 +346,9 @@ student.free()
 * Does **not** recurse into owned fields
 * Leaves owned sub-objects intact
 
-This is useful for:
-
-* Manual lifecycle control
-* Custom teardown logic
-* Performance-sensitive paths
-
 ---
 
-### 4.2 `freeDeep()`
+### 7.2 `freeDeep()`
 
 ```bestie
 student.freeDeep()
@@ -218,64 +360,45 @@ student.freeDeep()
 * Recursively frees all `own` fields
 * Skips all `ref` fields
 
-This matches **real-world expectations** for structured objects and avoids:
-
-* Writing 10 manual `free()` calls
-* Boilerplate destructors
-* Error-prone teardown code
-
 The behavior of `freeDeep()` is **entirely determined at compile time**.
 
 ---
 
-## 5. Pointer Model (`ptr<T>`)
+## 8. Raw Pointers (`ptr<T>`)
 
-Bestie is a systems language.
-Pointers exist and are first-class.
+### 8.1 Definition
 
-```bestie
-ptr<T>
-```
+`ptr<T>` represents a **raw memory address**, not ownership.
 
-means:
+Rules:
 
-* A raw memory address
 * No ownership semantics
 * No lifetime guarantees
-* Explicit dereferencing
-
-Pointers are honest and unsafe by design.
+* No implicit dereferencing
+* Explicitly unsafe by design
 
 ---
 
-## 6. Addressability Model
+### 8.2 Addressability Model
 
-Bestie deliberately separates **ownership** from **addressability**.
+Ownership and addressability are **orthogonal**.
 
-Having an address does **not** mean ownership.
+Having an address does **not** imply ownership.
 Having ownership does **not** require exposing an address.
 
 ---
 
-### 6.1 `.address()` — The Only Way to Get a Pointer
-
-Bestie provides **one** mechanism:
+### 8.3 `.address()` — The Only Way to Get a Pointer
 
 ```bestie
 value.address()
 ```
 
-`.address()` returns a pointer to the **language-level memory representation** of a value.
-
-Important:
+`.address()` returns a pointer to the **language-level memory representation**.
 
 > `.address()` never lies about what it points to.
 
----
-
-### 6.2 Return Type of `.address()`
-
-The type of pointer returned depends on **mutability and semantics**:
+Return type depends on mutability:
 
 | Value kind                 | Result         |
 | -------------------------- | -------------- |
@@ -283,41 +406,62 @@ The type of pointer returned depends on **mutability and semantics**:
 | Immutable or `const` value | `ptr<const T>` |
 | Runtime resource           | `ptr<const T>` |
 
-Examples:
+---
+
+### 8.4 Dereferencing Rules
+
+Bestie has **no implicit dereferencing**.
 
 ```bestie
-val x: int = 10
-val px = x.address()           // ptr<const int>
+val v = p.val
+p.val = 42
+```
 
-var y: int = 20
-val py = y.address()           // ptr<int>
+Const correctness is enforced:
+
+```bestie
+ptr<const T>  // read-only
+ptr<T>        // mutable
 ```
 
 ---
 
-## 7. Runtime Resources (Files, Sockets, etc.)
+### 8.5 Pointer Arithmetic
 
-Runtime resources **are addressable**.
+Allowed only when:
 
-This is important for systems programmers.
+* Offset is known at compile time
+* Bounds can be proven safe
+
+```bestie
+p.offset(2).val
+```
+
+Out-of-bounds access is a **compile-time error** whenever provable.
+
+---
+
+## 9. Runtime Resources
+
+Runtime resources (files, sockets, etc.) are addressable:
 
 ```bestie
 val f = file.open()
 val p = f.address()   // ptr<const file>
 ```
 
-What this means:
+Meaning:
 
-* The pointer refers to the **handle object**
+* Pointer refers to the handle object
 * Not the OS kernel resource
-* The handle is read-only
-* Mutation through the pointer is forbidden
+* Handle is read-only
+* Mutation through pointer is forbidden
 
-This is **exactly equivalent** to `FILE*` in C.
+Equivalent to `FILE*` in C.
 
 ---
 
-## 8. User-Defined Types and `.address()`
+## 10. User-Defined Types and Layout
 
 User-defined classes and structs:
 
@@ -330,95 +474,110 @@ val own u = User.new()
 val p = u.address()   // ptr<User>
 ```
 
-If the binding is immutable:
+Inlining rules ensure:
 
-```bestie
-val u = User.init(...)
-val p = u.address()   // ptr<const User>
-```
-
-No special casing.
-No hidden rules.
+* No hidden pointers
+* Predictable field layout
+* Cache-friendly access
 
 ---
 
-## 9. Dereferencing Rules
+## 11. Collections and Memory
 
-Bestie has **no implicit dereferencing**.
+### 11.1 Collection Ownership
+
+Collections own their elements **only if element type is `own T`**.
 
 ```bestie
-val v = p.val()
-p.val(42)
+list<own User> users
 ```
 
-Const correctness is enforced:
+* `users.freeDeep()` frees all users
+* `users.free()` frees only the container
+
+---
+
+### 11.2 Copying Collections
+
+* Value collections → deep copy
+* Reference collections → reference copy
+* Ownership collections → move only
+
+Illegal:
 
 ```bestie
-ptr<const T>  // read-only
-ptr<T>        // mutable
+val a: list<own User>
+val b = a   // compile-time error
 ```
 
 ---
 
-## 10. `own`, `ref`, and Pointers Together
+### 11.3 Immutable & Concurrent Variants
 
-These concepts are orthogonal:
+```bestie
+val l = list<int>.asArray.asImmutable
+```
 
-* `own` → who frees
-* `ref` → who borrows
-* `ptr<T>` → raw address
+Rules:
 
-You may freely combine them **where rules allow**.
-
-What is forbidden is:
-
-* Implicit ownership through pointers
-* Lifetime extension through pointers
-* Hiding ownership in pointer APIs
+* Immutable collections may be shared across threads
+* No mutation APIs
+* Compile-time enforced
 
 ---
 
-## 11. Stack vs Heap
+## 12. Stack vs Heap Optimization
 
 * Value types prefer stack allocation
 * Escape analysis applies
-* Heap allocation is explicit (`.new()`)
+* Heap allocation is explicit
 
-The compiler may:
-
-* Inline
-* Elide
-* Reorder
-* Optimize
-
-As long as observable behavior is preserved.
+The compiler may inline, elide, reorder, and optimize as long as observable behavior is preserved.
 
 ---
 
-## 12. Concurrency Rules (Preview)
+## 13. Concurrency Rules (Preview)
 
 * `own` values cannot be implicitly shared
 * `ref` cannot cross threads
 * `ptr<T>` crossing threads is explicit and unsafe
 
-These rules follow naturally from the ownership model.
+These rules ensure:
+
+* Data-race freedom
+* Deterministic memory behavior
 
 ---
 
-## 13. Summary
+## 14. What This Model Rejects
 
-Bestie memory management is:
+Explicitly rejected designs:
+
+* Garbage collection
+* Implicit reference counting
+* Arena sublanguages
+* Unsafe blocks
+* Borrow inference complexity
+* Runtime lifetime tracking
+
+---
+
+## 15. Summary
+
+Bestie’s memory and ownership model is:
 
 * Explicit, not magical
-* Pointer-friendly, not pointer-hiding
 * Ownership-driven, not GC-driven
-* Practical for systems
-* Safe enough for backend
+* Pointer-friendly, not pointer-hiding
+* Deterministic, not runtime-driven
+* Safe by construction, not by convention
 
 `own` answers **who frees**
 `ref` answers **who borrows**
 `ptr<T>` answers **where in memory**
 
+Memory is not managed *for* the developer.
+Memory is managed **with** the developer — explicitly, safely, and predictably.
+
 Nothing more.
 Nothing less.
-

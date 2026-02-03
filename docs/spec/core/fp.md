@@ -115,11 +115,108 @@ Default parameters and keyword arguments are **purely syntactic conveniences** a
 
 ---
 
-## 3. Multiple Return Values and Tuples
+## 3. Complete vs Partial Functions
+
+Bestie replaces null, nil, undefined, and sentinel values with a compile-time distinction between **complete** and **partial** functions.
+There is no runtime empty value.
+
+### 3.1 Complete Functions
+
+A complete function guarantees that it returns a value on all execution paths.
+
+```bestie
+fun getUser(id: int): User {
+    return repository.find(id)
+}
+```
+
+Rules:
+
+* All control-flow paths must return a value
+* The compiler proves completeness
+* Consumers do not need guards
+
+Invalid:
+
+```bestie
+fun f(): int {
+    if (cond) {
+        return 1
+    }
+}
+```
+
+* Compile-time error: not all paths return a value.
+
+### 3.2 Partial Functions
+
+A partial function explicitly declares that it may not return a value.
+
+```bestie
+fun getUser(id: int): User ?
+```
+
+Rules:
+
+* Caller must handle partiality
+* Compiler enforces exhaustiveness
+* No implicit exceptions
+
+Example:
+
+```bestie
+fun getUser(id: int): User ? {
+    if (exists(id)) {
+        return repository.find(id)
+    }
+    return
+}
+```
+
+#### 3.3 Calling Partial Functions
+
+Calling a partial function forces the caller to handle control flow explicitly.
+
+```bestie
+fun process(id: int): void {
+    val user = getUser(id)
+    if (user) {
+        sendEmail(user)
+    }
+}
+```
+
+Compiler enforces:
+
+* Partial calls cannot be used as complete expressions
+* Results must be guarded or transformed
+
+### 3.4 Lambdas and Partiality
+
+Lambdas may also be complete or partial.
+
+Complete lambda:
+
+```bestie
+val inc = (x: int) => x + 1;
+```
+
+Partial lambda:
+
+```bestie
+val find = (x: int) => User ? {
+    if (x > 0) return repo.get(x)
+    return
+}
+```
+
+---
+
+## 4. Multiple Return Values and Tuples
 
 Bestie allows functions to return **multiple values** using **tuples**.
 
-### 3.1 Tuple Return Types
+### 4.1 Tuple Return Types
 
 ```bestie
 fun divMod(x: int, y: int): (int, int) {
@@ -136,9 +233,7 @@ Rules:
 
 ---
 
-### 3.2 Tuple Return Shortcut
-
-As a convenience, tuple construction may be omitted in `return` statements.
+### 4.2 Tuple Return Shortcut
 
 ```bestie
 fun stats(x: int): (int, int, int) {
@@ -146,7 +241,7 @@ fun stats(x: int): (int, int, int) {
 }
 ```
 
-This is **exactly equivalent** to:
+Equivalent to:
 
 ```bestie
 return (x, x * 2, x * 3)
@@ -154,15 +249,13 @@ return (x, x * 2, x * 3)
 
 Rules:
 
-* The function return type must be a tuple
-* The number and order of returned values must match the tuple type
+* Function return type must be a tuple
+* Number and order of returned values must match the tuple type
 * No runtime transformation is introduced
 
 ---
 
-### 3.3 Tuple Destructuring (Capture Shortcut)
-
-Tuple values may be destructured directly at the binding site.
+### 4.3 Tuple Destructuring (Capture Shortcut)
 
 ```bestie
 val a, b = divMod(10, 3)
@@ -184,9 +277,7 @@ Rules:
 
 ---
 
-### 3.4 Ignoring Values with `_`
-
-Unused tuple values may be ignored using `_`.
+### 4.4 Ignoring Values with `_`
 
 ```bestie
 val quotient, _ = divMod(10, 3)
@@ -200,18 +291,18 @@ Rules:
 
 ---
 
-## 4. Function Types
+## 5. Function Types
 
 Function types are **explicit and structural**.
 
 ```bestie
-(int) -> int
+fn(int) -> int
 ```
 
 Usage:
 
 ```bestie
-val f: (int) -> int = square
+val f: fn(int) -> int = square
 ```
 
 Rules:
@@ -223,11 +314,11 @@ Rules:
 
 ---
 
-## 5. Lambdas
+## 6. Lambdas
 
 Lambdas are anonymous functions with **explicit and restricted semantics**.
 
-### 5.1 Lambda Syntax
+### 6.1 Lambda Syntax
 
 ```bestie
 val f = (x: int): int => x * 2
@@ -242,7 +333,7 @@ Properties:
 
 ---
 
-### 5.2 Non-Closure Rule (Core Guarantee)
+### 6.2 Non-Closure Rule (Core Guarantee)
 
 **Lambdas in Bestie are not closures by default.**
 
@@ -262,7 +353,7 @@ val y = 10
 val f = (x: int) => x + y   // compile-time error
 ```
 
-This guarantees:
+Guarantees:
 
 * No hidden sharing
 * No lifetime complexity
@@ -271,9 +362,7 @@ This guarantees:
 
 ---
 
-### 5.3 Explicit Capture (Restricted)
-
-Explicit capture is allowed with strict rules.
+### 6.3 Explicit Capture (Restricted)
 
 ```bestie
 val factor: int = 3
@@ -288,11 +377,11 @@ Rules:
 * Capture layout is compile-time known
 * No heap allocation introduced
 
-This preserves determinism while allowing controlled FP composition.
+Preserves determinism while allowing controlled FP composition.
 
 ---
 
-### 5.4 Lambda Allocation Model
+### 6.4 Lambda Allocation Model
 
 By default:
 
@@ -304,12 +393,10 @@ Heap allocation for lambdas is **not part of the core language**.
 
 ---
 
-## 6. Higher-Order Functions
-
-Bestie fully supports higher-order functions.
+## 7. Higher-Order Functions
 
 ```bestie
-fun apply(f: (int) -> int, x: int): int {
+fun apply(f: fn(int) -> int, x: int): int {
     return f(x)
 }
 ```
@@ -323,12 +410,10 @@ Rules:
 
 ---
 
-## 7. Variable Arguments (Varargs)
-
-Bestie supports **variable-length argument lists** using explicit vararg parameters.
+## 8. Variable Arguments (Varargs)
 
 ```bestie
-fun sum(var xs: int): int {
+fun sum(var xs: int...): int {
     var total = 0
     for x in xs {
         total += x
@@ -352,11 +437,9 @@ Rules:
 
 ---
 
-## 8. Method References
+## 9. Method References
 
-Bestie supports explicit, safe method references.
-
-### 8.1 Unbound Method References
+### 9.1 Unbound Method References
 
 ```bestie
 val f: (User) -> str = User::getName
@@ -376,7 +459,7 @@ Rules:
 
 ---
 
-### 8.2 Bound Method References (Restricted)
+### 9.2 Bound Method References (Restricted)
 
 ```bestie
 own u = User.init(...).new()
@@ -392,69 +475,11 @@ Rules:
 
 ---
 
-## 9. Partial Functions and Errors
-
-Bestie avoids nulls and implicit exceptions.
-
-### 9.1 Partial Functions
-
-```bestie
-fun parseInt(s: str): int?
-```
-
-Rules:
-
-* Partiality is explicit
-* Caller must handle it
-* Compiler enforces exhaustiveness
-
----
-
-### 9.2 Option and Error-Oriented FP
-
-Preferred FP-style returns:
-
-* `option<T>`
-* `T?`
-* Explicit error values
-
-```bestie
-fun findUser(id: int): option<User>
-```
-
-Errors are values.
-Control flow is explicit.
-
----
-
-## 10. Immutability in FP
-
-FP in Bestie strongly prefers immutability.
-
-Guidelines:
-
-* Use `val` by default
-* Prefer value types
-* Avoid `var` in FP-heavy code
-* Favor transformation over mutation
-
-```bestie
-val users2 = users.map(u => u.withName("Alice"))
-```
-
-Immutability is enforced by:
-
-* Type system
-* Ownership rules
-* Compile-time checks
-
----
-
-## 11. Extension Functions
+## 10. Extension Functions
 
 Extension functions add behavior **without modifying types** and **without runtime cost**.
 
-### 11.1 Declaration
+### 10.1 Declaration
 
 ```bestie
 fun str.isEmpty(): bool {
@@ -471,9 +496,7 @@ val empty = s.isEmpty()
 
 ---
 
-### 11.2 Compilation Model
-
-Extension functions are:
+### 10.2 Compilation Model
 
 * Statically resolved
 * Compiled as plain functions
@@ -483,17 +506,11 @@ Extension functions are:
 isEmpty(s)
 ```
 
-There is:
-
-* No virtual dispatch
-* No vtables
-* No runtime lookup
+No virtual dispatch, no vtables, no runtime lookup.
 
 ---
 
-### 11.3 `this` Semantics
-
-Inside an extension:
+### 10.3 `this` Semantics
 
 * `this` is the receiver parameter
 * Immutable unless the type allows mutation
@@ -501,7 +518,7 @@ Inside an extension:
 
 ---
 
-### 11.4 Extensions vs Members
+### 10.4 Extensions vs Members
 
 Rules:
 
@@ -513,9 +530,7 @@ Name collisions are illegal.
 
 ---
 
-### 11.5 Extensions and Protocols
-
-Extensions:
+### 10.5 Extensions and Protocols
 
 * Do not implement protocols
 * Do not participate in protocol dispatch
@@ -523,7 +538,7 @@ Extensions:
 
 ---
 
-### 11.6 Generic Extensions
+### 10.6 Generic Extensions
 
 ```bestie
 fun <T> list<T>.head(): T? {
@@ -539,9 +554,7 @@ Rules:
 
 ---
 
-## 12. Function Composition
-
-Composition is explicit and type-safe.
+## 11. Function Composition
 
 ```bestie
 fun compose<A, B, C>(
@@ -556,17 +569,14 @@ No implicit currying or composition exists.
 
 ---
 
-## 13. Currying and Partial Application
+## 12. Currying and Partial Application
 
-### 13.1 No Implicit Currying
+### 12.1 No Implicit Currying
 
 Automatic currying is not supported.
-
 Capturing-based currying is illegal.
 
----
-
-### 13.2 Explicit Partial Application
+### 12.2 Explicit Partial Application
 
 Partial application is performed via **compile-time transformations**:
 
@@ -582,7 +592,7 @@ Rules:
 
 ---
 
-## 14. Recursion
+## 13. Recursion
 
 Recursion is explicit.
 
@@ -594,7 +604,7 @@ Rules:
 
 ---
 
-## 15. FP and Memory Model
+## 14. FP and Memory Model
 
 FP fully respects ownership.
 
@@ -604,14 +614,14 @@ Rules:
 * Ownership passing is explicit
 * Lambdas cannot capture owning references
 
-This ensures:
+Ensures:
 
 * Manual memory safety
 * Concurrency correctness
 
 ---
 
-## 16. FP and OOP Interoperability
+## 15. FP and OOP Interoperability
 
 * Methods are functions with receivers
 * Extension functions bridge FP and OOP
@@ -620,6 +630,29 @@ This ensures:
 
 FP reduces accidental complexity.
 It does not replace OOP.
+
+---
+
+## 16. Immutability in FP
+
+FP in Bestie strongly prefers immutability.
+
+Guidelines:
+
+* Use `val` by default
+* Prefer value types
+* Avoid `var` in FP-heavy code
+* Favor transformation over mutation
+
+```bestie
+val users2 = users.map(u => u.withName("Alice"))
+```
+
+Enforced by:
+
+* Type system
+* Ownership rules
+* Compile-time checks
 
 ---
 

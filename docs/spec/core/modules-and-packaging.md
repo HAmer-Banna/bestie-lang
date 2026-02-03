@@ -314,14 +314,15 @@ Imports are **file-scoped** and reference **exported symbols**:
 
 ```bestie
 import net.http.client.HttpClient
-import net.http.client.*
 ```
 
 Rules:
 
 * No relative imports
 * No file-path imports
-* Wildcards import only `pub` symbols
+* No wildcard imports (`*`)
+* Explicit import only: `import bestie.lib.math`
+* Module Import Declarations
 * No package aliasing
 * Aliasing is allowed only for types/functions
 

@@ -30,8 +30,6 @@ High-level, convenient utilities:
 **Properties:**
 
 * Closed but not sealed (≈80%), evolves carefully
-* Explicit import only: `import bestie.lib.math`
-* No wildcard imports (`*`)
 * PascalCase for classes/protocols
 
 ---

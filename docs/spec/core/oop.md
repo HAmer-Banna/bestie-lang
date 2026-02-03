@@ -32,19 +32,60 @@ Bestie enforces:
 * Deterministic memory layout
 * Compile-time resolvable semantics
 
-**Golden Rule:** If behavior can be resolved at compile time, it **must** be resolved at compile time.
+**Golden Rule:**
+If behavior can be resolved at compile time, it **must** be resolved at compile time.
 
 Any OOP feature violating this rule is excluded from the **core language**.
 
 ---
 
-## 2. Class Kinds
+## 2. Polymorphism Model (Binding First)
+
+Bestie supports **both static and dynamic polymorphism**, but they are **explicitly separated**.
+
+Three forms exist:
+
+### 2.1 Overloading (Static)
+
+```bestie
+fun draw(x: int)
+fun draw(x: Point)
+```
+
+* Resolved entirely at compile time
+* No runtime cost
+
+---
+
+### 2.2 Static Protocol Polymorphism (Default)
+
+* Compile-time dispatch
+* No vtables
+* No RTTI
+* Zero runtime cost
+
+This is **early binding**.
+
+---
+
+### 2.3 Dynamic Polymorphism (Explicit)
+
+* Requires `@virtual`
+* `@override` mandatory
+* Vtables generated only when required
+* Dispatch happens at runtime
+
+This is **late binding**, and is **opt-in only**.
+
+---
+
+## 3. Class Kinds
 
 Bestie supports **multiple explicit class kinds**, each with strict guarantees.
 
 ---
 
-### 2.1 data class
+### 3.1 data class
 
 **Purpose:**
 
@@ -75,7 +116,7 @@ data class User {
 
 ---
 
-### 2.2 value class
+### 3.2 value class
 
 **Purpose:**
 
@@ -104,7 +145,7 @@ value class Point {
 
 ---
 
-### 2.3 enum / enum class
+### 3.3 enum / enum class
 
 **Purpose:**
 
@@ -126,7 +167,7 @@ enum class Status {
 
 ---
 
-### 2.4 single class
+### 3.4 single class
 
 **Purpose:**
 
@@ -149,13 +190,14 @@ single class Config {
 
 * Cannot be open or inherited
 * Inner classes must be `priv`
-* Mutable state allowed (user responsibility)
+* Mutable state.
 
 ---
 
-### 2.5 class (Closed by Default)
+### 3.5 class
 
-**Purpose:** Standard object with identity
+**Purpose:**
+Standard object with identity
 
 ```bestie
 class File {
@@ -165,15 +207,17 @@ class File {
 
 **Properties:**
 
-* Closed by default
+* Closed
 * Static dispatch
-* No inheritance unless explicitly enabled
+* Cannot be inherited
+* Can extend another class or implements protocol.
 
 ---
 
-### 2.6 open class
+### 3.6 open class
 
-**Purpose:** Explicit inheritance root, explicit polymorphic intent
+**Purpose:**
+Explicit inheritance root, explicit polymorphic intent
 
 ```bestie
 open class Shape {
@@ -185,14 +229,16 @@ open class Shape {
 
 * Must be explicitly marked `open`
 * Virtual methods must be explicitly annotated with `@virtual`
-* `@override` mandatory for overriding
+* `@override` mandatory
 * Single inheritance only
+* open class that is not subclassed will trigger a compiler warning, discouraging the use of openness unless inheritance is explicitly intended
 
 ---
 
-### 2.7 abstract class
+### 3.7 abstract class
 
-**Purpose:** Partial implementation with shared logic
+**Purpose:**
+Partial implementation with shared logic
 
 **Rules:**
 
@@ -202,118 +248,13 @@ open class Shape {
 
 ---
 
-## 3. Visibility Modifiers
-
-Supported:
-
-* `pub` | `pkg` | `protec` | `priv`
-
-**Rules:**
-
-* Top-level declarations cannot be `priv`
-* `pkg` is default
-* `protec` applies only to inheritance
-* Inner declarations cannot widen visibility
-
-```bestie
-pkg class A {
-    pub class B {}   // ❌ illegal
-}
-```
+** data, value, enum, and @immutable classes cannot extend other classes, but may implement protocols. Only statically dispatched (non-@virtual) protocol methods are permitted.
 
 ---
 
-## 4. Inner Classes
+## 4. Protocols (Behavior Contracts)
 
-Inner classes are **lexically nested**, not implicitly bound.
-
-**Rules:**
-
-* No implicit capture of outer instance
-* No hidden references
-* Explicit qualification required
-* Visibility constrained by outer declaration
-
-Inner classes may:
-
-* Declare methods and properties
-* Use annotations
-* Cannot be open if outer is data, value, or single
-
----
-
-## 5. `this` and `super` Resolution
-
-### 5.1 `this`
-
-* Always resolves statically
-* Refers to **lexically enclosing instance**
-* No implicit rebinding
-
-```bestie
-class Outer {
-    val x: int
-    class Inner {
-        fun f(o: Outer) {
-            this      // Inner
-            o          // Outer (explicit)
-        }
-    }
-}
-```
-
-No implicit `Outer.this`. All outer access must be explicit.
-
-### 5.2 `super`
-
-* Allowed only when inheritance exists and is fully resolvable at compile time
-* Refers to **immediate parent class**
-* Cannot be dynamic or cross containment boundaries
-
-```bestie
-open class A { fun f(): int }
-class B : A {
-    fun g(): int { return super.f() }
-}
-```
-
-Invalid cases:
-
-* `super` in non-inheriting classes
-* `super` inside inner classes
-* `super` targeting protocol defaults directly
-
----
-
-## 6. Properties (Fields with Accessors)
-
-* Compile to explicit getter/setter methods
-
-```bestie
-val name: str => { get }
-var age: int => { get; set }
-```
-
-**Rules:**
-
-* No implicit backing fields
-* Ownership rules apply
-* Mutation must be explicit
-
-Allowed in:
-
-* `class`, `open class`, `single class`, inner classes
-
-Forbidden in:
-
-* `protocol`
-* Discouraged in data/value classes
-
----
-
-## 7. Protocols (Behavior Contracts)
-
-* Define **behavior**, not state
+Protocols define **behavior only**, not state.
 
 ```bestie
 protocol Printable {
@@ -331,7 +272,7 @@ protocol Printable {
 
 ---
 
-### 7.1 Protocol Inheritance
+### 4.1 Protocol Inheritance
 
 ```bestie
 protocol Object : Hashable, Comparable, Printable
@@ -340,182 +281,167 @@ protocol Object : Hashable, Comparable, Printable
 **Rules:**
 
 * All parent protocol methods are included
-* Method resolution is **compile-time**
-* No diamond ambiguity (no state, no fields)
-* Conflicting defaults must be resolved explicitly by implementors
+* Method resolution is compile-time
+* No diamond ambiguity
+* Conflicting defaults must be resolved explicitly
 
 Protocols **do not form runtime hierarchies**.
 
 ---
 
-## 8. Polymorphism Model
+## 5. Casting Rules (Classes & Protocols)
 
-Three explicit forms of polymorphism:
+Casting in Bestie is **explicit, directional, and binding-aware**.
 
-### 8.1 Overloading (Static)
+### 5.1 Upcasting (Implicit, Safe)
+
+Allowed when moving **from concrete to abstraction**.
 
 ```bestie
-fun draw(x: int)
-fun draw(x: Point)
+val s: Shape = Circle.new()
+val p: Printable = Circle.new()
 ```
 
-* Resolved entirely at compile time
-
-### 8.2 Static Protocol Polymorphism (Default)
-
-* Compile-time dispatch
-* No vtables
-* Zero runtime cost
-
-### 8.3 Dynamic Polymorphism (Explicit)
-
-* Requires `@virtual` annotation
-* `@override` is mandatory
-* Vtables generated only when required
-* Dynamic dispatch is **opt-in**
+* Always safe
+* Compile-time verified
+* Preserves early binding unless `@virtual` is involved
 
 ---
 
-## 9. Inheritance & Override Rules
+### 5.2 Downcasting (Explicit, Checked)
 
-* `@override` mandatory for all overridden methods
+Required when moving **from abstraction to concrete**.
+
+```bestie
+val c: Circle = s as Circle
+```
+
+Rules:
+
+* Must use `as`
+* Fails at compile time if statically impossible
+* Runtime check only exists if dynamic polymorphism is involved
+
+---
+
+### 5.3 Class ↔ Protocol Casting
+
+```bestie
+val p: Printable = Circle.new()
+val c: Circle = p as Circle
+```
+
+Rules:
+
+* Upcast to protocol is implicit
+* Downcast requires `as`
+* No RTTI-based discovery
+* Validity is known at compile time for sealed protocols
+
+---
+
+### 5.4 Binding Preservation Rules
+
+* Static calls remain statically bound after casting
+* Dynamic dispatch only occurs for `@virtual` methods
+* Casting **never introduces late binding**
+
+---
+
+## 6. Inheritance & Override Rules
+
+* `@override` mandatory
 * Signature must match exactly
 
-### 9.1 Default Implementation Resolution
+### 6.1 Default Implementation Resolution
 
 Order:
 
 1. Parent class
-2. Concrete implementation in subclass
-3. Protocol default implementations
+2. Concrete subclass implementation
+3. Protocol default implementation
 
-*Protocol defaults are never implicitly chained.*
-
----
-
-## 10. Construction Rules (`init` / `new`)
-
-* `new()` = allocation
-* `init()` = initialization
-* Builders/factories may wrap both
-
-Restrictions:
-
-* `@noNew`
-* `@noInit`
-* `@noConstruct`
-
-Enforced **at compile time**.
+Protocol defaults are **never implicitly chained**.
 
 ---
 
-## 11. Design Patterns in Core
-
-Included:
-
-* `single class` (Singleton)
-
-In std-lib:
-
-* `Factory` (protocol)
-* `Builder` (protocol)
-
-Excluded (expressible via protocols/lambdas):
-
-* Observer, Strategy, Visitor, Command
+** Inheritance in Bestie is explicit: ext is used to extend a single class, and impl is used to implement one or more protocols.
 
 ---
 
-12. Sealed Declarations (Java-Style File Closure)
+## 7. Visibility Modifiers
 
-Bestie supports Java-style sealing to define closed, finite sets of declarations.
+Supported:
 
-Sealing applies to a list of declarations, not a single type, and does not introduce new kinds.
+* `pub` | `pkg` | `protec` | `priv`
 
-Sealing may target:
+**Rules:**
 
-classes
+* Top-level declarations cannot be `priv`
+* `pkg` is default
+* `protec` applies only to inheritance
+* Inner declarations cannot widen visibility
 
-protocols
+---
 
-file-level functions
+## 8. Inner Classes
 
-Sealing is file-scoped and compile-time only.
-
-12.1 Sealed Classes
-
-A sealed declaration explicitly enumerates which classes may extend a base class.
-
-sealed Shape permits Circle, Rectangle, Triangle
-
-
-open class Shape
-class Circle : Shape
-class Rectangle : Shape
-class Triangle : Shape
-
-Properties:
-
-Only listed classes may extend the sealed base
-
-All permitted classes must be in the same file
-
-Enables exhaustive match checking
-
-No runtime registration or reflection
+Inner classes are **lexically nested**, not implicitly bound.
 
 Rules:
 
-Base must be open or abstract
+* No implicit capture of outer instance
+* No hidden references
+* Explicit qualification required
+* Visibility constrained by outer declaration
 
-No implicit inheritance outside the permit list
+---
 
-Sealing does not affect dispatch or memory layout
+## 9. `this` and `super` Resolution
 
-12.2 Sealed Protocols
+### 9.1 `this`
 
-Protocols may also be sealed with an explicit implementor list.
+* Always resolves statically
+* Refers to lexically enclosing instance
+* No implicit rebinding
 
-sealed protocol Token permits NumberToken, StringToken
+---
 
+### 9.2 `super`
 
-class NumberToken : Token
-class StringToken : Token
+* Compile-time resolvable only
+* Refers to immediate parent
+* Forbidden in inner classes and protocols
 
-Properties:
+---
 
-Only permitted types may implement the protocol
+## 10. Properties (Fields with Accessors)
 
-All implementors are known at compile time
+* Compile to explicit getter/setter methods
+* No implicit backing fields
+* Ownership rules apply
 
-Enables exhaustive protocol-based matching
+---
 
-Rules:
+## 11. Construction Rules (`init` / `new`)
 
-Protocol rules still apply (no state, no fields)
+* `new()` allocates
+* `init()` initializes
+* Enforced at compile time
 
-Default implementations remain static
+---
 
-12.3 Sealed File-Level Functions
+## 12. Sealed Declarations (File-Scoped)
 
-File-level functions may be sealed to define a closed overload set.
+Sealing defines **closed, finite sets** of declarations.
 
-sealed fun parse(str: str): Token
-sealed fun parse(int: int): Token
+Applies to:
 
-Properties:
+* Classes
+* Protocols
+* File-level functions
 
-Only declared overloads are allowed
-
-No external extension or overloading
-
-Resolution remains compile-time
-
-Rules:
-
-All sealed overloads must appear in the same file
-
-Prevents accidental API extension
+No runtime impact.
 
 ---
 
@@ -523,14 +449,16 @@ Prevents accidental API extension
 
 Always thread-safe:
 
-* data class, value class, enum/enum class, single class (initialization), `@immutable` classes, effectively immutable classes (all `val`)
+* data class
+* value class
+* enum / enum class
+* single class initialization
+* immutable classes
 
 User responsibility:
 
-* open class
-* Classes with mutable (`var`) members
-
-*Concurrency safety is ownership-driven, not lock-driven.*
+* open classes
+* mutable state
 
 ---
 
@@ -546,12 +474,17 @@ User responsibility:
 
 ## 15. Summary
 
-Bestie OOP is:
+Bestie OOP is a **compiler-driven object model** with:
 
-* Explicit
-* Predictable
-* Compile-time resolvable
-* Memory-safe
-* Concurrency-aware
+* Early binding by default
+* Late binding only by explicit request
+* Explicit casting with preserved semantics
+* No hidden runtime behavior
+* Strong memory and concurrency guarantees
 
-OOP exists to **model reality clearly**, not to enable accidental complexity.
+Classes model **identity and structure**.
+Protocols model **behavior and capability**.
+Casting never changes binding rules.
+
+OOP in Bestie exists to **serve performance, predictability, and correctness** —
+never abstraction for its own sake.

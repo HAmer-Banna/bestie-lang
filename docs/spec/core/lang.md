@@ -4,7 +4,7 @@
 
 Bestie is a native, compiled programming language designed from first principles for **systems programming and backend engineering**.
 
-Bestie is not built around a single paradigm.
+Bestie is not built around a single paradigm.  
 Object-oriented programming, functional programming, and low-level control are treated as **explicit tools**, not ideologies.
 
 Bestie prioritizes:
@@ -62,7 +62,7 @@ Higher-level abstractions live in:
 * `std-api`
 * `std-framework`
 
-The core defines guarantees.
+The core defines guarantees.  
 APIs define convenience.
 
 ---
@@ -140,7 +140,7 @@ Multiple value declarations are a **binding convenience**, not a data structure.
 
 ```bestie
 val x, y, z = 5, 6, 3
-```
+````
 
 This is equivalent to:
 
@@ -257,8 +257,9 @@ All `_` usage is **compile-time only** and introduces no runtime behavior.
 Primitive value types map directly to machine types:
 
 * `byte`
-* `int32`, `int64`
-* `uint32`, `uint64`
+* `ubyte`
+* `int16`, `int32`, `int64`
+* `uint16`, `uint32`, `uint64`
 * `float32`, `float64`
 * `int`, `uint`, `float` (width inferred by target)
 * `bool`
@@ -280,13 +281,89 @@ Value types include:
 * `str` (UTF-8, immutable)
 * `tuple`
 * `ptr<T>`
-* Immutable collection literals
+* collections: {`list<T>`, `set<T>`, `map<T>`, `deque<T>`, `heap<T>`};
 
 Value types:
 
 * Are immutable by default
 * Are copied efficiently
 * Have no hidden allocation
+
+---
+
+## 5.3 Casting, Promotion, and Type Aliases
+
+### 5.3.1 Casting Rules
+
+Bestie enforces **explicit casting** except where the target type is already known.
+
+Example:
+
+```bestie
+val x: int = 5 / 2        // integer division, result is int
+```
+
+However, implicit inference without an explicit target type is **illegal**:
+
+```bestie
+val x = 5 / 2             // ❌ compiler error
+```
+
+The programmer must make intent explicit:
+
+```bestie
+val x = (5 / 2) as int
+```
+
+Casting is always visible in source code and never implicit.
+
+---
+
+### 5.3.2 Type Promotion Is Explicit
+
+Bestie does **not** allow implicit numeric promotion or narrowing.
+
+Example:
+
+```bestie
+val x: int = 5
+val y: byte = x           // ❌ compiler error
+```
+
+Correct form:
+
+```bestie
+val y: byte = x as byte
+```
+
+This rule applies **both directions**:
+
+* Widening
+* Narrowing
+
+All promotions require an explicit `as` cast.
+
+---
+
+### 5.3.3 Type Aliases Using `as`
+
+Bestie allows **type aliases** using the `as` keyword.
+
+Aliases introduce **no new types** and incur **no runtime cost**.
+
+Example:
+
+```bestie
+type UserId as int
+type Bytes as list<byte>
+```
+
+Rules:
+
+* Aliases are compile-time only
+* Aliases improve readability and intent
+* Aliases do not affect layout or ABI
+* Casting rules still apply to the underlying type
 
 ---
 
@@ -401,7 +478,7 @@ Bestie supports a balanced mix of symbolic and word-based operators.
 
 ### Logical and Bitwise
 
-* `&&`, `||`, `!`
+* `&&`, `||`, `!`, `and`, `or`, `not`
 * `&`, `|`, `^`, `~`, `<<`, `>>`
 
 ### Introspection and Identity

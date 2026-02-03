@@ -123,7 +123,7 @@ Ownership **cannot cross threads**.
 
 * Immutable values (`val`)
 * Data, value, enum, single classes
-* Classes annotated `@immutable`
+* Effectively Immutable Classes or Explicit by annotated `@immutable`
 
 ```bestie
 val cfg = Config.load()
