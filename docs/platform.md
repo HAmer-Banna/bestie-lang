@@ -169,17 +169,7 @@ postgres_driver = "0.9.0"
 
 ---
 
-### 8.5 Visibility and Export Rules
-
-* **`pub`**: visible outside module only if exported
-* **`pkg`**: visible to any file within the package
-* **`priv`**: strictly local
-
-**Explicit re-exports are forbidden** — no leakage through indirect dependencies
-
----
-
-### 8.6 Linking & Build Summary
+### 8.5 Linking & Build Summary
 
 * **Binary-Only:** Remote repo distributes optimized object files
 * **Static Linking:** Single, self-contained executable
