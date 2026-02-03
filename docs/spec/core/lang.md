@@ -15,9 +15,6 @@ Bestie prioritizes:
 * Zero-cost abstractions
 * Long-term stability
 
-Bestie is conceptually:
-**Zig + Kotlin**, without inheriting the weaknesses of either.
-
 ---
 
 ## 2. Core Design Principles
