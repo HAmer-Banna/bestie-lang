@@ -2,9 +2,9 @@
 
 Bestie is a practical programming language.
 
-Not academic.
-Not experimental.
-Not clever for its own sake.
+Not academic.  
+Not experimental.  
+Not clever for its own sake.  
 
 Practical by design.
 
@@ -33,11 +33,11 @@ No split between “low-level” and “high-level” modes.
 
 ### Performance Is a First-Class Feature
 
-Performance is not an optimization phase.
+Performance is not an optimization phase.  
 It is a design constraint.
 
-Bestie compiles to native code.
-There is no garbage collector.
+Bestie compiles directly to native code.  
+There is no garbage collector.  
 There are no hidden runtime costs.
 
 If performance is optional, it will eventually be ignored.
@@ -46,65 +46,84 @@ If performance is optional, it will eventually be ignored.
 
 ### Safety Means Predictability, Not Restriction
 
-Bestie does not prevent programmers from making choices.
+Bestie does not forbid power.  
+It eliminates **surprises**.
 
-It prevents:
+Bestie prevents:
 
-* Accidents
-* Ambiguity
-* Undefined behavior
+* Accidental memory errors
+* Ambiguous behavior
+* Undefined execution
 
 There is:
 
 * No null
 * No silent failure
-* No undefined execution
+* No undefined behavior
 
-Safety exists to make intent explicit, not to forbid power.
+Safety exists to make intent explicit — not to restrict capability.
 
 ---
 
 ### Memory Is a Language Responsibility
 
-Programmers must control *when* memory is allocated and released.
+Programmers control *when* memory is allocated and released.
 
 They should not be forced to manage:
 
 * Padding
 * Layout
 * Hidden metadata
+* Implicit ownership
 
 Bestie guarantees:
 
 * Deterministic memory behavior
-* Optimal layout by default
 * Compile-time validated lifetimes
+* Predictable object layout
+* Explicit ownership semantics
 
-Memory is something you reason about, not something you hope works.
+Memory is something you reason about — not something you hope works.
 
 ---
 
 ### Abstractions Must Be Zero-Cost
 
 Abstractions exist to improve clarity.
-They must not impose runtime penalties.
+
+They must **not** impose runtime penalties.
 
 If an abstraction cannot be compiled away,
 it does not belong in the core language.
+
+Zero-cost is not an optimization.
+It is a requirement.
 
 ---
 
 ### Paradigms Are Tools, Not Identities
 
-Object-oriented programming is useful.
-Functional programming is useful.
+Object-oriented programming is useful.  
+Functional programming is useful.  
 Procedural programming is useful.
 
-Bestie supports all of them.
-
-It enforces none of them.
+Bestie supports all of them.  
+Bestie enforces none of them.
 
 Dogma does not scale.
+
+---
+
+### Determinism Over Magic
+
+Bestie prefers:
+
+* Compile-time resolution over runtime discovery
+* Explicit control over hidden automation
+* Predictable execution over convenience
+
+There is no hidden runtime behavior.  
+What you write is what executes.
 
 ---
 
@@ -113,13 +132,14 @@ Dogma does not scale.
 Bestie is:
 
 * Not a scripting language
-* Not a minimal or “tiny” language
 * Not a research experiment
-* Not framework-driven
-* Not runtime-centric
+* Not runtime-driven
+* Not macro-driven
+* Not framework-dependent
+* Not trying to solve every problem
 
-There is no hidden magic.
-Everything that matters is visible.
+There is no hidden magic.  
+Everything that matters is visible and predictable.
 
 ---
 
@@ -127,10 +147,10 @@ Everything that matters is visible.
 
 Because:
 
-* C gives control but no safety
-* C++ gives power but no predictability
+* C gives control but limited safety
+* C++ gives power but increasing complexity
 * Java gives safety but removes control
-* Rust gives safety with high cognitive cost
+* Rust gives safety with high cognitive overhead
 
 Modern systems demand:
 
@@ -139,7 +159,7 @@ Modern systems demand:
 * Explicit control
 * Reasonable complexity
 
-Bestie exists to meet those demands without compromise.
+Bestie exists to meet those demands **without compromise**.
 
 ---
 
@@ -148,22 +168,22 @@ Bestie exists to meet those demands without compromise.
 Bestie promises:
 
 1. Native performance
-2. Explicit and deterministic memory control
-3. Zero undefined behavior
-4. Professional-grade ergonomics
-5. Long-term stability
+2. Deterministic and explicit memory control
+3. No undefined behavior
+4. Strong compile-time guarantees
+5. Long-term language stability
 
-Nothing hidden.
-Nothing implied.
-Nothing extra.
+Nothing hidden.  
+Nothing implicit.  
+Nothing unnecessary.
 
 ---
 
 ## Final Word
 
-Bestie is not trying to cover every idea in programming.
+Bestie is not trying to implement every idea in programming.
 
-It is trying to get the fundamentals exactly right.
+It is focused on getting the **fundamentals exactly right**.
 
-Once the fundamentals are right,
+Once the fundamentals are correct,
 everything else becomes possible.
