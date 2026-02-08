@@ -65,9 +65,8 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 * `@immutable` — Marks a type or value as deeply immutable
 * `@virtual` — Allows dynamic dispatch override
 * `@override` — Enforces method override correctness
-* `@inline` — Requests function inlining
+* `@noInline` — Debugging (stack traces, profiling clarity)
 * `@pure` — Declares a function as side-effect free
-* `@partial` — Marks incomplete or intentionally partial definitions
 * `@expose` — Exposes an element for external tooling or APIs
 * `@noNew` — Prevents direct allocation via `new`
 * `@noInit` — Disallows initialization blocks
