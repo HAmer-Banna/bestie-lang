@@ -210,13 +210,12 @@ All collections use **consistent method naming**.
 
 | Collection    | Methods                                            |
 | ------------- | -------------------------------------------------- |
-| list/set/heap | `add`, `remove`                                    |
-| deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast` |
+| list/set      | `add`, `remove`, `get`, `insert`, `indexOf`                                 |
+| heap          | `add`, `remove`, `get`
+| deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peakFirst`, `peakRemove` |
 | map           | `put`, `remove`                                    |
 
 All collections provide **efficient iterators** with no hidden indirection.
-
-There is no `Map.Entry` abstraction.
 
 ---
 
