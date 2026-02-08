@@ -216,6 +216,7 @@ All collections use **consistent method naming**.
 | map           | `put`, `remove`                                    |
 
 All collections provide **efficient iterators** with no hidden indirection.
+Some collections provide convenient way for accessing an element; as list[0]; map["food"];
 
 ---
 
