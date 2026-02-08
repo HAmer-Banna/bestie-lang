@@ -50,15 +50,15 @@ Pointers, allocation, and freeing exist — but **fully checked** by the compile
 - `protocol`
 - `group protocol`
 - `fun`
-- `inline fun`
-- Lambdas
+- `Lambdas`
 
 Every class automatically gets:
 
 - `.new()`
 - `.free()`
+- `.freeDeep()`
 - `.address()`
-- `.deref()`
+- `.val`
 
 ---
 
