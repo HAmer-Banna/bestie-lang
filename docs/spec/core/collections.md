@@ -237,7 +237,15 @@ This keeps the core minimal and zero-cost.
 
 ---
 
-## 8. Summary
+## 8. Relationship to Iterable
+* All core collections implement Iterable<T>
+* Iterable<T> does not imply mutability
+* Iteration order is defined by the implementation
+* for-in loop is used as replacement for .next()
+
+---
+
+## 9. Summary
 
 Bestie collections are:
 
