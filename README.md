@@ -161,5 +161,4 @@ Bestie evolves carefully — **core stability and predictability come first.**
 Mission:
 
 > **Unify performance, control, and clarity into one deterministic native language.**
-```
 
