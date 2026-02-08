@@ -62,11 +62,13 @@ System-level and external APIs:
 High-level abstractions over APIs:
 
 * `web` — high-level web abstractions over HTTP
+* `template` - for MVC templates
 * `orm` — database abstraction layer
 * `gui` — desktop GUI abstractions
 * `stream` — streaming and reactive utilities
 * `test` — testing utilities
-* `dependency-injection` — IoC and service wiring
+* `aop` - Aspect Oriented Programming (In bestie can be achieved using classes/functions)
+* `di` — dependency-injection, IoC and service wiring (used with other frameworks)
 
 **Distribution:** Shipped via **remote repository**, automatically downloaded by the compiler.
 
