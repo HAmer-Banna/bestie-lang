@@ -553,7 +553,6 @@ Annotations are compile-time only and introduce no runtime cost.
 
 Examples:
 
-* `@inline`
 * `@virtual`
 * `@override`
 * `@immutable`
@@ -570,7 +569,7 @@ Mechanisms:
 
 * Complete returns
 * Partial returns (`?`)
-* `option<T>`
+* `Option<T>`
 * Explicit error values
 
 ➡ See **errors.md**
