@@ -37,6 +37,8 @@ If behavior can be resolved at compile time, it **must** be resolved at compile 
 
 Any OOP feature violating this rule is excluded from the **core language**.
 
+Bestie guarantee the best memory layout.
+
 ---
 
 ## 2. Polymorphism Model (Binding First)
@@ -149,8 +151,16 @@ value class Point {
 
 **Purpose:**
 
-* Closed sets of values
-* Compile-time exhaustiveness
+In Bestie enum can be used in two ways:
+enum{} as an enumerated list each value indexed start from 0, used in simple enums like 
+```bestie
+enum WeekendDays{
+FRIDAY,
+SATURDAY
+}
+```
+
+or as enum class where it can implement protocol (only as static dispatch) and be Generic <T>.
 
 ```bestie
 enum class Status {
@@ -158,6 +168,9 @@ enum class Status {
     Disabled
 }
 ```
+
+* Closed sets of values
+* Compile-time exhaustiveness
 
 **Rules:**
 
@@ -185,6 +198,7 @@ single class Config {
 * Exactly one instance per process
 * Implicit, thread-safe access
 * Lazy and deterministic initialization
+* Private init(); with a public getInstance() method.
 
 **Rules:**
 
@@ -210,7 +224,7 @@ class File {
 * Closed
 * Static dispatch
 * Cannot be inherited
-* Can extend another class or implements protocol.
+* Can extend another class (if not annotated with @immutable) or implements protocol.
 
 ---
 
@@ -453,76 +467,66 @@ No runtime impact.
 
 A sealed declaration explicitly enumerates which classes may extend a base class.
 
+```bestie
 sealed Shape permits Circle, Rectangle, Triangle
-
 
 open class Shape
 class Circle : Shape
 class Rectangle : Shape
 class Triangle : Shape
+```
 
 Properties:
 
-Only listed classes may extend the sealed base
-
-All permitted classes must be in the same file
-
-Enables exhaustive match checking
-
-No runtime registration or reflection
+* Only listed classes may extend the sealed base
+* All permitted classes must be in the same file
+* Enables exhaustive match checking
+* No runtime registration or reflection
 
 Rules:
-
-Base must be open or abstract
-
-No implicit inheritance outside the permit list
-
-Sealing does not affect dispatch or memory layout
+* Base must be open or abstract
+* No implicit inheritance outside the permit list
+* Sealing does not affect dispatch or memory layout
 
 ### 12.2 Sealed Protocols
 
 Protocols may also be sealed with an explicit implementor list.
 
+```bestie
 sealed protocol Token permits NumberToken, StringToken
-
 
 class NumberToken : Token
 class StringToken : Token
+```
 
 Properties:
 
-Only permitted types may implement the protocol
-
-All implementors are known at compile time
-
-Enables exhaustive protocol-based matching
+* Only permitted types may implement the protocol
+* All implementors are known at compile time
+* Enables exhaustive protocol-based matching
 
 Rules:
 
-Protocol rules still apply (no state, no fields)
-
-Default implementations remain static
+* Protocol rules still apply (no state, no fields)
+* Default implementations remain static
 
 ### 12.3 Sealed File-Level Functions
 
 File-level functions may be sealed to define a closed overload set.
 
-sealed fun parse(str: str): Token
-sealed fun parse(int: int): Token
+`sealed fun parse(str: str): Token`
+`sealed fun parse(int: int): Token`
 
 Properties:
 
-Only declared overloads are allowed
-
-No external extension or overloading
-
-Resolution remains compile-time
+* Only declared overloads are allowed
+* No external extension or overloading
+* Resolution remains compile-time
 
 Rules:
 
-All sealed overloads must appear in the same file
-
-Prevents accidental API extension
+* All sealed overloads must appear in the same file
+* Prevents accidental API extension
 
 ---
 
@@ -535,6 +539,7 @@ Always thread-safe:
 * enum / enum class
 * single class initialization
 * immutable classes
+* effectively immutable classes (all fields are val)
 
 User responsibility:
 
