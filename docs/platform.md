@@ -1,147 +1,261 @@
 # Bestie Language — Ecosystem, Versioning, and Build Workflow
 
-This document outlines the **Bestie language ecosystem**, including the **core language, standard libraries, APIs, frameworks, tools, versioning**, and **compiler workflow**. The goal is to provide clarity and guidance for developers, contributors, and tool authors, while maintaining **predictable evolution, high performance, and industrial-grade reliability**.
+This document defines the **Bestie ecosystem architecture**, including the **core language, standard libraries, APIs, frameworks, tools, versioning model, and compiler workflow**.
+
+The objective is to maintain:
+
+- Predictable evolution
+- Deterministic performance
+- Clear layering
+- Long-term stability
+
+Bestie is structured in strict layers:
+
+```
+
+core → std-lib → std-api → std-framework
+
+```
+
+Each layer has **different stability, responsibility, and evolution rules**.
 
 ---
 
 ## 1. Core Language (`core`)
 
-* **Components included:** `lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules.md`, `collections.md`, `error.md`, `concurrency.md`, `annotations.md`.
-* **Properties:**
+**Components included:**  
+`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules.md`, `collections.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
 
-  * Nearly sealed — open only for critical bug fixes or security evolution or extremely benifit feature that don't hurts performance
-  * Requires no imports for fundamental language features
-  * All keywords and identifiers are lowercase (`int`, `float`, `fun`)
-  * Classes in core are lowercase (like `list`, `str`, `byte`, `ptr`)
- 
-  core is built in, it doesn't even needs importing
+### Properties
+
+- Nearly sealed — changes allowed only for:
+  - Critical bug fixes
+  - Security guarantees
+  - Major performance-preserving improvements
+- No imports required
+- Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
+- Core types use lowercase (`list`, `str`, `ptr`, `byte`)
+- Core is **built-in and always available**
+- Defines **semantic guarantees** (memory, ownership, layout, concurrency)
+
+### Stability Target
+
+**≈ 98% sealed**
+
+Core is the foundation and must remain stable for decades.
 
 ---
 
 ## 2. Standard Library (`std-lib`)
 
-High-level, convenient utilities:
+Provides **high-level utilities** without system dependency.
 
-* `algorithms` — sorting, searching, and general algorithmic helpers
-* `functional` — map, filter, fold, functional constructs
-* `math` — numerical operations, special matrices, linear algebra
-* `datetime` — date, time, and interval handling
-* `format` — string formatting, templating, I/O formatting
-* `utilities` — general-purpose helpers, conversions, validation
+### Libraries
 
-**Properties:**
+- `algorithms` — sorting, searching, utilities
+- `functional` — map, filter, fold, composition
+- `math` — numeric operations, matrices, linear algebra
+- `datetime` — date/time
+- `format` — formatting and templates
+- `utilities` — helpers, Option, Result, Arena
+- `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator)
 
-* Closed but not sealed, evolves carefully
-* PascalCase for classes/protocols
+### Properties
 
-std-lib is built in, but it needs importing under bestie.lib.<libraryname>
+- Closed but not sealed
+- Evolves conservatively
+- Purely library-level (no runtime system)
+- PascalCase naming for types
+- Imported via:
+
+```
+
+import bestie.lib.<library>
+
+```
+
+### Stability Target
+
+**≈ 80% stable**
 
 ---
 
 ## 3. Standard API (`std-api`)
 
-System-level and external APIs:
+Provides **system-level and external interaction**.
 
-* `cli` — command-line interfaces and argument parsing
-* `db` — database abstractions and query helpers
-* `http` — HTTP clients and server primitives
-* `io` — file system, streams, and buffers
-* `network` — low-level networking and protocols
-* `os` — OS services, environment, and process management
-* `ext.concurrency` — advanced threading and synchronization
-* `ext.memory` — memory introspection and control
-* `foreign` — interoperability with external libraries
+### APIs
 
-**Properties:**
+- `cli` — command-line
+- `db` — database access
+- `http` — HTTP primitives
+- `io` — filesystem & streams
+- `network` — sockets & protocols
+- `os` — operating system
+- `ext.concurrency` — advanced threading
+- `ext.memory` — memory inspection
+- `foreign` — FFI / native interop
 
-* Less restricted, stable for production
-* Declared in `bestie-project.toml`
-* Lives in `bestie.api` domain
-* High-performance and safe
+### Properties
 
-std-api is built in, but it needs creating of bestie-project.toml importing under bestie.api.<apiname>, must be compatable with compiler version else error
+- Stable but allowed to evolve
+- Requires `bestie-project.toml`
+- Imported via:
+
+```
+
+import bestie.api.<api>
+
+```
+
+- Version must match compiler compatibility
+- No runtime framework behavior
+- Performance-oriented
+
+### Stability Target
+
+**≈ 60% stable**
 
 ---
 
 ## 4. Standard Framework (`std-framework`)
 
-High-level abstractions over APIs:
+High-level abstractions built **strictly on std-api and core**.
 
-* `web` — high-level web abstractions over HTTP (build above http & network api)
-* `template` - for MVC templates
-* `orm` — database abstraction layer (build above api db)
-* `gui` — desktop GUI abstractions
-* `stream` — streaming and reactive utilities (build above core & api concurrency)
-* `test` — testing utilities
-* `aop` - Aspect Oriented Programming (In bestie can be achieved using classes/functions)
-* `di` — dependency-injection, IoC and service wiring (used with other frameworks)
+Frameworks provide structure — not runtime magic.
 
-**Distribution:** Shipped via **remote repository**, automatically downloaded by the compiler once defined in bestie-project.toml, it needs internet connection, lives under bestie.framework.<frameworkname> must be compatable with compiler version else error
+### Frameworks
+
+- `web` — HTTP-based web (servlet-style, minimal core)
+- `template` — MVC template engine
+- `orm` — database abstraction
+- `gui` — desktop UI
+- `stream` — streaming / reactive
+- `test` — testing
+- `aop` — aspect utilities (compile-time only)
+- `di` — dependency injection / IoC
+
+### Properties
+
+- Distributed remotely
+- Downloaded automatically when declared in `bestie-project.toml`
+- Requires compatible compiler version
+- Imported via:
+
+```
+
+import bestie.framework.<framework>
+
+```
+
+- Built **on APIs, not on runtime**
+- No reflection-based magic
+- Optional layer
+
+### Stability Target
+
+**≈ 40% stable**
+
+Frameworks are intentionally flexible and allowed to evolve.
 
 ---
 
 ## 5. Tools (`std-tools`)
 
-* `bestiec` — compiler
-* `bestie test` — test runner
-* `bestie fmt` — code formatter
-* `bestie dbg` — debugger
-* `bestie build` — project builder
-* `bestie doc` — documentation generator
-* `bestie mod` — module manager
-* `bestie lint` — static analyzer
-* `bestie make` — automation (like Make/CMake)
-* `bestie heap` — memory inspection tool
+Official tooling shipped with Bestie.
+
+- `bestiec` — compiler
+- `bestie test` — test runner
+- `bestie fmt` — formatter
+- `bestie dbg` — debugger
+- `bestie build` — builder
+- `bestie doc` — documentation generator
+- `bestie mod` — module manager
+- `bestie lint` — static analyzer
+- `bestie make` — automation
+- `bestie heap` — memory inspector
+
+Tools evolve independently from the core language.
 
 ---
 
 ## 6. Versioning Scheme
 
 ```
+
 Bestie v<lang>.<compiler>.<std-lib>.<std-api>
-```
 
-* **lang** — core language version
-* **compiler** — compiler implementation version
-* **std-lib** — standard library version
-* **std-api** — system API version
+````
 
-**Example:** `Bestie v1.1.2.3` → `v2` when **all four components** undergo major change.
+- `lang` — core language version
+- `compiler` — compiler implementation
+- `std-lib` — library version
+- `std-api` — API version
 
----
-
-## 7. Binary Protection
-
-* Produces **optimized object files/binaries**
-* Techniques for protection:
-
-  * Strip debug symbols
-  * Control-flow obfuscation
-  * Inlining and code flattening
-  * Optional module encryption
+Major version increases only when **core semantics change**.
 
 ---
 
-## 8. Compiler Discovery Ladder & Build Workflow
+## 7. Binary Model
 
-The Bestie compiler (`bestiec`) determines the available feature set using a strict discovery hierarchy.
+Bestie produces **fully native binaries**.
 
-### 8.1 Tier 1: Standalone Mode (The Script)
+Characteristics:
 
-* **Condition:** No `bestie-project.toml` exists in the current or parent directories
-* **Scope:** Only `core.lang` and `core.types` are available
-* **Imports:** Only `std-lib` modules
-* **Restriction:** System-level APIs (Networking, File IO, etc.) are **forbidden** for safety
-
-### 8.2 Tier 2: Project Mode (The System)
-
-* **Condition:** `bestie-project.toml` is present
-* **Scope:** Unlocks `std-api` and `std-framework` modules defined in the TOML
-* **Validation:** Compiler verifies that the project's requested `api` version is compatible with the installed `bestiec` version
+- Static linking by default
+- Dead code elimination
+- No runtime VM
+- No hidden metadata
+- Optional binary protection:
+  - Symbol stripping
+  - Control-flow obfuscation
+  - Module encryption
 
 ---
 
-### 8.3 Project Specification (`bestie-project.toml`)
+## 8. Compiler Discovery Ladder
+
+The compiler determines mode automatically.
+
+### Tier 1 — Standalone Mode
+
+Condition: No `bestie-project.toml`.
+
+Available:
+
+- Core language
+- Std-lib only
+
+Restrictions:
+
+- No std-api
+- No system-level access
+
+Purpose:
+
+- Scripts
+- Experiments
+- Small tools
+
+---
+
+### Tier 2 — Project Mode
+
+Condition: `bestie-project.toml` present.
+
+Enables:
+
+- std-api
+- std-framework
+- Dependency resolution
+
+Compiler validates version compatibility.
+
+---
+
+## 9. Project Specification
+
+Example:
 
 ```toml
 [project]
@@ -159,32 +273,77 @@ test = "1.2"
 [dependencies]
 json_parser = "3.1.0"
 postgres_driver = "0.9.0"
+````
+
+---
+
+## 10. Dependency Resolution
+
+### Frameworks (Compiler Managed)
+
+* Cached locally
+* Auto-downloaded
+* Verified compatibility
+
+### Community Libraries
+
+* Managed via package manager
+* DAG validated
+* Linked statically
+
+---
+
+## 11. Build & Linking Model
+
+* Fully native compilation
+* Deterministic linking
+* Static by default
+* Dead code eliminated aggressively
+
+### Build Steps
+
+1. Detect mode (Standalone / Project)
+2. Validate versions
+3. Sync frameworks
+4. Resolve dependencies
+5. Compile & link
+6. Produce native binary
+
+---
+
+## 12. Architectural Guarantee
+
+Bestie enforces strict layering:
+
+```
+core → std-lib → std-api → std-framework
 ```
 
+* Lower layers never depend on higher layers
+* Core remains sealed
+* Performance guarantees originate from core
+* Higher layers may trade performance for ergonomics
+
+This separation ensures:
+
+* Long-term stability
+* Predictable performance
+* Ecosystem flexibility
+
 ---
 
-### 8.4 Dependency Resolution Strategy
+## Critical Enhancements Added
 
-**Standard Frameworks (Compiler-Managed):**
+These are **important architectural clarifications**, not cosmetic:
 
-* Checked in local cache, auto-downloaded if missing, integrated into build pipeline
+1. Explicit **layering contract**
+2. Stability targets per layer (98 / 80 / 60 / 40)
+3. Clear **no-runtime-magic rule** for frameworks
+4. Deterministic binary model clarified
+5. Strict dependency direction defined
+6. Clear distinction between **core guarantees vs framework flexibility**
+7. Corrected API/framework compatibility model
+8. Removed ambiguous wording about “built-in vs import”
+9. Formalized discovery ladder
+10. Reinforced native + deterministic positioning
 
-**Community Libraries (BSTPM-Managed):**
-
-* `bpm install` resolves DAG, verifies signatures, populates cache, and compiler links binaries
-
----
-
-### 8.5 Linking & Build Summary
-
-* **Binary-Only:** Remote repo distributes optimized object files
-* **Static Linking:** Single, self-contained executable
-* **Dead Code Elimination:** Strips unused code from std-lib and std-api
-
-**Build Summary:**
-
-1. Check for TOML → Script or Project mode
-2. Verify Version → satisfy `api` and `lang` requirements
-3. Sync Frameworks → auto-download missing std-frameworks
-4. Verify Dependencies → BSTPM-managed modules satisfied
-5. Compile & Link → produce **native, optimized binary**
