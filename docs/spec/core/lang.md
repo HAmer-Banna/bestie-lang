@@ -26,14 +26,14 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 * Memory layout, padding, and alignment
 * Protocol dispatch
 * Inline expansion
-* Destructor placement
+* Lifetime and destructor placement
 * Ownership validation
-* Pointer safety
+* Pointer correctness
 * Builder chains
 * Error handling paths
 * Loop lowering and unrolling opportunities
 * Devirtualization
-* Concurrency safety (races, deadlocks, sharing rules)
+* Concurrency safety (races, deadlocks, illegal sharing)
 
 The runtime is intentionally minimal.
 
@@ -62,8 +62,8 @@ Higher-level abstractions live in:
 * `std-api`
 * `std-framework`
 
-The core defines guarantees.  
-APIs define convenience.
+The core defines **semantic guarantees**.  
+Higher layers provide **convenience and extensibility**.
 
 ---
 
@@ -80,7 +80,8 @@ Properties:
 * Immutable binding and value
 * No runtime allocation
 * No mutation through references
-* Cannot reference mutable memory
+* Cannot reference mutable or runtime memory
+* Stored in read-only memory
 
 Valid scopes:
 
@@ -103,13 +104,16 @@ Intended use:
 
 ### 4.2 `val` — Immutable Binding (Default)
 
-`val` defines an immutable binding to a value that may be mutable depending on its type.
+`val` defines an immutable binding to a value.
+
+The **binding is immutable**.  
+The **value mutability depends on its type**.
 
 Properties:
 
 * Runtime values allowed
 * Preferred default
-* Encourages immutability
+* Encourages value-oriented programming
 
 File-level `val` must be annotated with `@immutable`.
 
@@ -122,131 +126,61 @@ File-level `val` must be annotated with `@immutable`.
 Allowed only:
 
 * Local variables
-* Class properties with explicit getters/setters
+* Class properties with explicit accessors
 
 Disallowed:
 
 * File scope
 * Protocols
-* Data/value/single classes
+* `data`, `value`, and `single` classes
 
 ---
 
 ### 4.4 Multiple Value Declarations
 
-Bestie makes a **strict distinction** between *multiple value declarations* and *tuples*.
-
-Multiple value declarations are a **binding convenience**, not a data structure.
+Multiple value declarations are **binding syntax sugar**, not data structures.
 
 ```bestie
 val x, y, z = 5, 6, 3
 ````
 
-This is equivalent to:
-
-```bestie
-val x: int = 5
-val y: int = 6
-val z: int = 3
-```
-
 Rules:
 
-* All values on the right-hand side **must have the same type**
-* The common type may be inferred or explicitly annotated
-* Heterogeneous values are **not allowed**
-* No tuple value is created
-* Binding is positional and resolved at compile time
-
-Explicit typing is allowed:
-
-```bestie
-val x, y, z: int = 5, 6, 3
-```
-
-Invalid example (heterogeneous values):
-
-```bestie
-val x, y, z = 5, 6, 'c'    // ❌ illegal
-```
-
-Binding form restrictions:
-
-* All bindings in a declaration **must use the same keyword**
-* Mixing `val`, `var`, and `const` in a single declaration is illegal
-
-Invalid examples:
-
-```bestie
-val x, var y = 1, 2        // ❌ illegal
-const x, y = 1, 2         // ❌ illegal (runtime values)
-```
-
-Valid examples:
-
-```bestie
-val a, b = getPairInts()
-var i, j = 0, 1
-```
-
-Multiple value declarations are **pure syntax sugar** and are lowered by the compiler into independent bindings with no runtime cost.
+* RHS values must share the **same type**
+* No tuple is created
+* Binding is positional
+* Lowered to independent bindings at compile time
+* Zero runtime cost
 
 ---
 
-### 4.5 Tuples and Destructuring Bindings
+### 4.5 Tuples and Destructuring
 
-Tuples are **first-class value types** that may contain **heterogeneous values**.
-
-```bestie
-val t: tuple = (5, 6, 'c')
-```
-
-Tuple destructuring creates bindings from a tuple value:
+Tuples are **first-class heterogeneous value types**.
 
 ```bestie
 val (x, y, z) = (5, 6, 'c')
 ```
 
-Or with explicit type:
+Properties:
 
-```bestie
-val (x, y, z): tuple = (5, 6, 'c')
-```
-
-Rules:
-
-* Tuples may contain values of different types
-* Destructuring requires a tuple value
-* Parentheses **explicitly signal tuple semantics**
-* Tuple layout and arity are compile-time known
-
-This distinction ensures that **binding convenience never replaces data modeling**.
+* Heterogeneous allowed
+* Compile-time layout known
+* No implicit allocation
+* Explicit tuple semantics via parentheses
 
 ---
 
 ### 4.6 Ignoring Values with `_`
 
-Bestie allows the underscore identifier `_` to explicitly **ignore values** wherever a binding would otherwise be required.
+`_` explicitly discards values without creating bindings.
 
-```bestie
-val x, _, z = 1, 2, 3
-val (_, y, _) = 5, 6, 'c'
-```
+Properties:
 
-Rules:
-
-* `_` introduces **no binding** and no lifetime
-* `_` may appear in any position
-* `_` is allowed in multiple declarations and tuple destructuring
-* `_` is allowed wherever ignoring a value does not violate Bestie’s type, ownership, or mutability rules
-* `_` suppresses unused-value diagnostics
-
-Restrictions:
-
-* `_` cannot be read from or assigned to
-* `_` is not a valid identifier
-
-All `_` usage is **compile-time only** and introduces no runtime behavior.
+* No lifetime
+* No storage
+* Compile-time only
+* Suppresses unused diagnostics
 
 ---
 
@@ -254,331 +188,177 @@ All `_` usage is **compile-time only** and introduces no runtime behavior.
 
 ### 5.1 Primitive Types
 
-Primitive value types map directly to machine types:
-
-* `byte`
-* `ubyte`
-* `int16`, `int32`, `int64`
-* `uint16`, `uint32`, `uint64`
-* `float32`, `float64`
-* `int`, `uint`, `float` (width inferred by target)
-* `bool`
-* `char`
-* `void`
+Primitive types map directly to machine representations.
 
 All primitives:
 
-* Have no headers
-* Are stack-friendly
-* Require no deallocation
+* No headers
+* Stack-friendly
+* No deallocation
+* Deterministic layout
 
 ---
 
 ### 5.2 Core Value Types
 
-Value types include:
+Includes:
 
-* `str` (UTF-8, immutable)
+* `str` (immutable, UTF-8)
 * `tuple`
 * `ptr<T>`
-* collections: {`list<T>`, `set<T>`, `map<T>`, `deque<T>`, `heap<T>`};
-
-Value types:
-
-* Are immutable by default
-* Are copied efficiently
-* Have no hidden allocation
-
----
-
-## 5.3 Casting, Promotion, and Type Aliases
-
-### 5.3.1 Casting Rules
-
-Bestie enforces **explicit casting** except where the target type is already known.
-
-Example:
-
-```bestie
-val x: int = 5 / 2        // integer division, result is int
-```
-
-However, implicit inference without an explicit target type is **illegal**:
-
-```bestie
-val x = 5 / 2             // ❌ compiler error
-```
-
-The programmer must make intent explicit:
-
-```bestie
-val x = (5 / 2) as int
-```
-
-Casting is always visible in source code and never implicit.
-
----
-
-### 5.3.2 Type Promotion Is Explicit
-
-Bestie does **not** allow implicit numeric promotion or narrowing.
-
-Example:
-
-```bestie
-val x: int = 5
-val y: byte = x           // ❌ compiler error
-```
-
-Correct form:
-
-```bestie
-val y: byte = x as byte
-```
-
-This rule applies **both directions**:
-
-* Widening
-* Narrowing
-
-All promotions require an explicit `as` cast.
-
----
-
-### 5.3.3 Type Aliases Using `as`
-
-Bestie allows **type aliases** using the `as` keyword.
-
-Aliases introduce **no new types** and incur **no runtime cost**.
-
-Example:
-
-```bestie
-type UserId as int
-type Bytes as list<byte>
-```
-
-Rules:
-
-* Aliases are compile-time only
-* Aliases improve readability and intent
-* Aliases do not affect layout or ABI
-* Casting rules still apply to the underlying type
-
----
-
-## 6. Generics
-
-Generics in Bestie are **compile-time constructs**, not runtime abstractions.
-
-Characteristics:
-
-* Full specialization (monomorphization)
-* No type erasure
-* No variance keywords
-* No `extends?` or `super?`
-* No wildcard types
-
-Despite this, generics remain expressive through:
-
-* Protocol constraints
-* Explicit type relationships
-* Compile-time resolution and diagnostics
-
-Every generic instantiation produces concrete, optimized code with predictable layout and performance.
-
----
-
-## 7. Control Flow: `if` and `switch`
-
-### 7.1 `if` as Statement and Expression
-
-In Bestie, `if` is both a **statement** and an **expression**.
-
-As an expression, `if` must produce a value:
-
-```bestie
-val x: int = if (cond) 4 else 0
-```
-
-If a value does not have a natural empty representation, `option<T>` must be used.
-
-As a statement, `if` may omit `else`.
-When used inside a function without `else`, the function becomes **partial**:
-
-```bestie
-fun f(): bool? = if (cond) return true
-```
-
-See **fp.md** for partial functions.
-
----
-
-### 7.2 `switch` as Statement and Expression
-
-`switch` is both a **statement** and an **expression**.
+* collections (`list`, `set`, `map`, `deque`, `heap`)
 
 Properties:
 
-* No fallthrough
-* Exhaustiveness checked when used as an expression
-* Compact syntax (similar to modern Java switch)
-
-```bestie
-val x = switch (v) {
-  1 => 10
-  2 => 20
-  else => 0
-}
-```
+* Immutable by default
+* Efficient copy semantics
+* No hidden allocation
 
 ---
 
-## 8. Loops
+## 6. Casting and Type Rules
 
-Bestie supports:
+Bestie requires **explicit casting**.
+
+No implicit numeric promotion or narrowing is allowed.
+
+Aliases using `type X as Y` introduce **no new runtime type**.
+
+---
+
+## 7. Generics
+
+Generics are **compile-time only**.
+
+Properties:
+
+* Full monomorphization
+* No runtime type information
+* No type erasure
+* Predictable layout and performance
+
+---
+
+## 8. Control Flow
+
+### `if`
+
+* Statement and expression
+* Expressions must return values
+* Missing branch → partial function (`?`)
+
+### `switch`
+
+* No fallthrough
+* Exhaustiveness enforced when expression
+* Fully compile-time analyzable
+
+---
+
+## 9. Loops
+
+Supports:
 
 * `for`
 * `for in`
 * `while`
 
-Loops may include an `else` clause, similar to Python.
-
-Loops may also be used as **expressions** when resolvable at compile time:
-
-```bestie
-val x: int = for (i = 0; i < 5; i++) i + 5
-val xs: list<int> = for (i in 0..3) i * 2
-```
-
-This provides comprehension-style behavior without stream abstractions.
+Loops may be used as **expressions when compile-time resolvable**.
 
 ---
 
-## 9. Syntax Rules
+## 10. Syntax Rules
 
-* Parentheses `()` are required after `if`, `switch`, and loop keywords
-* Braces `{}` are required when the body is not on the same line
-
-```bestie
-if (cond) doSomething() else doOther()
-
-if (cond)
-  doSomething() // ❌ compiler error
-```
-
-Bestie does **not** require `{` to be on the same line.
-Formatting is enforced by the `fmt` tool.
+* Parentheses required for control flow
+* Braces required for multi-line bodies
+* Formatting enforced by tool, not compiler
 
 ---
 
-## 10. Operators
+## 11. Operators
 
-Bestie supports a balanced mix of symbolic and word-based operators.
+Logical, bitwise, identity, and compile-time introspection operators supported.
 
-### Logical and Bitwise
-
-* `&&`, `||`, `!`, `and`, `or`, `not`
-* `&`, `|`, `^`, `~`, `<<`, `>>`
-
-### Introspection and Identity
-
-* `is` — identity comparison
-* `typeOf(x)` — compile-time type query
-* `sizeOf(T)` — compile-time size query
+No hidden operator behavior.
 
 ---
 
-## 11. Functions (Overview)
-
-Functions are declared using `fun`.
-
-Properties:
+## 12. Functions (Overview)
 
 * Static dispatch by default
-* Explicit dynamic dispatch via annotations
-* No implicit heap allocation
+* No hidden allocation
+* Compile-time resolvable
 
-➡ See **fp.md**
+See `fp.md`.
 
 ---
 
-## 12. Object-Oriented Programming (Overview)
-
-Bestie supports OOP with explicit control:
+## 13. OOP (Overview)
 
 * Closed classes by default
 * Explicit inheritance
-* Protocol-based polymorphism
+* Protocol-driven polymorphism
 
-➡ See **oop.md**
-
----
-
-## 13. Memory Model (Overview)
-
-Bestie uses manual, deterministic memory management:
-
-* `ptr<T>`
-* `own<T>`
-* `ref<T>`
-
-➡ See **memory.md**
+See `oop.md`.
 
 ---
 
-## 14. Concurrency (Overview)
+## 14. Memory Model (Overview)
 
-Concurrency is:
+Manual, deterministic memory model:
+
+* `own`
+* `ref`
+* `ptr`
+
+See `memory.md`.
+
+---
+
+## 15. Concurrency (Overview)
 
 * Explicit
 * Compile-time validated
-* Free of hidden sharing
+* No hidden sharing
 
-➡ See **concurrency.md**
-
----
-
-## 15. Collections (Overview)
-
-Core collections are deterministic, generic, and ownership-aware.
-
-➡ See **collections.md**
+See `concurrency.md`.
 
 ---
 
-## 16. Annotations
+## 16. Collections (Overview)
 
-Annotations are compile-time only and introduce no runtime cost.
+Deterministic, ownership-aware, generic.
 
-Examples:
-
-* `@virtual`
-* `@override`
-* `@immutable`
-
-➡ See **annotation.md**
+See `collections.md`.
 
 ---
 
-## 17. Error Handling (Overview)
+## 17. Annotations
 
-Bestie avoids nulls and implicit exceptions.
+Compile-time only, zero runtime cost.
+
+See `annotations.md`.
+
+---
+
+## 18. Error Handling
+
+Bestie avoids null and hidden exceptions.
 
 Mechanisms:
 
 * Complete returns
 * Partial returns (`?`)
 * `Option<T>`
-* Explicit error values
+* Explicit errors
 
-➡ See **errors.md**
+See `exceptions.md`.
 
 ---
 
-## 18. Stability & Versioning
+## 19. Stability
 
-* Core language is sealed
+* Core is sealed
 * Backward compatibility is mandatory
-* Experimental features require compiler flags
-* APIs evolve without breaking core guarantees
+* Experimental features require flags
+* Higher layers evolve independently
