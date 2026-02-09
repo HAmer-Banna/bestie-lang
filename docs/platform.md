@@ -9,10 +9,12 @@ This document outlines the **Bestie language ecosystem**, including the **core l
 * **Components included:** `lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules.md`, `collections.md`, `error.md`, `concurrency.md`, `annotations.md`.
 * **Properties:**
 
-  * Nearly sealed (≈98%) — open only for critical bug fixes or security evolution
+  * Nearly sealed — open only for critical bug fixes or security evolution or extremely benifit feature that don't hurts performance
   * Requires no imports for fundamental language features
   * All keywords and identifiers are lowercase (`int`, `float`, `fun`)
-  * Classes in core are lowercase; std-lib classes use PascalCase (`Arena`, `Option<T>`)
+  * Classes in core are lowercase (like `list`, `str`, `byte`, `ptr`)
+ 
+  core is built in, it doesn't even needs importing
 
 ---
 
@@ -29,8 +31,10 @@ High-level, convenient utilities:
 
 **Properties:**
 
-* Closed but not sealed (≈80%), evolves carefully
+* Closed but not sealed, evolves carefully
 * PascalCase for classes/protocols
+
+std-lib is built in, but it needs importing under bestie.lib.<libraryname>
 
 ---
 
@@ -50,10 +54,12 @@ System-level and external APIs:
 
 **Properties:**
 
-* Less restricted (≈65%), stable for production
+* Less restricted, stable for production
 * Declared in `bestie-project.toml`
 * Lives in `bestie.api` domain
 * High-performance and safe
+
+std-api is built in, but it needs creating of bestie-project.toml importing under bestie.api.<apiname>, must be compatable with compiler version else error
 
 ---
 
@@ -61,16 +67,16 @@ System-level and external APIs:
 
 High-level abstractions over APIs:
 
-* `web` — high-level web abstractions over HTTP
+* `web` — high-level web abstractions over HTTP (build above http & network api)
 * `template` - for MVC templates
-* `orm` — database abstraction layer
+* `orm` — database abstraction layer (build above api db)
 * `gui` — desktop GUI abstractions
-* `stream` — streaming and reactive utilities
+* `stream` — streaming and reactive utilities (build above core & api concurrency)
 * `test` — testing utilities
 * `aop` - Aspect Oriented Programming (In bestie can be achieved using classes/functions)
 * `di` — dependency-injection, IoC and service wiring (used with other frameworks)
 
-**Distribution:** Shipped via **remote repository**, automatically downloaded by the compiler.
+**Distribution:** Shipped via **remote repository**, automatically downloaded by the compiler once defined in bestie-project.toml, it needs internet connection, lives under bestie.framework.<frameworkname> must be compatable with compiler version else error
 
 ---
 
@@ -84,7 +90,7 @@ High-level abstractions over APIs:
 * `bestie doc` — documentation generator
 * `bestie mod` — module manager
 * `bestie lint` — static analyzer
-* `bestie auto` — automation (like Make/CMake)
+* `bestie make` — automation (like Make/CMake)
 * `bestie heap` — memory inspection tool
 
 ---
@@ -165,7 +171,7 @@ postgres_driver = "0.9.0"
 
 **Community Libraries (BSTPM-Managed):**
 
-* `bstpm install` resolves DAG, verifies signatures, populates cache, and compiler links binaries
+* `bpm install` resolves DAG, verifies signatures, populates cache, and compiler links binaries
 
 ---
 
