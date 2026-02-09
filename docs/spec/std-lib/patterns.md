@@ -1,349 +1,217 @@
-# Bestie Language — Ecosystem, Versioning, and Build Workflow
+# Bestie Standard Patterns
 
-This document defines the **Bestie ecosystem architecture**, including the **core language, standard libraries, APIs, frameworks, tools, versioning model, and compiler workflow**.
+This document defines **reusable design patterns** in Bestie as **protocols**, not frameworks.
 
-The objective is to maintain:
+Patterns in Bestie are:
 
-- Predictable evolution
-- Deterministic performance
-- Clear layering
-- Long-term stability
+* Explicit
+* Compile-time driven
+* Allocation-aware
+* Optional (never forced)
+* Expressed as contracts, not hierarchies
 
-Bestie is structured in strict layers:
+Bestie does not encode patterns into the language runtime.
+Instead, it provides **precise protocol shapes** that allow patterns to emerge naturally and safely.
+
+---
+
+## Design Principles
+
+1. **Patterns are protocols**
+   Behavior is expressed via contracts, not base classes.
+
+2. **No hidden control flow**
+   Every pattern is resolved explicitly by the compiler.
+
+3. **No runtime magic**
+   No reflection, no RTTI, no dynamic proxies.
+
+4. **Ownership-aware**
+   Patterns must respect `own`, `ref`, and `ptr` semantics.
+
+---
+
+## 1. Iterator
+
+The `Iterator<T>` protocol represents **explicit, pull-based iteration**.
+
+```bestie
+protocol Iterator<T> {
+    fun next(): Option<T>
+}
+```
+
+### Semantics
+
+* `next()` returns:
+
+  * `Present(value)` when an element exists
+  * `Not_Present` when iteration is complete
+* Iterators are **stateful**
+* No implicit allocation
+* No hidden invalidation rules
+
+### Rules
+
+* Iterators may own or borrow their data source
+* Thread safety depends on the underlying object
+* Iterators are not restartable unless explicitly documented
+
+---
+
+## 2. Iterable
+
+The `Iterable<T>` protocol represents **things that can produce iterators**.
+
+```bestie
+protocol Iterable<T> {
+    fun iterator(): Iterator<T>
+}
+```
+
+### Semantics
+
+* `iterator()` creates a new iteration state
+* No requirement for heap allocation
+* Multiple iterators may coexist if the implementation allows it
+
+### Relationship to Collections
+
+* All core collections implement `Iterable<T>`
+* `Iterable<T>` does not imply mutability
+* Iteration order is defined by the implementation
+
+---
+
+## 3. Factory
+
+The `Factory<T>` protocol represents **object creation without exposing construction details**.
+
+```bestie
+@partial
+protocol Factory<T> {
+    fun create(): T
+    fun of(args: ...): T
+}
 
 ```
 
-core → std-lib → std-api → std-framework
+### Semantics
 
+* Encapsulates allocation and initialization
+* May return:
+
+  * Value types
+  * Owned heap objects
+  * Borrowed references (documented explicitly)
+
+### Usage
+
+Factories are preferred when:
+
+* Construction logic is complex
+* Allocation strategy may change
+* Objects must be pooled or reused
+
+Factories do **not** imply singleton behavior.
+
+---
+
+## 4. Builder
+
+The `Builder<T>` protocol represents **step-by-step construction** of an object.
+
+```bestie
+protocol Builder<T> {
+    fun build(): T
+}
 ```
 
-Each layer has **different stability, responsibility, and evolution rules**.
+### Semantics
+
+* Builders may be mutable
+* `build()` consumes the builder by default
+* Partial configuration is allowed
+
+### Guidelines
+
+* Builders should be short-lived
+* Builders should not escape threads unless documented
+* Builders are preferred over telescoping constructors
+
+### Relationship to Factory
+
+* A builder may internally use a factory
+* A factory may return a builder
+
+The patterns are complementary, not exclusive.
 
 ---
 
-## 1. Core Language (`core`)
+## 5. Proxy
 
-**Components included:**  
-`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules.md`, `collections.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+The `Proxy<T>` protocol represents **controlled indirection**.
 
-### Properties
-
-- Nearly sealed — changes allowed only for:
-  - Critical bug fixes
-  - Security guarantees
-  - Major performance-preserving improvements
-- No imports required
-- Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
-- Core types use lowercase (`list`, `str`, `ptr`, `byte`)
-- Core is **built-in and always available**
-- Defines **semantic guarantees** (memory, ownership, layout, concurrency)
-
-### Stability Target
-
-**≈ 98% sealed**
-
-Core is the foundation and must remain stable for decades.
-
----
-
-## 2. Standard Library (`std-lib`)
-
-Provides **high-level utilities** without system dependency.
-
-### Libraries
-
-- `algorithms` — sorting, searching, utilities
-- `functional` — map, filter, fold, composition
-- `math` — numeric operations, matrices, linear algebra
-- `datetime` — date/time
-- `format` — formatting and templates
-- `utilities` — helpers, Option, Result, Arena
-- `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator)
-
-### Properties
-
-- Closed but not sealed
-- Evolves conservatively
-- Purely library-level (no runtime system)
-- PascalCase naming for types
-- Imported via:
-
+```bestie
+protocol Proxy<T> {
+    fun get(): ref T
+}
 ```
 
-import bestie.lib.<library>
+### Semantics
 
-```
+* `get()` returns a reference to the underlying object
+* Access may be:
 
-### Stability Target
+  * Lazy
+  * Validated
+  * Synchronized
+  * Remote
 
-**≈ 80% stable**
+### Rules
 
----
+* Proxies must not hide ownership transfer
+* Proxies must document lifetime guarantees
+* Proxies do not imply dynamic dispatch
 
-## 3. Standard API (`std-api`)
+### Common Uses
 
-Provides **system-level and external interaction**.
-
-### APIs
-
-- `cli` — command-line
-- `db` — database access
-- `http` — HTTP primitives
-- `io` — filesystem & streams
-- `network` — sockets & protocols
-- `os` — operating system
-- `ext.concurrency` — advanced threading
-- `ext.memory` — memory inspection
-- `foreign` — FFI / native interop
-
-### Properties
-
-- Stable but allowed to evolve
-- Requires `bestie-project.toml`
-- Imported via:
-
-```
-
-import bestie.api.<api>
-
-```
-
-- Version must match compiler compatibility
-- No runtime framework behavior
-- Performance-oriented
-
-### Stability Target
-
-**≈ 60% stable**
+* Access control
+* Lazy initialization
+* Resource management
+* Boundary enforcement
 
 ---
 
-## 4. Standard Framework (`std-framework`)
+## Patterns Explicitly Excluded
 
-High-level abstractions built **strictly on std-api and core**.
+The following patterns are **intentionally not provided** as core protocols:
 
-Frameworks provide structure — not runtime magic.
+* Observer
+* Visitor
+* Strategy
+* Command
 
-### Frameworks
+These are expressible via:
 
-- `web` — HTTP-based web (servlet-style, minimal core)
-- `template` — MVC template engine
-- `orm` — database abstraction
-- `gui` — desktop UI
-- `stream` — streaming / reactive
-- `test` — testing
-- `aop` — aspect utilities (compile-time only)
-- `di` — dependency injection / IoC
+* Functions
+* Lambdas
+* Protocol composition
 
-### Properties
-
-- Distributed remotely
-- Downloaded automatically when declared in `bestie-project.toml`
-- Requires compatible compiler version
-- Imported via:
-
-```
-
-import bestie.framework.<framework>
-
-```
-
-- Built **on APIs, not on runtime**
-- No reflection-based magic
-- Optional layer
-
-### Stability Target
-
-**≈ 40% stable**
-
-Frameworks are intentionally flexible and allowed to evolve.
+Providing them as built-ins would encourage unnecessary indirection.
 
 ---
 
-## 5. Tools (`std-tools`)
+## Summary
 
-Official tooling shipped with Bestie.
+Bestie patterns are:
 
-- `bestiec` — compiler
-- `bestie test` — test runner
-- `bestie fmt` — formatter
-- `bestie dbg` — debugger
-- `bestie build` — builder
-- `bestie doc` — documentation generator
-- `bestie mod` — module manager
-- `bestie lint` — static analyzer
-- `bestie make` — automation
-- `bestie heap` — memory inspector
+* Minimal
+* Explicit
+* Compile-time safe
+* Ownership-aware
 
-Tools evolve independently from the core language.
+Patterns exist to **clarify intent**, not to add abstraction layers.
 
----
-
-## 6. Versioning Scheme
-
-```
-
-Bestie v<lang>.<compiler>.<std-lib>.<std-api>
-
-````
-
-- `lang` — core language version
-- `compiler` — compiler implementation
-- `std-lib` — library version
-- `std-api` — API version
-
-Major version increases only when **core semantics change**.
-
----
-
-## 7. Binary Model
-
-Bestie produces **fully native binaries**.
-
-Characteristics:
-
-- Static linking by default
-- Dead code elimination
-- No runtime VM
-- No hidden metadata
-- Optional binary protection:
-  - Symbol stripping
-  - Control-flow obfuscation
-  - Module encryption
-
----
-
-## 8. Compiler Discovery Ladder
-
-The compiler determines mode automatically.
-
-### Tier 1 — Standalone Mode
-
-Condition: No `bestie-project.toml`.
-
-Available:
-
-- Core language
-- Std-lib only
-
-Restrictions:
-
-- No std-api
-- No system-level access
-
-Purpose:
-
-- Scripts
-- Experiments
-- Small tools
-
----
-
-### Tier 2 — Project Mode
-
-Condition: `bestie-project.toml` present.
-
-Enables:
-
-- std-api
-- std-framework
-- Dependency resolution
-
-Compiler validates version compatibility.
-
----
-
-## 9. Project Specification
-
-Example:
-
-```toml
-[project]
-name = "order-processor"
-version = "1.0.0"
-
-[requirements]
-lang = "1.0"
-api = "2.4"
-
-[std-frameworks]
-web = "1.5"
-test = "1.2"
-
-[dependencies]
-json_parser = "3.1.0"
-postgres_driver = "0.9.0"
-````
-
----
-
-## 10. Dependency Resolution
-
-### Frameworks (Compiler Managed)
-
-* Cached locally
-* Auto-downloaded
-* Verified compatibility
-
-### Community Libraries
-
-* Managed via package manager
-* DAG validated
-* Linked statically
-
----
-
-## 11. Build & Linking Model
-
-* Fully native compilation
-* Deterministic linking
-* Static by default
-* Dead code eliminated aggressively
-
-### Build Steps
-
-1. Detect mode (Standalone / Project)
-2. Validate versions
-3. Sync frameworks
-4. Resolve dependencies
-5. Compile & link
-6. Produce native binary
-
----
-
-## 12. Architectural Guarantee
-
-Bestie enforces strict layering:
-
-```
-core → std-lib → std-api → std-framework
-```
-
-* Lower layers never depend on higher layers
-* Core remains sealed
-* Performance guarantees originate from core
-* Higher layers may trade performance for ergonomics
-
-This separation ensures:
-
-* Long-term stability
-* Predictable performance
-* Ecosystem flexibility
-
----
-
-## Critical Enhancements Added
-
-These are **important architectural clarifications**, not cosmetic:
-
-1. Explicit **layering contract**
-2. Stability targets per layer (98 / 80 / 60 / 40)
-3. Clear **no-runtime-magic rule** for frameworks
-4. Deterministic binary model clarified
-5. Strict dependency direction defined
-6. Clear distinction between **core guarantees vs framework flexibility**
-7. Corrected API/framework compatibility model
-8. Removed ambiguous wording about “built-in vs import”
-9. Formalized discovery ladder
-10. Reinforced native + deterministic positioning
-
+If a pattern cannot be expressed clearly as a protocol,
+it does not belong in Bestie’s core or standard library.
