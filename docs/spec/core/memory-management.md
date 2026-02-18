@@ -265,7 +265,7 @@ After move:
 Example:
 
 ```bestie
-fun printUser(user: ref<User>) {
+fun printUser(user: ref User) {
     print(user.name)
 }
 ```
@@ -549,7 +549,117 @@ These rules ensure:
 
 ---
 
-## 14. What This Model Rejects
+## 14. Raw Pointers — `ptr<T>`
+
+Pointers are part of Bestie because it is a **systems language**.
+
+They enable:
+
+* Pass-by-address
+* Explicit aliasing
+* Low-level data structures
+* Memory-mapped / OS / FFI interaction
+* Performance-critical operations
+
+`ptr<T>` represents **an address**, not ownership.
+
+Rules:
+
+* No ownership
+* No lifetime guarantee
+* No implicit dereference
+
+---
+
+### 13.1 Getting a Pointer
+
+```bestie
+val p = value.address()
+```
+
+Return type:
+
+| Value kind      | Result         |
+| --------------- | -------------- |
+| Mutable value   | `ptr<T>`       |
+| Immutable value | `ptr<const T>` |
+
+---
+
+### 14.2 Dereferencing
+
+```bestie
+val v = p.val
+p.val = 42
+```
+
+No implicit dereferencing exists.
+
+---
+
+### 14.3 Pointer vs `ref`
+
+| Feature       | ref         | ptr                 |
+| ------------- | ----------- | ------------------- |
+| Lifetime safe | Yes         | No                  |
+| Escapes scope | No          | Yes                 |
+| Stored        | No          | Yes                 |
+| Intended use  | Safe borrow | Systems indirection |
+
+---
+
+### 14.4 Pass-by-Address
+
+Pointers enable explicit indirection:
+
+```bestie
+fun fill(buf: ptr<byte>, n: int)
+```
+
+This replaces hidden reference semantics found in other languages.
+
+---
+
+### 14.5 Pointer and Ownership Interaction
+
+Pointer **does not own memory**.
+
+Modifying through pointer is allowed **only if underlying object is mutable and alive**.
+
+```bestie
+own u = User.new()
+val p = u.address()
+p.val.name = "Ali"   // allowed
+
+u.free()             // must not occur while pointer used
+```
+
+Compiler validates only **local lifetime safety** to keep compilation fast.
+
+---
+
+## 15. FFI Pointer Rules
+
+When interacting with foreign systems:
+
+### Borrowed pointer (do NOT free)
+
+```bestie
+val p = os.getBuffer()
+```
+
+### Owned pointer (caller must free)
+
+```bestie
+val p = c.malloc(128)
+c.free(p)
+```
+
+FFI APIs must document pointer ownership explicitly.
+
+---
+
+## 16. What This Model Rejects
 
 Explicitly rejected designs:
 
@@ -562,7 +672,7 @@ Explicitly rejected designs:
 
 ---
 
-## 15. Summary
+## 17. Summary
 
 Bestie’s memory and ownership model is:
 
