@@ -182,10 +182,8 @@ Tools evolve independently from the core language.
 ## 6. Versioning Scheme
 
 ```
-
 Bestie v<lang>.<compiler>.<std-lib>.<std-api>
-
-````
+```
 
 - `lang` — core language version
 - `compiler` — compiler implementation
@@ -273,7 +271,7 @@ test = "1.2"
 [dependencies]
 json_parser = "3.1.0"
 postgres_driver = "0.9.0"
-````
+```
 
 ---
 

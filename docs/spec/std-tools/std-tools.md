@@ -55,9 +55,6 @@ Two executables are provided:
 bestiec # compiler
 bestie # tooling entry point
 
-yaml
-Copy code
-
 ---
 
 ## 5. Compiler (`bestiec`)
@@ -72,9 +69,6 @@ bestiec main.bst
 bestiec main.bst -o app
 bestiec main.bst --debug
 bestiec main.bst --release
-
-yaml
-Copy code
 
 Rules:
 
@@ -104,9 +98,6 @@ bestie test
 bestie test --watch
 bestie test --filter UserService
 
-yaml
-Copy code
-
 Configuration is defined in `bestie-project.toml`.
 
 ---
@@ -127,9 +118,6 @@ Examples:
 bestie fmt
 bestie fmt ./src
 
-yaml
-Copy code
-
 ---
 
 ### 6.3 `bestie dbg`
@@ -147,9 +135,6 @@ Capabilities (initial scope):
 Example:
 
 bestie dbg ./app
-
-yaml
-Copy code
 
 ---
 
@@ -170,15 +155,9 @@ bestie build
 bestie build release
 bestie build clean
 
-makefile
-Copy code
-
 Configuration:
 
 bestie.build.toml
-
-yaml
-Copy code
 
 Compatibility with `Makefile` is allowed but optional.
 
@@ -204,9 +183,6 @@ Example:
 
 bestie doc
 
-yaml
-Copy code
-
 ---
 
 ### 6.6 `bestie mod`
@@ -230,9 +206,6 @@ Examples:
 bestie mod init
 bestie mod add my-lib
 bestie mod update
-
-yaml
-Copy code
 
 ---
 

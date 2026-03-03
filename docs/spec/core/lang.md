@@ -142,7 +142,7 @@ Multiple value declarations are **binding syntax sugar**, not data structures.
 
 ```bestie
 val x, y, z = 5, 6, 3
-````
+```
 
 Rules:
 

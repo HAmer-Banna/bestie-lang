@@ -37,7 +37,7 @@ If behavior can be resolved at compile time, it **must** be resolved at compile 
 
 Any OOP feature violating this rule is excluded from the **core language**.
 
-Bestie guarantee the best memory layout.
+Bestie guarantees the best memory layout.
 
 ---
 
