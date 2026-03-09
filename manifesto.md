@@ -2,9 +2,9 @@
 
 Bestie is a practical programming language.
 
-Not academic.  
-Not experimental.  
-Not clever for its own sake.  
+Not academic.
+Not experimental.
+Not clever for its own sake.
 
 Practical by design.
 
@@ -33,11 +33,11 @@ No split between “low-level” and “high-level” modes.
 
 ### Performance Is a First-Class Feature
 
-Performance is not an optimization phase.  
+Performance is not an optimization phase.
 It is a design constraint.
 
-Bestie compiles directly to native code.  
-There is no garbage collector.  
+Bestie compiles directly to native code.
+There is no garbage collector.
 There are no hidden runtime costs.
 
 If performance is optional, it will eventually be ignored.
@@ -46,7 +46,7 @@ If performance is optional, it will eventually be ignored.
 
 ### Safety Means Predictability, Not Restriction
 
-Bestie does not forbid power.  
+Bestie does not forbid power.
 It eliminates **surprises**.
 
 Bestie prevents:
@@ -103,11 +103,11 @@ It is a requirement.
 
 ### Paradigms Are Tools, Not Identities
 
-Object-oriented programming is useful.  
-Functional programming is useful.  
+Object-oriented programming is useful.
+Functional programming is useful.
 Procedural programming is useful.
 
-Bestie supports all of them.  
+Bestie supports all of them.
 Bestie enforces none of them.
 
 Dogma does not scale.
@@ -122,7 +122,7 @@ Bestie prefers:
 * Explicit control over hidden automation
 * Predictable execution over convenience
 
-There is no hidden runtime behavior.  
+There is no hidden runtime behavior.
 What you write is what executes.
 
 ---
@@ -138,7 +138,7 @@ Bestie is:
 * Not framework-dependent
 * Not trying to solve every problem
 
-There is no hidden magic.  
+There is no hidden magic.
 Everything that matters is visible and predictable.
 
 ---
@@ -173,8 +173,8 @@ Bestie promises:
 4. Strong compile-time guarantees
 5. Long-term language stability
 
-Nothing hidden.  
-Nothing implicit.  
+Nothing hidden.
+Nothing implicit.
 Nothing unnecessary.
 
 ---

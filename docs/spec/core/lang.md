@@ -4,7 +4,7 @@
 
 Bestie is a native, compiled programming language designed from first principles for **systems programming and backend engineering**.
 
-Bestie is not built around a single paradigm.  
+Bestie is not built around a single paradigm.
 Object-oriented programming, functional programming, and low-level control are treated as **explicit tools**, not ideologies.
 
 Bestie prioritizes:
@@ -62,7 +62,7 @@ Higher-level abstractions live in:
 * `std-api`
 * `std-framework`
 
-The core defines **semantic guarantees**.  
+The core defines **semantic guarantees**.
 Higher layers provide **convenience and extensibility**.
 
 ---
@@ -106,7 +106,7 @@ Intended use:
 
 `val` defines an immutable binding to a value.
 
-The **binding is immutable**.  
+The **binding is immutable**.
 The **value mutability depends on its type**.
 
 Properties:

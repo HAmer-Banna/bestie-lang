@@ -1,6 +1,6 @@
 # Bestie Low-Level Pillars (Locked)
 
-These pillars are **non-negotiable**.  
+These pillars are **non-negotiable**.
 Any change that violates them is considered a **design regression**, regardless of feature demand.
 
 ---
@@ -64,7 +64,7 @@ Bestie prioritizes:
 - Efficient alignment and packing
 - Reduced pointer indirection
 
-The programmer expresses structure;  
+The programmer expresses structure;
 the compiler determines layout within semantic guarantees.
 
 ### Positioning

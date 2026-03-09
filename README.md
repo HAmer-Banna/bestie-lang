@@ -1,6 +1,6 @@
-# Bestie Programming Language  
-**Fast as light. Native. Deterministic. No GC.**  
-**Control of C. Elegance of Kotlin.**  
+# Bestie Programming Language
+**Fast as light. Native. Deterministic. No GC.**
+**Control of C. Elegance of Kotlin.**
 **From kernel to cloud with one language**
 
 ---
@@ -9,12 +9,12 @@
 
 Bestie is a modern compiled language designed to unify two domains that rarely meet cleanly:
 
-- **Systems programming** — C, Zig, Rust  
-- **Backend & application engineering** — Java, Kotlin, Go  
+- **Systems programming** — C, Zig, Rust
+- **Backend & application engineering** — Java, Kotlin, Go
 
 Bestie’s mission:
 
-> **Bring the control and predictability of system languages to backend developers,  
+> **Bring the control and predictability of system languages to backend developers,
 > and bring the clarity and expressiveness of modern OOP to systems developers.**
 
 Bestie is built from first principles — not constrained by C/C++ legacy and not driven by academic ideology.
@@ -23,29 +23,29 @@ Bestie is built from first principles — not constrained by C/C++ legacy and no
 
 ## ⚡ Core Principles
 
-### ✔ No Garbage Collector  
-Memory is explicit and deterministic.  
+### ✔ No Garbage Collector
+Memory is explicit and deterministic.
 No pauses. No hidden allocation. No unpredictable runtime behavior.
 
-### ✔ Native performance  
-Bestie compiles directly to machine code with a minimal runtime.  
+### ✔ Native performance
+Bestie compiles directly to machine code with a minimal runtime.
 Most decisions are resolved at **compile time** — types, memory layout, dispatch, generics, and concurrency safety.
 
-### ✔ Deterministic by design  
-If a program compiles, its behavior remains predictable over time.  
+### ✔ Deterministic by design
+If a program compiles, its behavior remains predictable over time.
 No hidden costs. No runtime surprises.
 
-### ✔ Explicit control, safe by construction  
+### ✔ Explicit control, safe by construction
 Pointers, allocation, and freeing are fully explicit — and verified by the compiler to prevent leaks, double frees, and invalid lifetimes.
 
-### ✔ Elegant and structured  
+### ✔ Elegant and structured
 A clean, Kotlin-inspired syntax with strong compile-time guarantees and a consistent mental model.
 
 ---
 
 ## 🛡️ Safety Philosophy
 
-Bestie safety is **not about preventing malicious code**.  
+Bestie safety is **not about preventing malicious code**.
 
 Bestie safety means:
 
@@ -53,11 +53,11 @@ Bestie safety means:
 
 Bestie prevents:
 
-- Forgotten frees  
-- Double frees  
-- Accidental shared mutation  
-- Hidden allocation  
-- Runtime unpredictability  
+- Forgotten frees
+- Double frees
+- Accidental shared mutation
+- Hidden allocation
+- Runtime unpredictability
 
 All without garbage collection and without runtime overhead.
 
@@ -115,11 +115,11 @@ Each layer builds on the previous one without breaking core guarantees.
 
 ## ❌ What Bestie is NOT
 
-- Not a garbage-collected language  
-- Not a scripting or VM-based runtime language  
-- Not a C++ successor or compatibility layer  
-- Not a framework-heavy ecosystem  
-- Not designed to solve every problem domain  
+- Not a garbage-collected language
+- Not a scripting or VM-based runtime language
+- Not a C++ successor or compatibility layer
+- Not a framework-heavy ecosystem
+- Not designed to solve every problem domain
 
 Bestie is focused: **deterministic, native, explicit, and stable.**
 
@@ -155,7 +155,7 @@ Full specification and design documents:
 
 ## 🤝 Contributing
 
-Contributions will open once the core language stabilizes.  
+Contributions will open once the core language stabilizes.
 Bestie evolves carefully — **core stability and predictability come first.**
 
 Mission:

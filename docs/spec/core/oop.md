@@ -151,8 +151,10 @@ value class Point {
 
 **Purpose:**
 
-In Bestie enum can be used in two ways:
-enum{} as an enumerated list each value indexed start from 0, used in simple enums like 
+In Bestie, `enum` can be used in two ways:
+
+`enum {}` as an enumerated list where each value is indexed from `0`, used in simple enums like:
+
 ```bestie
 enum WeekendDays{
 FRIDAY,
@@ -160,7 +162,7 @@ SATURDAY
 }
 ```
 
-or as enum class where it can implement protocol (only as static dispatch) and be Generic <T>.
+Or as `enum class`, where it can implement a protocol (static dispatch only) and be generic (`<T>`).
 
 ```bestie
 enum class Status {

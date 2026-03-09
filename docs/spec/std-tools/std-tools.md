@@ -83,7 +83,7 @@ Rules:
 
 ### 6.1 `bestie test`
 
-**Purpose:**  
+**Purpose:**
 Execute tests defined in the project.
 
 Behavior:
@@ -104,7 +104,7 @@ Configuration is defined in `bestie-project.toml`.
 
 ### 6.2 `bestie fmt`
 
-**Purpose:**  
+**Purpose:**
 Format Bestie source code.
 
 Principles:
@@ -122,7 +122,7 @@ bestie fmt ./src
 
 ### 6.3 `bestie dbg`
 
-**Purpose:**  
+**Purpose:**
 Interactive debugging of Bestie programs.
 
 Capabilities (initial scope):
@@ -140,7 +140,7 @@ bestie dbg ./app
 
 ### 6.4 `bestie build`
 
-**Purpose:**  
+**Purpose:**
 Project automation and task orchestration.
 
 Intent:
@@ -165,7 +165,7 @@ Compatibility with `Makefile` is allowed but optional.
 
 ### 6.5 `bestie doc`
 
-**Purpose:**  
+**Purpose:**
 Generate documentation from Bestie source code.
 
 Outputs:
@@ -187,7 +187,7 @@ bestie doc
 
 ### 6.6 `bestie mod`
 
-**Purpose:**  
+**Purpose:**
 Dependency and module management.
 
 Responsibilities:
@@ -211,7 +211,7 @@ bestie mod update
 
 ### 6.7 `bestie lint` (Reserved)
 
-**Purpose:**  
+**Purpose:**
 Static analysis beyond formatting.
 
 Potential checks:

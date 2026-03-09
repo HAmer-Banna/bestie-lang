@@ -10,7 +10,7 @@ Memory management in Bestie is:
 * Compile-time validated
 * Systems-grade
 
-Bestie does **not** hide memory.  
+Bestie does **not** hide memory.
 It makes memory **predictable, inspectable, and intentional**.
 
 There is **one memory model**, unified across system and backend domains.
