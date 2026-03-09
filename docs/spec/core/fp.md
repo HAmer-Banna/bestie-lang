@@ -532,7 +532,7 @@ Name collisions are illegal.
 
 ### 10.5 Extensions and Protocols
 
-* Do not implement protocols
+* Do not use `impl` to satisfy protocols
 * Do not participate in protocol dispatch
 * Are resolved statically at call site
 

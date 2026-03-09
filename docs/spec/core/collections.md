@@ -241,7 +241,7 @@ This keeps the core minimal and zero-cost.
 ---
 
 ## 8. Relationship to Iterable
-* All core collections implement `Iterable<T>`
+* All core collections `impl Iterable<T>`
 * `Iterable<T>` does not imply mutability
 * Iteration order is defined by the implementation
 * `for-in` is preferred over direct `.next()` usage in user code

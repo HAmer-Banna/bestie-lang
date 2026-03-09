@@ -71,7 +71,7 @@ protocol Serializer<T> {
 }
 ```
 
-All formats implement these protocols.
+All formats use `impl` with these protocols.
 
 ---
 
@@ -150,7 +150,7 @@ Rules:
 Users may define custom serializers/parsers:
 
 ```bestie
-class UserJson : Serializer<User>, Parser<User> {
+class UserJson impl Serializer<User>, Parser<User> {
     fun serialize(u: User): str = ...
     fun parse(s: str): User | ParseError = ...
 }

@@ -169,7 +169,7 @@ protocol Equable<T> {
 
 ### Interaction with `==`
 
-If a type implements `Equable`, the `==` operator is lowered to:
+If a type uses `impl Equable`, the `==` operator is lowered to:
 
 ```bestie
 lhs.equal(rhs)
@@ -206,7 +206,7 @@ protocol Comparable<T> {
 
 ## 7. Hashable Protocol
 
-`Hashable` defines a stable hash for a value and **extends `Equable`**.
+`Hashable` defines a stable hash for a value and uses **`ext Equable`**.
 
 ### Definition
 

@@ -162,7 +162,7 @@ SATURDAY
 }
 ```
 
-Or as `enum class`, where it can implement a protocol (static dispatch only) and be generic (`<T>`).
+Or as `enum class`, where it can `impl` a protocol (static dispatch only) and be generic (`<T>`).
 
 ```bestie
 enum class Status {
@@ -226,8 +226,8 @@ class File {
 * Closed by default
 * Static dispatch
 * A `class` can be a subclass, but not an inheritance root
-* May extend an `open class` or `abstract class`
-* May implement one or more protocols
+* May use `ext` with an `open class` or `abstract class` base
+* May use `impl` with one or more protocols
 
 ---
 
@@ -265,8 +265,8 @@ Partial implementation with shared logic
 
 ---
 
-`data class`, `value class`, `enum/enum class`, and `@immutable class` cannot extend classes.
-They may implement protocols, but only statically dispatched protocol methods are allowed.
+`data class`, `value class`, `enum/enum class`, and `@immutable class` cannot use `ext`.
+They may use `impl` with protocols, but only statically dispatched protocol methods are allowed.
 
 ---
 
@@ -293,7 +293,7 @@ protocol Printable {
 ### 4.1 Protocol Inheritance
 
 ```bestie
-protocol Object : Hashable, Comparable, Printable
+protocol Object ext Hashable, Comparable, Printable
 ```
 
 **Rules:**
@@ -476,20 +476,20 @@ No runtime impact.
 
 ### 12.1 Sealed Classes
 
-A sealed declaration explicitly enumerates which classes may extend a base class.
+A sealed declaration explicitly enumerates which classes may `ext` a base class.
 
 ```bestie
 sealed Shape permits Circle, Rectangle, Triangle
 
 open class Shape
-class Circle : Shape
-class Rectangle : Shape
-class Triangle : Shape
+class Circle ext Shape
+class Rectangle ext Shape
+class Triangle ext Shape
 ```
 
 Properties:
 
-* Only listed classes may extend the sealed base
+* Only listed classes may `ext` the sealed base
 * All permitted classes must be in the same file
 * Enables exhaustive match checking
 * No runtime registration or reflection
@@ -501,18 +501,18 @@ Rules:
 
 ### 12.2 Sealed Protocols
 
-Protocols may also be sealed with an explicit implementor list.
+Protocols may also be sealed with an explicit `impl` list.
 
 ```bestie
 sealed protocol Token permits NumberToken, StringToken
 
-class NumberToken : Token
-class StringToken : Token
+class NumberToken impl Token
+class StringToken impl Token
 ```
 
 Properties:
 
-* Only permitted types may implement the protocol
+* Only permitted types may `impl` the protocol
 * All implementors are known at compile time
 * Enables exhaustive protocol-based matching
 

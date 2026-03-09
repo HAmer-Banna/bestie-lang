@@ -55,13 +55,13 @@ fun divide(a: int, b: int): int {
 ### 2.2 Application Errors
 
 * Represent **user-defined failures**.
-* Can be defined as **classes extending `Error`**.
+* Can be defined as **classes using `ext Error`**.
 * Thrown explicitly by application code.
 
 Example:
 
 ```bestie
-class InvalidUserInputError : Error {
+class InvalidUserInputError ext Error {
     val message: str
 
     fun new(msg: str) {
