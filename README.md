@@ -149,7 +149,7 @@ Future architecture branches:
 
 Full specification and design documents:
 
-➡️ `/spec/feature-definition-v0.1.md`
+➡️ `docs/spec/` (core language specification)
 
 ---
 

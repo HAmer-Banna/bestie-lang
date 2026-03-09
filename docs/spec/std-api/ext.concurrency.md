@@ -4,7 +4,7 @@ This document defines the **Extended Concurrency API** for Bestie.
 
 This API builds **strictly on top of the core concurrency primitives**:
 
-* `threadOS`
+* `threadOs`
 * `threadLight` (fiber)
 * Structured concurrency
 * CSP-style message passing
@@ -40,7 +40,7 @@ then **it must not introduce a new abstraction**.
 
 Provided by the language itself:
 
-* OS threads (`threadOS`)
+* OS threads (`threadOs`)
 * Fibers (`threadLight`)
 * Structured concurrency (implicit by ownership & lifetimes)
 * CSP primitives (channels)

@@ -54,7 +54,7 @@ data class Duration {
 ### 2.3 `Date`
 
 ```bestie
-struct Date {
+data class Date {
     year: int
     month: int
     day: int
@@ -66,7 +66,7 @@ struct Date {
 ### 2.4 `Time`
 
 ```bestie
-struct Time {
+data class Time {
     hour: int
     minute: int
     second: int
@@ -79,7 +79,7 @@ struct Time {
 ### 2.5 `DateTime`
 
 ```bestie
-struct DateTime {
+data class DateTime {
     date: Date
     time: Time
     zone: TimeZone

@@ -152,8 +152,8 @@ Functional operations work on any collection type that satisfies the **iterable 
 
 * `list`
 * `set`
-* `queue`
-* `tree`
+* `deque`
+* `map`
 
 Collections themselves remain structurally simple and behavior-free.
 

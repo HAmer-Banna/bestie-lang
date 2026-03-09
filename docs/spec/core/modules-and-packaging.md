@@ -322,7 +322,6 @@ Rules:
 * No file-path imports
 * No wildcard imports (`*`)
 * Explicit import only: `import bestie.lib.math`
-* Module Import Declarations
 * No package aliasing
 * Aliasing is allowed only for types/functions
 

@@ -198,7 +198,7 @@ process(stream)
 
 Concurrency is achieved via:
 
-* `threadOS`
+* `threadOs`
 * `threadLight`
 * Structured concurrency
 

@@ -63,7 +63,7 @@ The core language provides:
 * Primitive and composite types
 * Data structures (`list`, `map`, `set`, etc.)
 * Error handling model (`Result`, pattern matching)
-* Concurrency primitives (`threadOS`, channels, mutexes)
+* Concurrency primitives (`threadOs`, channels, mutexes)
 * Memory and ownership model
 * String type and templates
 

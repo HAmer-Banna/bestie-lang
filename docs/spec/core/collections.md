@@ -212,7 +212,7 @@ All collections use **consistent method naming**.
 | ------------- | -------------------------------------------------- |
 | list/set      | `add`, `remove`, `get`, `insert`, `indexOf`                                 |
 | heap          | `add`, `remove`, `get`
-| deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peakFirst`, `peakRemove` |
+| deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
 | map           | `put`, `remove`                                    |
 
 All collections provide **efficient iterators** with no hidden indirection.

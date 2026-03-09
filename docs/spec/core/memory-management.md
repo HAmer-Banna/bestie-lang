@@ -47,7 +47,7 @@ class Student {
     val address: Address
     val course: Course
 }
-````
+```
 
 What should happen when we call:
 
@@ -571,7 +571,7 @@ Rules:
 
 ---
 
-### 13.1 Getting a Pointer
+### 14.1 Getting a Pointer
 
 ```bestie
 val p = value.address()

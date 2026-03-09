@@ -2,7 +2,7 @@
 
 This document defines the **utility package** of the Bestie standard library. These types form the foundation for memory management, error modeling, and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
 
-This package is part of the **core**. It does not depend on threading primitives, atomics, or runtime services beyond threadOS / threadLight.
+This package is part of the **core**. It does not depend on threading primitives, atomics, or runtime services beyond threadOs / threadLight.
 
 ---
 
