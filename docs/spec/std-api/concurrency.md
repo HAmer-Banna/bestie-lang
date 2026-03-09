@@ -42,12 +42,8 @@ Provided by the language itself:
 
 * OS threads (`threadOs`)
 * Fibers (`threadLight`)
-* Structured concurrency (implicit by ownership & lifetimes)
-* CSP primitives (channels)
-* Ownership transfer as synchronization
-* Deterministic execution guarantees
 
-This covers **90–95% of real-world concurrency needs**.
+Channels, mutexes, structured concurrency, and other coordination primitives live in **API/stdlib**, not core. Core enforces ownership rules and deterministic execution at compile time, but the only execution primitives are threads and fibers.
 
 ---
 
