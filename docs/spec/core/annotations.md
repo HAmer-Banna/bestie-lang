@@ -9,6 +9,7 @@ Annotations in Bestie are **compile-time only constructs**. They exist solely to
 * Annotations are evaluated and consumed entirely at **compile time**.
 * They do **not** generate runtime reflection data.
 * They do **not** incur memory overhead or execution penalties.
+* They do **not** bypass ownership, visibility, or concurrency rules.
 * Their primary roles include:
 
   * Validation
@@ -32,6 +33,7 @@ Although the Bestie compiler itself is **closed-source and not modifiable**, the
 * Integrate with external tooling
 
 This enables rich ecosystems (e.g. frameworks) without compromising compiler stability or runtime performance.
+Plugins operate at a compile-time boundary and cannot silently change core runtime semantics.
 
 ---
 

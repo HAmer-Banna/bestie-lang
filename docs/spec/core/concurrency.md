@@ -7,11 +7,11 @@ Core concurrency in Bestie is:
 * Low-level
 * Deterministic
 * Explicit
-* Compile-time safe
+* Safe-by-default for `own/ref` paths, with explicit unsafe boundaries via `ptr`
 
-All higher-level concurrency abstractions (actors, mutexes, channels, structured concurrency) live in the **API/stdlib**.
+All higher-level concurrency abstractions (actors, mutexes, channels, structured concurrency) live in **std-api/std-lib**.
 
-> Bestie does **not** start with a default thread. Even `main` runs in an explicit thread created by the user.
+> `main` runs on an explicit entry thread with `threadOs` semantics.
 
 ---
 
@@ -21,7 +21,7 @@ Core concurrency is designed to be:
 
 1. Minimal
 2. Explicit
-3. Compile-time safe
+3. Compile-time validated ownership/sharing
 4. Deterministic
 5. Low-overhead
 
@@ -59,12 +59,12 @@ val t = threadOs.of(() => work())
 
 ### 2.2 Lightweight Threads (`threadLight`)
 
-`threadLight` represents **cheap, stack-managed threads**:
+`threadLight` represents **runtime-managed lightweight threads**:
 
 * High-concurrency, cooperative scheduling
 * Not bound to OS threads
 * Opportunistic parallelism: runs in parallel if cores are available, otherwise concurrent
-* Deterministic scheduling
+* Deterministic lifecycle semantics
 
 **Factory creation:**
 
@@ -117,7 +117,9 @@ val own u = User.of(...)
 threadOs.of(() => use(u)) // ❌ compile error
 ```
 
-Ownership **cannot cross threads**.
+Ownership cannot be shared across threads implicitly.
+
+Explicit ownership transfer is allowed only via `move`, where the source binding becomes invalid immediately.
 
 ### 4.2 Allowed
 
@@ -138,7 +140,7 @@ Parallelism in Bestie core:
 
 * `threadOs` **always runs in parallel** on available cores
 * `threadLight` runs **parallel when possible**, otherwise concurrent
-* Compiler enforces **parallel safety at compile-time**
+* Compiler enforces **parallel safety at compile-time** for `own/ref` rules
 * Two threads may run in parallel **only if ownership rules allow**
 
 > **Parallelism is a property of ownership, not syntax.** No special `parallel` blocks or fork/join keywords exist.
@@ -147,12 +149,13 @@ Parallelism in Bestie core:
 
 ## 6. Compile-Time Guarantees
 
-* Ownership crossing threads is rejected
+* Implicit ownership sharing across threads is rejected
 * Illegal sharing is a **compile-time error**
 * Lifetimes are validated
-* No runtime checks are added
+* No implicit runtime ownership checks are added for safe (`own/ref`) code paths
 
-> If it compiles, it is safe by construction.
+> If `own/ref` sharing rules compile, concurrency sharing is safe by construction.
+> Pointer-based sharing remains explicit programmer responsibility.
 
 ---
 
@@ -185,7 +188,7 @@ Bestie **core concurrency** is:
 * Primitive but sufficient
 * Minimal and deterministic
 * Explicit without verbosity
-* Safe by compile-time rules
+* Safe-by-default with explicit unsafe boundaries
 
 > `threadOs` and `threadLight` are **the only core primitives**.
 > Parallelism is guaranteed when ownership allows, everything else lives in API/stdlib.

@@ -33,7 +33,7 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 * Error handling paths
 * Loop lowering and unrolling opportunities
 * Devirtualization
-* Concurrency safety (races, deadlocks, illegal sharing)
+* Concurrency safety for ownership/sharing rules (`own/ref`)
 
 The runtime is intentionally minimal.
 
@@ -219,7 +219,8 @@ Includes:
 
 Properties:
 
-* Immutable by default
+* Binding immutability defaults to `val`/`const`
+* Value mutability depends on type qualifiers
 * Efficient copy semantics
 * No hidden allocation
 
@@ -318,7 +319,8 @@ Manual, deterministic memory model:
 
 * `own`
 * `ref`
-* `ptr`
+* `ptr<T>`
+* Explicit unsafe boundaries for low-level operations (`ptr`, FFI, manual free)
 
 See `memory.md`.
 
@@ -352,7 +354,7 @@ See `annotations.md`.
 
 ## 18. Error Handling
 
-Bestie avoids null and hidden exceptions.
+Bestie avoids hidden null-like states and hidden exception flow.
 
 Mechanisms:
 

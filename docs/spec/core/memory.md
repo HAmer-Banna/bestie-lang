@@ -24,7 +24,7 @@ The memory model exists to satisfy the following constraints:
 1. **Native performance**
 2. **Deterministic layout and lifetime**
 3. **No garbage collection**
-4. **No unsafe escape hatches**
+4. **No hidden unsafe behavior**
 5. **Minimal cognitive overhead**
 6. **Uniform rules for all domains**
 
@@ -33,6 +33,8 @@ Bestie rejects designs where:
 * Safety is optional
 * Allocation is implicit
 * Different subsystems use different memory rules
+
+Unsafe operations are allowed, but only through explicit syntax (`ptr<T>`, FFI, manual free) that is visible at the call site.
 
 ---
 
@@ -182,13 +184,11 @@ Properties:
 
 ### 4.2 Reference Types
 
-Reference semantics exist **only** via explicit constructs:
+Reference and indirection semantics exist **only** via explicit constructs:
 
-```
-own T
-ref T
-ptr<T>
-```
+* `ref T` for borrowed references
+* `ptr<T>` for raw addresses
+* `own` qualifiers on bindings/fields for explicit ownership responsibility
 
 There is no implicit reference behavior.
 
@@ -235,6 +235,8 @@ Rules:
 * `own` values cannot be implicitly shared
 * `own` values cannot be captured by lambdas
 * Ownership transfer must be explicit
+* Moved-from bindings are invalid and cannot be used
+* Ownership back-links must use `ref` or `ptr`, not `own`
 
 ---
 
@@ -277,6 +279,7 @@ Rules:
 * `ref` cannot escape scope
 * `ref` never implies ownership
 * `ref` cannot cross thread boundaries
+* Returning `ref` is valid only when borrowed from a value that outlives the caller
 
 ---
 
@@ -303,7 +306,15 @@ fun process(own data: Data)
 
 When a function creates or produces a value, **someone must own it**.
 
-Therefore, functions return `own` by default:
+Default return is by value.
+
+```bestie
+fun makeId(): int {
+    return 42
+}
+```
+
+When the returned expression is heap-allocated (for example via `new()`), ownership is transferred to the caller.
 
 ```bestie
 fun createUser(): User {
@@ -311,7 +322,7 @@ fun createUser(): User {
 }
 ```
 
-Conceptually:
+Equivalent explicit form (optional for readability):
 
 ```bestie
 fun createUser(): own User
@@ -319,10 +330,11 @@ fun createUser(): own User
 
 Rules:
 
+* Value returns follow value semantics
 * Returned objects are **owned by the caller**
-* Ownership transfer is explicit
+* Ownership transfer at return sites is explicit in semantics
 * Returning `ref` requires the owner to outlive the caller
-* Returning values copies
+* Returned `own` values cannot be duplicated by assignment
 
 This eliminates:
 
@@ -345,6 +357,7 @@ student.free()
 * Frees **only the object itself**
 * Does **not** recurse into owned fields
 * Leaves owned sub-objects intact
+* Triggers a compiler warning when direct `own` fields still exist
 
 ---
 
@@ -361,6 +374,11 @@ student.freeDeep()
 * Skips all `ref` fields
 
 The behavior of `freeDeep()` is **entirely determined at compile time**.
+
+For deterministic ownership cleanup:
+
+* Use `freeDeep()` for ownership trees
+* Or free owned fields manually before `free()`
 
 ---
 
@@ -428,16 +446,17 @@ ptr<T>        // mutable
 
 ### 8.5 Pointer Arithmetic
 
-Allowed only when:
+Allowed through explicit pointer APIs.
 
-* Offset is known at compile time
-* Bounds can be proven safe
+The compiler enforces bounds when provable.
+When not provable, responsibility is explicit on the pointer-using code.
+
+* Compile-time-known safe offsets are accepted
+* Statically provable out-of-bounds is a compile-time error
 
 ```bestie
 p.offset(2).val
 ```
-
-Out-of-bounds access is a **compile-time error** whenever provable.
 
 ---
 
@@ -515,7 +534,7 @@ val b = a   // compile-time error
 ### 11.3 Immutable & Concurrent Variants
 
 ```bestie
-val l = list<int>.asArray.asImmutable
+val l = list<int>.array.immutable.build()
 ```
 
 Rules:
@@ -544,97 +563,27 @@ The compiler may inline, elide, reorder, and optimize as long as observable beha
 
 These rules ensure:
 
-* Data-race freedom
-* Deterministic memory behavior
+* Data-race freedom for code that stays within `own/ref` rules
+* Deterministic memory behavior in safe code paths
 
 ---
 
-## 14. Raw Pointers — `ptr<T>`
+## 14. Explicit Unsafe Boundary
 
-Pointers are part of Bestie because it is a **systems language**.
+Bestie exposes low-level operations directly instead of hiding them.
 
-They enable:
+This boundary includes:
 
-* Pass-by-address
-* Explicit aliasing
-* Low-level data structures
-* Memory-mapped / OS / FFI interaction
-* Performance-critical operations
+* Raw pointers and pointer arithmetic
+* Manual deallocation
+* FFI boundaries
 
-`ptr<T>` represents **an address**, not ownership.
+Contract:
 
-Rules:
-
-* No ownership
-* No lifetime guarantee
-* No implicit dereference
-
----
-
-### 14.1 Getting a Pointer
-
-```bestie
-val p = value.address()
-```
-
-Return type:
-
-| Value kind      | Result         |
-| --------------- | -------------- |
-| Mutable value   | `ptr<T>`       |
-| Immutable value | `ptr<const T>` |
-
----
-
-### 14.2 Dereferencing
-
-```bestie
-val v = p.val
-p.val = 42
-```
-
-No implicit dereferencing exists.
-
----
-
-### 14.3 Pointer vs `ref`
-
-| Feature       | ref         | ptr                 |
-| ------------- | ----------- | ------------------- |
-| Lifetime safe | Yes         | No                  |
-| Escapes scope | No          | Yes                 |
-| Stored        | No          | Yes                 |
-| Intended use  | Safe borrow | Systems indirection |
-
----
-
-### 14.4 Pass-by-Address
-
-Pointers enable explicit indirection:
-
-```bestie
-fun fill(buf: ptr<byte>, n: int)
-```
-
-This replaces hidden reference semantics found in other languages.
-
----
-
-### 14.5 Pointer and Ownership Interaction
-
-Pointer **does not own memory**.
-
-Modifying through pointer is allowed **only if underlying object is mutable and alive**.
-
-```bestie
-own u = User.new()
-val p = u.address()
-p.val.name = "Ali"   // allowed
-
-u.free()             // must not occur while pointer used
-```
-
-Compiler validates only **local lifetime safety** to keep compilation fast.
+* Unsafe power is explicit in source code
+* Ownership is never inferred from pointers
+* The compiler rejects statically provable misuse
+* Non-provable misuse remains the programmer's explicit responsibility
 
 ---
 
@@ -680,7 +629,7 @@ Bestie’s memory and ownership model is:
 * Ownership-driven, not GC-driven
 * Pointer-friendly, not pointer-hiding
 * Deterministic, not runtime-driven
-* Safe by construction, not by convention
+* Safe by default with explicit unsafe boundaries
 
 `own` answers **who frees**
 `ref` answers **who borrows**

@@ -26,7 +26,8 @@ All variations are **explicit** and **compile-time validated**.
 
 Collections are created using **builders**, **size annotations**, or **literals**, depending on intent.
 
-There is no implicit allocation and no hidden resizing.
+There is no hidden allocation strategy.
+Growth/reallocation behavior is defined by the selected collection variation.
 
 ---
 
@@ -102,7 +103,7 @@ This rule is strict and enforced by the compiler.
 * `list<T>` → array
 * `set<T>` → hash
 * `map<K,V>` → hash
-* `deque<T>` → as declared
+* `deque<T>` → must explicitly choose queue or stack behavior
 * `heap<T>` → **must specify `max` or `min`**
 
 ```bestie
@@ -160,7 +161,7 @@ Optional compiler warnings may be emitted for redundant modifiers.
 
 ## 5. Collection Literals and `const`
 
-Collection literals use `{}` syntax and are **fully compile-time constructs**.
+Collection literals use `{}` syntax and are compile-time parsed with explicit runtime allocation semantics.
 
 ```bestie
 val a : list<int> = {1,2,3}
@@ -170,7 +171,7 @@ val b : set<int>  = {1,2,3}
 ### 5.1 Literal Rules
 
 * `list` literals allow duplicates
-* `set` literals **reject duplicates at compile time**
+* `set` literals reject duplicates when duplicates are compile-time provable
 * No automatic deduplication is performed
 
 ```bestie
@@ -200,7 +201,8 @@ const b = list<int>[n].build()    // ❌ runtime size
 * Are fully immutable
 * Have no heap allocation
 * Reside in read-only memory
-* Cannot be mutated or copied
+* Cannot be mutated
+* Preserve immutability when copied
 
 ---
 
@@ -208,15 +210,16 @@ const b = list<int>[n].build()    // ❌ runtime size
 
 All collections use **consistent method naming**.
 
-| Collection    | Methods                                            |
-| ------------- | -------------------------------------------------- |
-| list/set      | `add`, `remove`, `get`, `insert`, `indexOf`                                 |
-| heap          | `add`, `remove`, `get`
-| deque         | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
-| map           | `put`, `remove`                                    |
+| Collection | Methods                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| list       | `add`, `remove`, `get`, `insert`, `indexOf`                      |
+| set        | `add`, `remove`, `contains`                                       |
+| heap       | `add`, `remove`, `peek`                                           |
+| deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
+| map        | `put`, `get`, `remove`, `containsKey`                             |
 
 All collections provide **efficient iterators** with no hidden indirection.
-Some collections provide convenient way for accessing an element; as list[0]; map["food"];
+Element access syntax is explicit (for example: `list[0]`, `map["food"]`).
 
 ---
 
@@ -226,11 +229,11 @@ Core collections **do not include functional methods** (`map`, `filter`, `fold`)
 
 Functional behavior is provided by:
 
-* `std-lib functional`
+* `std.functional`
 * Extension functions
 
 ```bestie
-val sum = list<int>.of(1,2,3).sum()
+val sum = std.functional.sum(xs)
 ```
 
 This keeps the core minimal and zero-cost.
@@ -238,10 +241,10 @@ This keeps the core minimal and zero-cost.
 ---
 
 ## 8. Relationship to Iterable
-* All core collections implement Iterable<T>
-* Iterable<T> does not imply mutability
+* All core collections implement `Iterable<T>`
+* `Iterable<T>` does not imply mutability
 * Iteration order is defined by the implementation
-* for-in loop is used as replacement for .next()
+* `for-in` is preferred over direct `.next()` usage in user code
 
 ---
 
@@ -254,7 +257,7 @@ Bestie collections are:
 * Deterministic in memory layout
 * Ownership-aware
 * Compile-time validated
-* Free of hidden allocation or resizing
-* Immutable-by-design when declared as values or constants
+* Free of hidden allocation behavior
+* Explicitly immutable via `immutable` or `const`
 
 > Collections in Bestie are **explicit tools**, not abstractions with surprises — matching the language’s core philosophy of predictability, safety, and control.

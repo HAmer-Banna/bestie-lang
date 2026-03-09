@@ -321,9 +321,9 @@ Rules:
 * No relative imports
 * No file-path imports
 * No wildcard imports (`*`)
-* Explicit import only: `import bestie.lib.math`
+* Imports must be explicit and fully qualified
 * No package aliasing
-* Aliasing is allowed only for types/functions
+* Symbol aliasing is allowed only for imported types/functions
 
 ---
 
@@ -339,17 +339,18 @@ Bestie does not allow:
 
 ## 9. Default Imports
 
-The following are always available:
+The following namespaces are available through the language prelude
+(not via user-written wildcard imports):
 
 ```
-core.lang.*
-core.types.*
+core.lang
+core.types
 ```
 
 This includes:
 
 * `int`, `float`, `str`
-* `ptr`, `option`
+* `ptr`, `Option`
 * Basic annotations
 
 Everything else must be imported explicitly.

@@ -442,7 +442,7 @@ Rules:
 ### 9.1 Unbound Method References
 
 ```bestie
-val f: (User) -> str = User::getName
+val f: fn(User) -> str = User::getName
 ```
 
 Equivalent to:
@@ -462,8 +462,8 @@ Rules:
 ### 9.2 Bound Method References (Restricted)
 
 ```bestie
-own u = User.init(...).new()
-val f: () -> str = u::getName
+own u = User.new()
+val f: fn() -> str = u::getName
 ```
 
 Rules:
@@ -541,8 +541,11 @@ Name collisions are illegal.
 ### 10.6 Generic Extensions
 
 ```bestie
-fun <T> list<T>.head(): T? {
-    return if (this.size > 0) this[0]
+fun <T> list<T>.head(): T ? {
+    if (this.size > 0) {
+        return this[0]
+    }
+    return
 }
 ```
 
@@ -645,7 +648,7 @@ Guidelines:
 * Favor transformation over mutation
 
 ```bestie
-val users2 = users.map(u => u.withName("Alice"))
+val users2 = std.functional.map(users, u => u.withName("Alice"))
 ```
 
 Enforced by:

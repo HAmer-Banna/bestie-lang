@@ -9,7 +9,7 @@ OOP in Bestie is:
 * Static by default
 * Dynamic only when explicitly requested
 * Memory-aware
-* Concurrency-safe by construction
+* Concurrency-safe for ownership-validated code paths
 
 Bestie treats OOP as a **controlled toolset**, not a dominant paradigm.
 
@@ -200,13 +200,13 @@ single class Config {
 * Exactly one instance per process
 * Implicit, thread-safe access
 * Lazy and deterministic initialization
-* Private init(); with a public getInstance() method.
+* Private `init()` with a public `getInstance()` method
 
 **Rules:**
 
 * Cannot be open or inherited
 * Inner classes must be `priv`
-* Mutable state.
+* Mutable state is allowed, but cross-thread mutation must be explicitly synchronized
 
 ---
 
@@ -223,10 +223,11 @@ class File {
 
 **Properties:**
 
-* Closed
+* Closed by default
 * Static dispatch
-* Cannot be inherited
-* Can extend another class (if not annotated with @immutable) or implements protocol.
+* A `class` can be a subclass, but not an inheritance root
+* May extend an `open class` or `abstract class`
+* May implement one or more protocols
 
 ---
 
@@ -247,7 +248,7 @@ open class Shape {
 * Virtual methods must be explicitly annotated with `@virtual`
 * `@override` mandatory
 * Single inheritance only
-* open class that is not subclassed will trigger a compiler warning, discouraging the use of openness unless inheritance is explicitly intended
+* `open class` that is not subclassed triggers a compiler warning
 
 ---
 
@@ -264,7 +265,8 @@ Partial implementation with shared logic
 
 ---
 
-** data, value, enum, and @immutable classes cannot extend other classes, but may implement protocols. Only statically dispatched (non-@virtual) protocol methods are permitted.
+`data class`, `value class`, `enum/enum class`, and `@immutable class` cannot extend classes.
+They may implement protocols, but only statically dispatched protocol methods are allowed.
 
 ---
 
@@ -336,7 +338,8 @@ Rules:
 
 * Must use `as`
 * Fails at compile time if statically impossible
-* Runtime check only exists if dynamic polymorphism is involved
+* Runtime check exists only for `@virtual` hierarchies
+* Runtime check uses compiler-emitted type metadata, not reflection APIs
 
 ---
 
@@ -351,7 +354,7 @@ Rules:
 
 * Upcast to protocol is implicit
 * Downcast requires `as`
-* No RTTI-based discovery
+* No reflection-based type discovery
 * Validity is known at compile time for sealed protocols
 
 ---
@@ -368,6 +371,9 @@ Rules:
 
 * `@override` mandatory
 * Signature must match exactly
+* Only `open` and `abstract` classes are inheritable
+* A closed `class` cannot be extended
+* A closed `class` may extend an `open` or `abstract` base
 
 ### 6.1 Default Implementation Resolution
 
@@ -381,7 +387,10 @@ Protocol defaults are **never implicitly chained**.
 
 ---
 
-** Inheritance in Bestie is explicit: ext is used to extend a single class, and impl is used to implement one or more protocols.
+Inheritance in Bestie is explicit:
+
+* `ext` extends exactly one class
+* `impl` implements one or more protocols
 
 ---
 
@@ -554,7 +563,7 @@ User responsibility:
 
 * Implicit virtual methods
 * Multiple inheritance
-* Runtime RTTI
+* General-purpose runtime RTTI APIs
 * Reflection-based dispatch
 * Fragile base classes
 

@@ -7,8 +7,9 @@ Bestie is designed to be **safe, explicit, and predictable**. Unlike languages s
 * Runtime surprises
 * Unchecked exceptions
 * Hidden null dereferences
+* Hidden error propagation
 
-All error handling in Bestie is **compile-time verified** and integrates cleanly with its memory and ownership model.
+Error handling in Bestie is **compile-time analyzed for explicit throw/catch paths** and integrates cleanly with its memory and ownership model.
 
 ---
 
@@ -32,7 +33,7 @@ Bestie distinguishes **two primary categories** of errors:
 ### 2.1 System Errors
 
 * Represent runtime errors that **cannot be recovered from safely**.
-* Thrown automatically by the runtime when invariants are violated.
+* May be raised by runtime subsystems when invariants are violated.
 
 Examples:
 
@@ -88,7 +89,7 @@ throw InvalidUserInputError.new("Invalid input")
 ## 4. Handling Exceptions
 
 * Use `try/catch` blocks to handle exceptions.
-* `catch` blocks are **ordered, type-checked, and compile-time verified**.
+* `catch` blocks are **ordered, type-checked, and compile-time analyzed**.
 
 Example:
 
@@ -159,5 +160,4 @@ Bestie exceptions work seamlessly with **core return types**:
 * Bestie exceptions are **explicit, predictable, and safe**.
 * Exceptions complement **return types, ownership rules, and memory safety**.
 * They are **tools for rare, unrecoverable situations**, not general control flow.
-* The compiler enforces rules **at compile time**, preventing accidental runtime surprises.
-
+* The compiler validates explicit throw/catch structure at compile time, preventing accidental runtime surprises.
