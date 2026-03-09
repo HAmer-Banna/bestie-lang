@@ -6,6 +6,7 @@ The objective is to maintain:
 
 - Predictable evolution
 - Deterministic performance
+- Explicit unsafe boundaries
 - Clear layering
 - Long-term stability
 
@@ -24,19 +25,21 @@ Each layer has **different stability, responsibility, and evolution rules**.
 ## 1. Core Language (`core`)
 
 **Components included:**
-`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules.md`, `collections.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules-and-packaging.md`, `collections.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
 
 ### Properties
 
 - Nearly sealed — changes allowed only for:
   - Critical bug fixes
-  - Security guarantees
+  - Safety guarantees
   - Major performance-preserving improvements
 - No imports required
 - Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
 - Core types use lowercase (`list`, `str`, `ptr`, `byte`)
 - Core is **built-in and always available**
 - Defines **semantic guarantees** (memory, ownership, layout, concurrency)
+- Safe-by-default semantics for ownership-validated (`own/ref`) paths
+- Explicit unsafe boundaries (`ptr`, FFI, manual `free`) remain visible in source
 
 ### Stability Target
 
@@ -320,6 +323,7 @@ core → std-lib → std-api → std-framework
 * Lower layers never depend on higher layers
 * Core remains sealed
 * Performance guarantees originate from core
+* Higher layers cannot weaken core ownership/safety semantics
 * Higher layers may trade performance for ergonomics
 
 This separation ensures:
@@ -344,4 +348,3 @@ These are **important architectural clarifications**, not cosmetic:
 8. Removed ambiguous wording about “built-in vs import”
 9. Formalized discovery ladder
 10. Reinforced native + deterministic positioning
-

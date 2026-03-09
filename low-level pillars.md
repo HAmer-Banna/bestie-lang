@@ -115,7 +115,8 @@ These pillars imply permanent language guarantees:
 - No hidden allocation in core semantics
 - Static dispatch by default
 - No runtime reflection
-- Ownership validated at compile time
+- Ownership/sharing rules validated at compile time for `own/ref` code paths
+- Unsafe operations (`ptr`, FFI, manual `free`) remain explicit boundaries
 - Predictable object layout rules
 - Explicit concurrency model
 

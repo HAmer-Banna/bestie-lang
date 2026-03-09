@@ -51,15 +51,17 @@ It eliminates **surprises**.
 
 Bestie prevents:
 
-* Accidental memory errors
+* Accidental ownership/lifetime errors in ownership-validated code paths
 * Ambiguous behavior
-* Undefined execution
+* Hidden undefined behavior
 
 There is:
 
 * No null
 * No silent failure
-* No undefined behavior
+* No hidden unsafe boundary
+
+Unsafe operations remain explicit at `ptr`, FFI, and manual `free` boundaries.
 
 Safety exists to make intent explicit — not to restrict capability.
 
@@ -169,7 +171,7 @@ Bestie promises:
 
 1. Native performance
 2. Deterministic and explicit memory control
-3. No undefined behavior
+3. No hidden undefined behavior; unsafe boundaries are explicit
 4. Strong compile-time guarantees
 5. Long-term language stability
 

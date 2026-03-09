@@ -32,11 +32,12 @@ Bestie compiles directly to machine code with a minimal runtime.
 Most decisions are resolved at **compile time** — types, memory layout, dispatch, generics, and concurrency safety.
 
 ### ✔ Deterministic by design
-If a program compiles, its behavior remains predictable over time.
+If a program compiles under declared ownership/safety semantics, its behavior remains predictable over time.
 No hidden costs. No runtime surprises.
 
-### ✔ Explicit control, safe by construction
-Pointers, allocation, and freeing are fully explicit — and verified by the compiler to prevent leaks, double frees, and invalid lifetimes.
+### ✔ Explicit control, safe by default
+Ownership-validated (`own/ref`) code paths are compiler-checked for illegal sharing and lifetime misuse.
+Unsafe power (`ptr`, FFI, manual `free`) is allowed only through explicit syntax at the call site.
 
 ### ✔ Elegant and structured
 A clean, Kotlin-inspired syntax with strong compile-time guarantees and a consistent mental model.
@@ -49,15 +50,17 @@ Bestie safety is **not about preventing malicious code**.
 
 Bestie safety means:
 
-> A correct program should not silently become unstable over time.
+> A program that stays within declared safe semantics should not silently become unstable over time.
 
-Bestie prevents:
+In ownership-validated code paths, Bestie prevents:
 
 - Forgotten frees
 - Double frees
 - Accidental shared mutation
 - Hidden allocation
-- Runtime unpredictability
+- Hidden undefined behavior
+
+At explicit unsafe boundaries (`ptr`, FFI, manual `free`), behavior is programmer-controlled and visibly marked in source.
 
 All without garbage collection and without runtime overhead.
 
@@ -161,4 +164,3 @@ Bestie evolves carefully — **core stability and predictability come first.**
 Mission:
 
 > **Unify performance, control, and clarity into one deterministic native language.**
-
