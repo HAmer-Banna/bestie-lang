@@ -9,9 +9,10 @@ Core concurrency in Bestie is:
 * Explicit
 * Safe-by-default for `own/ref` paths, with explicit unsafe boundaries via `ptr`
 
-All higher-level concurrency abstractions (actors, mutexes, channels, structured concurrency) live in **std-api/std-lib**.
+All higher-level concurrency abstractions (actors, mutexes, channels, structured concurrency) live in **std-api**.
 
-> `main` runs on an explicit entry thread with `threadOs` semantics.
+> Unlike Go/Java runtime models, Bestie does not implicitly create an extra `main` worker thread.
+> Program entry starts on the process entry OS thread, and `main` executes there with `threadOs` semantics.
 
 ---
 
@@ -120,6 +121,15 @@ threadOs.of(() => use(u)) // ❌ compile error
 Ownership cannot be shared across threads implicitly.
 
 Explicit ownership transfer is allowed only via `move`, where the source binding becomes invalid immediately.
+
+Example (explicit transfer):
+
+```bestie
+val own u = User.of(...)
+threadOs.of(move u, (own user: User) => use(user)) // ✅ transfer ownership to spawned thread
+
+use(u) // ❌ compile error (moved value)
+```
 
 ### 4.2 Allowed
 
