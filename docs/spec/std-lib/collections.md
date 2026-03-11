@@ -1,13 +1,13 @@
-# Bestie Core Collections
+# Bestie Standard Library — Collections
 
-This document defines the **core collections** in Bestie.
+This document defines the **Bestie collections** provided by the standard library.
 Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
 
-Collections are value-oriented by default and integrate tightly with Bestie’s memory and concurrency model.
+Collections are value-oriented by default and integrate tightly with Bestie's memory and concurrency model.
 
 ---
 
-## 1. Supported Core Collections
+## 1. Supported Collections
 
 | Collection | Variations         | Default |
 | ---------- | ------------------ | ------- |
@@ -225,7 +225,7 @@ Element access syntax is explicit (for example: `list[0]`, `map["food"]`).
 
 ## 7. Functional Operations
 
-Core collections **do not include functional methods** (`map`, `filter`, `fold`).
+Std-lib collections **do not include functional methods** (`map`, `filter`, `fold`).
 
 Functional behavior is provided by:
 
@@ -236,12 +236,12 @@ Functional behavior is provided by:
 val sum = std.functional.sum(xs)
 ```
 
-This keeps the core minimal and zero-cost.
+This keeps collections minimal and zero-cost.
 
 ---
 
 ## 8. Relationship to Iterable
-* All core collections `impl Iterable<T>`
+* All collections `impl Iterable<T>`
 * `Iterable<T>` does not imply mutability
 * Iteration order is defined by the implementation
 * `for-in` is preferred over direct `.next()` usage in user code
@@ -260,4 +260,4 @@ Bestie collections are:
 * Free of hidden allocation behavior
 * Explicitly immutable via `immutable` or `const`
 
-> Collections in Bestie are **explicit tools**, not abstractions with surprises — matching the language’s core philosophy of predictability, safety, and control.
+> Collections in Bestie are **explicit tools**, not abstractions with surprises — matching the language's core philosophy of predictability, safety, and control.

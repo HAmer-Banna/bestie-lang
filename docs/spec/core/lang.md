@@ -215,7 +215,6 @@ Includes:
 * `str` (immutable, UTF-8)
 * `tuple`
 * `ptr<T>`
-* collections (`list`, `set`, `map`, `deque`, `heap`)
 
 Properties:
 
@@ -253,15 +252,48 @@ Properties:
 
 ### `if`
 
+`if` is both a **statement** and an **expression**.
+
+As an expression, `if` must produce a value:
+
+```bestie
+val x: int = if (cond) 4 else 0
+```
+
+If a value does not have a natural empty representation, `Option<T>` must be used.
+
+As a statement, `if` may omit `else`.
+When used inside a function without `else`, the function becomes **partial**:
+
+```bestie
+fun f(): bool ? = if (cond) return true
+```
+
+See `fp.md` for partial functions.
+
+Properties:
+
 * Statement and expression
 * Expressions must return values
 * Missing branch → partial function (`?`)
 
 ### `switch`
 
+`switch` is both a **statement** and an **expression**.
+
+Properties:
+
 * No fallthrough
 * Exhaustiveness enforced when expression
 * Fully compile-time analyzable
+
+```bestie
+val x = switch (v) {
+  1 => 10
+  2 => 20
+  else => 0
+}
+```
 
 ---
 
@@ -273,7 +305,26 @@ Supports:
 * `for in`
 * `while`
 
-Loops may be used as **expressions when compile-time resolvable**.
+Loops may include an `else` clause (similar to Python) when the loop completes without `break`.
+
+Loops may be used as **expressions when compile-time resolvable**:
+
+```bestie
+val x: int = for (i = 0; i < 5; i++) i + 5
+val xs: list<int> = for (i in 0..3) i * 2
+```
+
+While loop example:
+
+```bestie
+var i = 0
+while (i < 10) {
+  print(i)
+  i += 1
+}
+```
+
+This provides comprehension-style behavior without stream abstractions.
 
 ---
 
@@ -336,15 +387,7 @@ See `concurrency.md`.
 
 ---
 
-## 16. Collections (Overview)
-
-Deterministic, ownership-aware, generic.
-
-See `collections.md`.
-
----
-
-## 17. Annotations
+## 16. Annotations
 
 Compile-time only, zero runtime cost.
 
@@ -352,7 +395,7 @@ See `annotations.md`.
 
 ---
 
-## 18. Error Handling
+## 17. Error Handling
 
 Bestie avoids hidden null-like states and hidden exception flow.
 
@@ -367,7 +410,7 @@ See `exceptions.md`.
 
 ---
 
-## 19. Stability
+## 18. Stability
 
 * Core is sealed
 * Backward compatibility is mandatory

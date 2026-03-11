@@ -25,7 +25,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
 ## 1. Core Language (`core`)
 
 **Components included:**
-`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules-and-packaging.md`, `collections.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
 
 ### Properties
 
@@ -56,6 +56,7 @@ Provides **high-level utilities** without system dependency.
 ### Libraries
 
 - `algorithms` — sorting, searching, utilities
+- `collections` — list, set, map, deque, heap
 - `functional` — map, filter, fold, composition
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time

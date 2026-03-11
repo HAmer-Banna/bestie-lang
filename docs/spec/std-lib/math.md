@@ -70,10 +70,10 @@ This is intentional.
 Reasons:
 
 * Matrix semantics vary widely (layout, mutability, dimensionality)
-* Core collections already provide structured storage
+* Std-lib collections already provide structured storage
 * Mathematical matrices are domain-specific, not language primitives
 
-As a result, **collections such as `list<T>.matrix` use a C-style flat layout** only as a storage optimization, not as a mathematical abstraction.
+As a result, **std-lib collections such as `list<T>.matrix` use a C-style flat layout** only as a storage optimization, not as a mathematical abstraction.
 
 ```bestie
 val m : list<int>.matrix = list<int>.matrix.of(3, 3)

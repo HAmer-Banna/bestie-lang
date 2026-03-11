@@ -77,7 +77,7 @@ protocol Iterable<T> {
 
 ### Relationship to Collections
 
-* All core collections `impl Iterable<T>`
+* All std-lib collections `impl Iterable<T>`
 * `Iterable<T>` does not imply mutability
 * Iteration order is defined by the implementation
 

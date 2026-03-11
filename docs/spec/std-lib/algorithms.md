@@ -43,7 +43,7 @@ These algorithms operate on:
 
 * `Iterable<T>`
 * `Iterator<T>`
-* Core collections (list, array, slice)
+* Std-lib collections (list, set, map, deque, heap)
 
 ---
 
