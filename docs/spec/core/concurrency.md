@@ -201,4 +201,4 @@ Bestie **core concurrency** is:
 * Safe-by-default with explicit unsafe boundaries
 
 > `threadOs` and `threadLight` are **the only core primitives**.
-> Parallelism is guaranteed when ownership allows, everything else lives in API/stdlib.
+> Parallelism is guaranteed when ownership allows, everything else lives in std-api.
