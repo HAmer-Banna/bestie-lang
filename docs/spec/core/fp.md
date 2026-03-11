@@ -204,10 +204,7 @@ val inc = (x: int) => x + 1;
 Partial lambda:
 
 ```bestie
-val find = (x: int) => User ? {
-    if (x > 0) return repo.get(x)
-    return
-}
+val findUser = (x: int): User ? => if (x > 0) return repo.get(x);
 ```
 
 ---

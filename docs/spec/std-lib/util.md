@@ -1,8 +1,6 @@
 # Bestie Standard Library — Utility Package
 
-This document defines the **utility package** of the Bestie standard library. These types form the foundation for memory management, error modeling, and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
-
-This package is part of the **core**. It does not depend on threading primitives, atomics, or runtime services beyond threadOs / threadLight.
+This document defines the **utility package** of the Bestie standard library. These types form the foundation for error modeling and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
 
 ---
 
@@ -36,52 +34,7 @@ val s = sb.toString()
 
 ---
 
-## 2. Arena
-
-`Arena` is a **value class** that provides region-based allocation.
-
-It allows fast allocation and bulk deallocation with well-defined lifetime semantics.
-
-### Construction
-
-```bestie
-val arena = Arena.of(1, MB)
-```
-
-* `size: int` — numeric size
-* `unit: SizeUnit` — enum (`KB`, `MB`, `GB`)
-
-### Allocation
-
-```bestie
-arena.add(42)
-arena.add(listOfInts)
-```
-
-* `add(T)` allocates a single value
-* `add(list<T>)` allocates a contiguous sequence
-
-All allocations belong to the arena and share the same lifetime.
-
-### Lifetime Control
-
-```bestie
-arena.reset()   // reuse memory
-arena.release() // invalidate arena
-```
-
-* `reset()` clears all allocations but keeps the arena usable
-* `release()` permanently invalidates the arena; further use is a compile-time error
-
-### Rules
-
-* Arenas do not move memory
-* Arenas do not escape their owning scope
-* Arenas do not participate in ownership transfer
-
----
-
-## 3. Option<T>
+## 2. Option<T>
 
 `Option<T>` represents **explicit presence or absence** of a value.
 
@@ -115,7 +68,7 @@ fun findUser(id: int): Option<User> {
 
 ---
 
-## 4. Result<T, E>
+## 3. Result<T, E>
 
 `Result<T, E>` represents an operation that may succeed or fail with a typed error.
 
@@ -146,7 +99,7 @@ fun parseInt(s: str): Result<int, ParseError> {
 
 ---
 
-## 5. Equable Protocol
+## 4. Equable Protocol
 
 `Equable` defines **structural equality** between two values of the same type.
 
@@ -184,7 +137,7 @@ No dynamic dispatch is introduced.
 
 ---
 
-## 6. Comparable Protocol
+## 5. Comparable Protocol
 
 `Comparable` defines a total ordering between values.
 
@@ -204,7 +157,7 @@ protocol Comparable<T> {
 
 ---
 
-## 7. Hashable Protocol
+## 6. Hashable Protocol
 
 `Hashable` defines a stable hash for a value and uses **`ext Equable`**.
 
@@ -232,7 +185,6 @@ protocol Hashable ext Equable<T> {
 The utility package provides:
 
 * Canonical utility for efficient string construction (`StringBuilder`)
-* Explicit memory construction (`Arena`)
 * Explicit absence modeling (`Option`)
 * Typed failure (`Result`)
 * Structural equality (`Equable`)

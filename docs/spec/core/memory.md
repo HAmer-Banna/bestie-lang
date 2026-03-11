@@ -132,7 +132,7 @@ All values are stack-allocated unless explicitly moved elsewhere.
 
 Used only when:
 
-* `new()` or `allocate()` is explicitly invoked
+* `new()` is explicitly invoked
 * Ownership must outlive the current scope
 * Dynamic size requires it
 
@@ -172,7 +172,7 @@ Includes:
 * Tuples
 * `data class`
 * `value class`
-* Immutable collections
+*  collections
 
 Properties:
 

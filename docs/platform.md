@@ -56,12 +56,13 @@ Provides **high-level utilities** without system dependency.
 ### Libraries
 
 - `algorithms` — sorting, searching, utilities
+- `allocators` — Arena, FixedBuffer, Debug
 - `collections` — list, set, map, deque, heap
 - `functional` — map, filter, fold, composition
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
 - `format` — formatting and templates
-- `utilities` — helpers, Option, Result, Arena
+- `utilities` — helpers, Option, Result, StringBuilder
 - `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator, Singleton via `Lazy`/`Once`)
 
 ### Properties
