@@ -132,7 +132,7 @@ Disallowed:
 
 * File scope
 * Protocols
-* `data`, `value`, and `single` classes
+* `data`, `value`, and `enum` declarations
 
 ---
 

@@ -90,7 +90,7 @@ Bestie does not use null, none, or nil.
 ### Definition
 
 ```bestie
-enum class Option<T> {
+enum Option<T> {
   Present(T)
   Not_Present
 }
@@ -122,7 +122,7 @@ fun findUser(id: int): Option<User> {
 ### Definition
 
 ```bestie
-enum class Result<T, E> {
+enum Result<T, E> {
   Ok(T)
   Err(E)
 }
@@ -162,7 +162,7 @@ protocol Equable<T> {
 
 ### Semantics
 
-* `equal` must be **reflexive**, **symmetric**, and **transitive`
+* `equal` must be **reflexive**, **symmetric**, and **transitive**
 * Equality is **value-based**, not identity-based
 * The method must not mutate either operand
 * Resolution is static and compile-time driven

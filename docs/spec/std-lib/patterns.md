@@ -183,6 +183,36 @@ protocol Proxy<T> {
 
 ---
 
+## 6. Singleton
+
+Singleton is a **library pattern**, not a core language class kind.
+
+```bestie
+protocol Singleton<T> {
+    fun instance(): ref T
+}
+```
+
+### Semantics
+
+* Exactly one process-level instance for a given declaration
+* Initialization is explicit and deterministic
+* No implicit global object creation by language runtime
+
+### Rules
+
+* Implementations should use one-time init primitives (for example `Lazy<T>` or `Once<T>`)
+* Cross-thread mutation remains explicit user responsibility
+* No hidden synchronization beyond what the chosen primitive provides
+
+### Why std-lib (not core)
+
+* Keeps the core language small and predictable
+* Avoids special singleton runtime semantics in class definitions
+* Preserves explicit control over initialization, ownership, and synchronization
+
+---
+
 ## Patterns Explicitly Excluded
 
 The following patterns are **intentionally not provided** as core protocols:

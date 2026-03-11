@@ -62,7 +62,7 @@ Provides **high-level utilities** without system dependency.
 - `datetime` — date/time
 - `format` — formatting and templates
 - `utilities` — helpers, Option, Result, Arena
-- `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator)
+- `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator, Singleton via `Lazy`/`Once`)
 
 ### Properties
 

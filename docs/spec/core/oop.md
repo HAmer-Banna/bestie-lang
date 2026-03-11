@@ -147,70 +147,44 @@ value class Point {
 
 ---
 
-### 3.3 enum / enum class
+### 3.3 enum
 
 **Purpose:**
 
-In Bestie, `enum` can be used in two ways:
-
-`enum {}` as an enumerated list where each value is indexed from `0`, used in simple enums like:
+In Bestie, `enum` is one core shape with two declaration forms:
 
 ```bestie
-enum WeekendDays{
-FRIDAY,
-SATURDAY
+enum WeekendDays {
+    FRIDAY,
+    SATURDAY
 }
 ```
 
-Or as `enum class`, where it can `impl` a protocol (static dispatch only) and be generic (`<T>`).
+For richer cases, the same `enum` keyword supports payload variants, generics (`<T>`), and protocol `impl` (static dispatch only):
 
 ```bestie
-enum class Status {
-    Active,
-    Disabled
+enum Status<T> {
+    Active(T),
+    Disabled(str)
 }
 ```
 
 * Closed sets of values
 * Compile-time exhaustiveness
+* Value-type semantics by default
 
 **Rules:**
 
 * No inheritance
+* No `ext`
 * No mutable state
+* No hidden heap allocation requirement
+* Tag-only enums lower to compact integer tags
 * Always thread-safe
 
 ---
 
-### 3.4 single class
-
-**Purpose:**
-
-* Process-level singleton
-* Global coordination point
-
-```bestie
-single class Config {
-    port: int
-}
-```
-
-**Properties:**
-
-* Exactly one instance per process
-* Implicit, thread-safe access
-* Lazy and deterministic initialization
-* Private `init()` with a public `getInstance()` method
-
-**Rules:**
-
-* Cannot be open or inherited
-* Inner classes must be `priv`
-* Mutable state is allowed, but cross-thread mutation must be explicitly synchronized
-
----
-
-### 3.5 class
+### 3.4 class
 
 **Purpose:**
 Standard object with identity
@@ -231,7 +205,7 @@ class File {
 
 ---
 
-### 3.6 open class
+### 3.5 open class
 
 **Purpose:**
 Explicit inheritance root, explicit polymorphic intent
@@ -252,7 +226,7 @@ open class Shape {
 
 ---
 
-### 3.7 abstract class
+### 3.6 abstract class
 
 **Purpose:**
 Partial implementation with shared logic
@@ -265,7 +239,7 @@ Partial implementation with shared logic
 
 ---
 
-`data class`, `value class`, `enum/enum class`, and `@immutable class` cannot use `ext`.
+`data class`, `value class`, `enum`, and `@immutable class` cannot use `ext`.
 They may use `impl` with protocols, but only statically dispatched protocol methods are allowed.
 
 ---
@@ -547,8 +521,7 @@ Always thread-safe:
 
 * data class
 * value class
-* enum / enum class
-* single class initialization
+* enum
 * immutable classes
 * effectively immutable classes (all fields are val)
 
@@ -556,6 +529,7 @@ User responsibility:
 
 * open classes
 * mutable state
+* singleton-style global objects implemented in std-lib patterns
 
 ---
 
@@ -566,6 +540,7 @@ User responsibility:
 * General-purpose runtime RTTI APIs
 * Reflection-based dispatch
 * Fragile base classes
+* Language-level singleton types
 
 ---
 

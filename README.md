@@ -73,10 +73,9 @@ Bestie provides a compact but expressive core:
 - `package`
 - `data class` — immutable structural type
 - `value class` — inline value wrapper
-- `single class` — process-level singleton
 - `class` — identity type (final by default)
 - `open class` / `abstract class`
-- `enum` / `enum class`
+- `enum` — simple tags or rich tagged variants
 - `protocol` — behavior contracts (static by default)
 - `fun` — compile-time resolvable functions
 - `lambda` — explicit, allocation-free by default

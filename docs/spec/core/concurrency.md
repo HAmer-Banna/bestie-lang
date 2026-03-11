@@ -134,7 +134,7 @@ use(u) // ❌ compile error (moved value)
 ### 4.2 Allowed
 
 * Immutable values (`val`)
-* Data, value, enum, single classes
+* Data, value, and enum declarations
 * Effectively Immutable Classes or Explicit by annotated `@immutable`
 
 ```bestie
