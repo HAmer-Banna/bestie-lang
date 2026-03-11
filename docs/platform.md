@@ -71,6 +71,7 @@ Provides **high-level utilities** without system dependency.
 - Evolves conservatively
 - Purely library-level (no runtime system)
 - PascalCase naming for types
+- Requires `import`
 - Imported via:
 
 ```
@@ -104,7 +105,8 @@ Provides **system-level and external interaction**.
 ### Properties
 
 - Stable but allowed to evolve
-- Requires `bestie-project.toml`
+- PascalCase naming for types
+- Requires `import` and `bestie-project.toml`
 - Imported via:
 
 ```
@@ -236,9 +238,11 @@ Restrictions:
 
 Purpose:
 
-- Scripts
+- Low Level development
+- Kernal & drivers development
 - Experiments
 - Small tools
+- Scripts
 
 ---
 
