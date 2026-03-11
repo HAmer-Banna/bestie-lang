@@ -83,7 +83,8 @@ This is **late binding**, and is **opt-in only**.
 
 ## 3. Class Kinds
 
-Bestie supports **multiple explicit class kinds**, each with strict guarantees.
+Bestie has one class keyword with semantic modifiers.
+Bestie supports **multiple explicit class shapes**, each with strict guarantees.
 
 ---
 
