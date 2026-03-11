@@ -114,7 +114,7 @@ No inheritance, reflection, or dynamic creation is allowed for core concurrency 
 ### 4.1 Forbidden
 
 ```bestie
-val own u = User.of(...)
+val own u = User.new()
 threadOs.of(() => use(u)) // ❌ compile error
 ```
 
@@ -125,7 +125,7 @@ Explicit ownership transfer is allowed only via `move`, where the source binding
 Example (explicit transfer):
 
 ```bestie
-val own u = User.of(...)
+val own u = User.new()
 threadOs.of(move u, (own user: User) => use(user)) // ✅ transfer ownership to spawned thread
 
 use(u) // ❌ compile error (moved value)
