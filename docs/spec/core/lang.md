@@ -225,6 +225,43 @@ Properties:
 
 ---
 
+### 5.3 Core Collections
+
+Bestie includes exactly one collection in the core language: `list<T>`.
+
+`list<T>` is built-in and available without `import`.
+It participates directly in the language's type, memory, and loop rules.
+
+Core `list<T>` supports:
+
+* `list<T>.build()` with no import
+* Built-in variations such as `array` and `linked`
+* Indexing via `xs[i]`
+* List literals such as `{1,2,3}` when the target type is `list<T>`
+* Sized array forms such as `list<int>[10]` and `list<int>[2][3]`
+* Core methods such as `add`, `remove`, `get`, `insert`, and `indexOf`
+* Ownership, immutability, and concurrency semantics defined by the core specification
+* Builder-chain resolution at compile time
+
+Bestie does **not** provide a separate built-in array type.
+Array semantics are expressed through the core `list<T>`.
+The default `list<T>` is array-backed unless another core variation is selected.
+
+All other collections live in `bestie.lib.collections`, including:
+
+* `set<T>`
+* `map<K,V>`
+* `deque<T>`
+* `heap<T>`
+
+Example:
+
+```bestie
+val xs = list<int>.linked().build()
+```
+
+---
+
 ## 6. Casting and Type Rules
 
 Bestie requires **explicit casting**.

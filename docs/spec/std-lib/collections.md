@@ -3,7 +3,9 @@
 This document defines the **Bestie collections** provided by the standard library.
 Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
 
-Collections are value-oriented by default and integrate tightly with Bestie's memory and concurrency model.
+Core Bestie includes exactly one built-in collection: `list<T>`.
+The full `list<T>` model is defined by the core language and is not specified in this document.
+This document covers the standard-library collection layer: `set`, `map`, `deque`, and `heap`.
 
 ---
 
@@ -11,7 +13,6 @@ Collections are value-oriented by default and integrate tightly with Bestie's me
 
 | Collection | Variations         | Default |
 | ---------- | ------------------ | ------- |
-| `list<T>`  | array, linked      | array   |
 | `set<T>`   | hash, tree, linked | hash    |
 | `map<K,V>` | hash, tree, linked | hash    |
 | `deque<T>` | queue, stack       | as-is   |
@@ -34,9 +35,9 @@ Growth/reallocation behavior is defined by the selected collection variation.
 ### 2.1 Builder Construction
 
 ```bestie
-val xs = list<int>.build()
 val ys = set<int>.tree().add(1).add(2)
 val zs = map<int,str>.hash().put(1,"a").put(2,"b")
+val dq = deque<int>.queue().build()
 ```
 
 Rules:
@@ -47,52 +48,21 @@ Rules:
 
 ---
 
-### 2.2 Sized Arrays (No Matrix Type)
+### 2.2 Core `list<T>` Boundary
 
-Bestie does **not** provide a separate `matrix` collection.
+`list<T>` is entirely part of the core language.
+This includes:
 
-Instead, **fixed-size and multi-dimensional arrays** are expressed using **bracket syntax**, applicable **only to array-backed lists**.
+* The existence of `list<T>`
+* The available list variations
+* `list<T>.build()`
+* List literals
+* Sized array forms such as `list<T>[n]`
+* Bracket validity rules for array-backed lists
+* List methods
+* List immutability and concurrency modifiers
 
-#### Fixed-size array
-
-```bestie
-val a = list<int>[10].build()
-```
-
-#### Dynamic-size array
-
-```bestie
-val n = readInt()
-val b = list<int>[n].build()
-```
-
-#### Two-dimensional array (flat, C-style layout)
-
-```bestie
-val m = list<int>[2][3].build()
-```
-
-Properties:
-
-* `[n]`, `[r][c]` are part of the **type**
-* Memory is **contiguous and flat**
-* Indexing is row-major
-* No matrix object exists in the core language
-
----
-
-### 2.3 Validity Rules for Brackets
-
-Brackets are valid **only** for array-backed lists.
-
-| Expression             | Result               |
-| ---------------------- | -------------------- |
-| `list<int>[10]`        | ✅ valid              |
-| `list<int>.array[10]`  | ✅ valid              |
-| `list<int>.linked[10]` | ❌ compile-time error |
-| `set<int>[10]`         | ❌ compile-time error |
-
-This rule is strict and enforced by the compiler.
+`bestie.lib.collections` does not define or extend `list<T>`.
 
 ---
 
@@ -100,14 +70,15 @@ This rule is strict and enforced by the compiler.
 
 ### 3.1 Defaults
 
-* `list<T>` → array
 * `set<T>` → hash
 * `map<K,V>` → hash
 * `deque<T>` → must explicitly choose queue or stack behavior
 * `heap<T>` → **must specify `max` or `min`**
 
 ```bestie
-val xs : list<int> = list<int>.build()  // array-backed
+val xs = set<int>.build()                   // hash-backed
+val ys = map<int,str>.build()               // hash-backed
+val dq = deque<int>.queue().build()         // queue
 ```
 
 ---
@@ -117,8 +88,8 @@ val xs : list<int> = list<int>.build()  // array-backed
 If multiple variations from the **same category** are chained, the **last one wins**.
 
 ```bestie
-val x = list<int>.array.linked().build()   // linked
-val y = set<int>.hash.tree().build()       // tree
+val x = set<int>.hash.tree().build()       // tree
+val y = map<int,str>.linked.hash().build() // hash
 ```
 
 Conflicts across incompatible categories are **compile-time errors**.
@@ -146,13 +117,13 @@ Collections support explicit mutation and concurrency semantics.
 * `copyOnWrite` is ignored if `immutable` is present
 
 ```bestie
-list<int>.concurrent.copyOnWrite.immutable.build()
+set<int>.concurrent.copyOnWrite.immutable.build()
 ```
 
 Resolves to:
 
 ```text
-immutable list
+immutable set
 ```
 
 Optional compiler warnings may be emitted for redundant modifiers.
@@ -164,18 +135,19 @@ Optional compiler warnings may be emitted for redundant modifiers.
 Collection literals use `{}` syntax and are compile-time parsed with explicit runtime allocation semantics.
 
 ```bestie
-val a : list<int> = {1,2,3}
-val b : set<int>  = {1,2,3}
+val a : set<int> = {1,2,3}
+val b : map<str,int> = {"a": 1, "b": 2}
 ```
 
 ### 5.1 Literal Rules
 
-* `list` literals allow duplicates
 * `set` literals reject duplicates when duplicates are compile-time provable
+* `map` literals reject duplicate keys when duplicates are compile-time provable
 * No automatic deduplication is performed
 
 ```bestie
 val x : set<int> = {1,2,2} // ❌ compile-time error
+val y : map<str,int> = {"a": 1, "a": 2} // ❌ compile-time error
 ```
 
 ---
@@ -185,15 +157,15 @@ val x : set<int> = {1,2,2} // ❌ compile-time error
 A collection may be declared `const` **only if** it is created via a literal.
 
 ```bestie
-const xs : list<int> = {1,2,3}
-const ys : list<int>[2][2] = {1,0,0,1}
+const xs : set<int> = {1,2,3}
+const ys : map<str,int> = {"x": 1}
 ```
 
 Invalid:
 
 ```bestie
-const a = list<int>.build()        // ❌ runtime allocation
-const b = list<int>[n].build()    // ❌ runtime size
+const a = set<int>.build()        // ❌ runtime allocation
+const b = map<str,int>.build()    // ❌ runtime allocation
 ```
 
 `const` collections:
@@ -212,14 +184,13 @@ All collections use **consistent method naming**.
 
 | Collection | Methods                                                           |
 | ---------- | ----------------------------------------------------------------- |
-| list       | `add`, `remove`, `get`, `insert`, `indexOf`                      |
 | set        | `add`, `remove`, `contains`                                       |
 | heap       | `add`, `remove`, `peek`                                           |
 | deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
 | map        | `put`, `get`, `remove`, `containsKey`                             |
 
 All collections provide **efficient iterators** with no hidden indirection.
-Element access syntax is explicit (for example: `list[0]`, `map["food"]`).
+Element access syntax is explicit (for example: `map["food"]`).
 
 ---
 

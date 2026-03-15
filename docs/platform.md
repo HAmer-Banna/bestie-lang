@@ -57,7 +57,7 @@ Provides **high-level utilities** without system dependency.
 
 - `algorithms` — sorting, searching, utilities
 - `allocators` — Arena, FixedBuffer, Debug
-- `collections` — list, set, map, deque, heap
+- `collections` — set, map, deque, heap
 - `functional` — map, filter, fold, composition
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
