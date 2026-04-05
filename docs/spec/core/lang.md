@@ -297,7 +297,7 @@ As an expression, `if` must produce a value:
 val x: int = if (cond) 4 else 0
 ```
 
-If a value does not have a natural empty representation, `Option<T>` must be used.
+If a value does not have a natural empty representation, `option<T>` must be used.
 
 As a statement, `if` may omit `else`.
 When used inside a function without `else`, the function becomes **partial**:
@@ -440,7 +440,7 @@ Mechanisms:
 
 * Complete returns
 * Partial returns (`?`)
-* `Option<T>`
+* `option<T>`
 * Explicit errors
 
 See `exceptions.md`.

@@ -82,7 +82,7 @@ Rules:
 ## 5. Parsing API
 
 ```bestie
-fun parseArgs(argv: list<str>, cmd: Command): Result<Command, CliError>
+fun parseArgs(argv: list<str>, cmd: Command): result<Command, CliError>
 ```
 
 Properties:

@@ -2,6 +2,8 @@
 
 This document defines the **utility package** of the Bestie standard library. These types form the foundation for error modeling and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
 
+Bestie uses lowercase for foundational abstractions such as `option<T>` and `result<T,E>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
+
 ---
 
 ## 1. StringBuilder
@@ -34,16 +36,16 @@ val s = sb.toString()
 
 ---
 
-## 2. Option<T>
+## 2. option<T>
 
-`Option<T>` represents **explicit presence or absence** of a value.
+`option<T>` represents **explicit presence or absence** of a value.
 
 Bestie does not use null, none, or nil.
 
 ### Definition
 
 ```bestie
-enum Option<T> {
+enum option<T> {
   Present(T)
   Not_Present
 }
@@ -52,11 +54,11 @@ enum Option<T> {
 ### Usage
 
 ```bestie
-fun findUser(id: int): Option<User> {
+fun findUser(id: int): option<User> {
   if exists(id) {
-    return Option.Present(loadUser(id))
+    return option.Present(loadUser(id))
   }
-  return Option.Not_Present
+  return option.Not_Present
 }
 ```
 
@@ -68,14 +70,14 @@ fun findUser(id: int): Option<User> {
 
 ---
 
-## 3. Result<T, E>
+## 3. result<T, E>
 
-`Result<T, E>` represents an operation that may succeed or fail with a typed error.
+`result<T, E>` represents an operation that may succeed or fail with a typed error.
 
 ### Definition
 
 ```bestie
-enum Result<T, E> {
+enum result<T, E> {
   Ok(T)
   Err(E)
 }
@@ -84,18 +86,18 @@ enum Result<T, E> {
 ### Usage
 
 ```bestie
-fun parseInt(s: str): Result<int, ParseError> {
+fun parseInt(s: str): result<int, ParseError> {
   if valid(s) {
-    return Result.Ok(convert(s))
+    return result.Ok(convert(s))
   }
-  return Result.Err(ParseError.InvalidFormat)
+  return result.Err(ParseError.InvalidFormat)
 }
 ```
 
 ### Guidelines
 
-* Prefer `Result` for expected, recoverable failures
-* Do not mix `Result` and `throw` without justification
+* Prefer `result` for expected, recoverable failures
+* Do not mix `result` and `throw` without justification
 
 ---
 
@@ -185,8 +187,8 @@ protocol Hashable ext Equable<T> {
 The utility package provides:
 
 * Canonical utility for efficient string construction (`StringBuilder`)
-* Explicit absence modeling (`Option`)
-* Typed failure (`Result`)
+* Explicit absence modeling (`option`)
+* Typed failure (`result`)
 * Structural equality (`Equable`)
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)

@@ -21,6 +21,8 @@ This document covers the standard-library collection layer: `set`, `map`, `deque
 All collections are **generic** (`<T>`).
 All variations are **explicit** and **compile-time validated**.
 
+Collection family names stay lowercase across Bestie so they remain aligned with core `list<T>` and other foundational abstractions such as `option<T>` and `result<T,E>`.
+
 ---
 
 ## 2. Construction Model

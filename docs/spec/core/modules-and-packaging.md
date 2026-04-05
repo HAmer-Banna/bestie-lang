@@ -350,7 +350,7 @@ core.types
 This includes:
 
 * `int`, `float`, `str`
-* `ptr`, `Option`
+* `ptr`, `option`
 * Basic annotations
 
 Everything else must be imported explicitly.

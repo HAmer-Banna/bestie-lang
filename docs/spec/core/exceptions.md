@@ -20,7 +20,7 @@ Bestie exception handling aims to:
 1. **Be explicit** — programmers must decide how to handle errors.
 2. **Be type-safe** — all error types are strongly typed and checked at compile time.
 3. **Avoid hidden runtime costs** — exceptions do not implicitly allocate memory.
-4. **Integrate with core return types** — works seamlessly with complete functions, partial functions (`?`), error returns (`!`), and `Option`.
+4. **Integrate with core return types** — works seamlessly with complete functions, partial functions (`?`), error returns (`!`), and `option`.
 
 **Golden Rule:** Exceptions in Bestie are for **rare, unrecoverable conditions**, not for normal control flow.
 
@@ -129,7 +129,7 @@ Bestie exceptions work seamlessly with **core return types**:
 | ---------------------- | ---------------------------------------------------- |
 | Complete function      | Can throw; caller may catch or propagate             |
 | Partial function (`?`) | Must handle exceptions; compiler ensures correctness |
-| Option class           | Exceptions coexist with `Not_Present` state          |
+| `option<T>`            | Exceptions coexist with `Not_Present` state          |
 | Error return (`!`)     | Recoverable errors; alternative to `throw`           |
 
 **Guideline:** Use `!` for expected recoverable errors and `throw` for unexpected, system-level failures.
@@ -151,7 +151,7 @@ Bestie exceptions work seamlessly with **core return types**:
 * Prefer **error returns (`!`)** for normal, recoverable failures.
 * Use **`throw`** for **unrecoverable or system-level errors**.
 * Combine exceptions with **partial functions (`?`)** for clarity.
-* Avoid mixing **`throw`** and `Option` without reason — stick to a single pattern per function.
+* Avoid mixing **`throw`** and `option` without reason — stick to a single pattern per function.
 
 ---
 

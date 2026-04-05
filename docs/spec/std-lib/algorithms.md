@@ -110,13 +110,13 @@ Use when:
 fun binarySearch<T: Comparable>(
     data: Iterable<T>,
     target: T
-): Option<int>
+): option<int>
 ```
 
 Rules:
 
 * Input **must be sorted**
-* Returns index wrapped in `Option`
+* Returns index wrapped in `option`
 
 Example:
 
@@ -322,4 +322,3 @@ It gives Bestie:
 Algorithms do one thing.
 They do it well.
 And they tell you exactly what they cost.
-

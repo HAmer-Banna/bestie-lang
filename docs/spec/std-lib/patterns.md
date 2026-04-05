@@ -37,7 +37,7 @@ The `Iterator<T>` protocol represents **explicit, pull-based iteration**.
 
 ```bestie
 protocol Iterator<T> {
-    fun next(): Option<T>
+    fun next(): option<T>
 }
 ```
 

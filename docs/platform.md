@@ -35,7 +35,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
   - Major performance-preserving improvements
 - No imports required
 - Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
-- Core types use lowercase (`list`, `str`, `ptr`, `byte`)
+- Foundational abstractions use lowercase (`list`, `str`, `ptr`, `byte`)
 - Core is **built-in and always available**
 - Defines **semantic guarantees** (memory, ownership, layout, concurrency)
 - Safe-by-default semantics for ownership-validated (`own/ref`) paths
@@ -62,7 +62,7 @@ Provides **high-level utilities** without system dependency.
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
 - `format` — formatting and templates
-- `utilities` — helpers, Option, Result, StringBuilder
+- `utilities` — helpers, option, result, StringBuilder
 - `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator, Singleton via `Lazy`/`Once`)
 
 ### Properties
@@ -70,7 +70,8 @@ Provides **high-level utilities** without system dependency.
 - Closed but not sealed
 - Evolves conservatively
 - Purely library-level (no runtime system)
-- PascalCase naming for types
+- Foundational abstractions use lowercase (`option`, `result`, `set`, `map`)
+- Nominal concrete types use PascalCase (`StringBuilder`, `Date`, `Command`)
 - Requires `import`
 - Imported via:
 
@@ -105,7 +106,8 @@ Provides **system-level and external interaction**.
 ### Properties
 
 - Stable but allowed to evolve
-- PascalCase naming for types
+- Foundational abstractions imported from lower layers keep lowercase names
+- API-defined nominal types use PascalCase
 - Requires `import` and `bestie-project.toml`
 - Imported via:
 

@@ -87,13 +87,13 @@ val fixed = FixedBuffer.of(4, KB)
 ### Allocation
 
 ```bestie
-val p = fixed.alloc(256) // Option<ptr<byte>>
+val p = fixed.alloc(256) // option<ptr<byte>>
 ```
 
 Semantics:
 
-* Success returns `Option.Present(ptr<byte>)`
-* Capacity exhaustion returns `Option.Not_Present`
+* Success returns `option.Present(ptr<byte>)`
+* Capacity exhaustion returns `option.Not_Present`
 * No implicit heap fallback is allowed
 
 ### Lifetime Control
