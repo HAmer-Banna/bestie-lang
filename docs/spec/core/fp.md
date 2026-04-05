@@ -68,6 +68,18 @@ Functions may be:
 * Class members (methods)
 * Extension functions
 
+Return type modifiers may be combined:
+
+| Signature                        | Meaning                                      |
+| -------------------------------- | -------------------------------------------- |
+| `fun f(): T`                     | Always returns `T`                           |
+| `fun f(): T ?`                   | May not return (partial)                     |
+| `fun f(): T ! E`                 | Returns `T` or error from set `E`            |
+| `fun f(): T ! `                  | Returns `T` or inferred error set            |
+| `fun f(): (T, U)`                | Returns multiple values as tuple             |
+
+These modifiers are **mutually exclusive per return slot**. A function may not return both `?` and `!` on the same value.
+
 ---
 
 ### 2.2 Expression (Concise) Functions
@@ -359,7 +371,7 @@ Guarantees:
 
 ---
 
-### 6.3 Explicit Capture (Restricted)
+### 6.3 Explicit Immutable Capture
 
 ```bestie
 val factor: int = 3
@@ -368,25 +380,51 @@ val f = [factor](x: int) => x * factor
 
 Rules:
 
-* Captured values are copied
-* Captures are immutable
-* `own<T>` values cannot be captured
+* Captured values are copied at the point of lambda creation
+* Captures are immutable — cannot be reassigned inside the lambda
+* `own` values cannot be captured
 * Capture layout is compile-time known
 * No heap allocation introduced
 
-Preserves determinism while allowing controlled FP composition.
+---
+
+### 6.4 Explicit Mutable Capture
+
+Mutable captures are allowed via `[var x]`. The lambda receives a mutable copy that persists between calls.
+
+```bestie
+var count = 0
+var counter = [var count](x: int): int => {
+    count += x
+    return count
+}
+
+counter(5)   // returns 5  — internal count = 5
+counter(3)   // returns 8  — internal count = 8
+```
+
+The original `count` is **unaffected** — the lambda owns its own mutable copy.
+
+Rules:
+
+* `[var x]` captures a mutable copy — the original binding is unchanged
+* Mutations to `var` captures persist between invocations
+* A lambda with `var` captures must be stored in a `var` binding
+* Cannot be shared across threads — mutable state forbids it
+* Cannot be returned from a function — captured state is stack-bound
+* Can be passed to functions (caller's stack holds the state)
+* `own` values cannot be captured as `var`
+* No heap allocation — captured state is inline in the lambda's stack frame
+* Capture layout is compile-time known
 
 ---
 
-### 6.4 Lambda Allocation Model
+### 6.5 Lambda Allocation Model
 
-By default:
-
-* Lambdas do not allocate
-* Lambdas are resolved at compile time
-* Lowered to inline code or function pointers
-
-Heap allocation for lambdas is **not part of the core language**.
+* Lambdas do not allocate — compile-time lowered to inline code or function pointers
+* Immutable captures — part of a zero-size or fixed-size compile-time-known frame
+* Mutable captures — inline in the lambda's stack frame, no heap
+* Heap allocation for lambdas is **not part of the core language**
 
 ---
 
@@ -409,8 +447,11 @@ Rules:
 
 ## 8. Variable Arguments (Varargs)
 
+Variadic parameters are declared with `...` after the element type.
+`val` and `var` carry their normal semantics — `val` is the default and preferred form.
+
 ```bestie
-fun sum(var xs: int...): int {
+fun sum(val xs: int...): int {
     var total = 0
     for x in xs {
         total += x
@@ -419,16 +460,31 @@ fun sum(var xs: int...): int {
 }
 ```
 
+Mutable varargs allow modification of elements inside the function body:
+
+```bestie
+fun normalize(var xs: float64...): void {
+    for i in 0..xs.size {
+        xs[i] = xs[i] / 100.0
+    }
+}
+```
+
 Usage:
 
 ```bestie
 sum(1, 2, 3, 4)
+normalize(10.0, 20.0, 50.0)
 ```
 
 Rules:
 
-* Varargs are explicit via `var`
-* Element type must be specified
+* `...` after the element type marks the parameter as variadic
+* `val xs: T...` — immutable variadic, elements cannot be reassigned (default)
+* `var xs: T...` — mutable variadic, elements may be modified inside the function
+* `const` is **not allowed** for varargs — variadic arguments are runtime values
+* Element type must be explicitly specified
+* Only the last parameter may be variadic
 * Argument sequence is stack-allocated when possible
 * No implicit heap allocation is introduced
 
@@ -456,18 +512,70 @@ Rules:
 
 ---
 
-### 9.2 Bound Method References (Restricted)
+### 9.2 Bound Method References
+
+A bound method reference binds an instance to a method, producing a zero-argument callable.
+The behavior depends on the type of the bound object.
+
+---
+
+**Value types** (`data class`, `value class`, `enum`, primitives) — copy:
 
 ```bestie
-own u = User.new()
-val f: fn() -> str = u::getName
+val p = Point(x = 1, y = 2)
+val f: fn() -> int = p::getX    // ✅ p is copied into f
 ```
 
-Rules:
+The value is copied at the point of binding. No ownership concerns.
 
-* Bound object must be `own<T>` or a value type
-* Ownership rules apply
-* No reference capture
+---
+
+**`own` values — explicit `move` required:**
+
+```bestie
+val own u = User.new()
+val f: fn() -> str = move u::getName   // ✅ u is moved into f
+f()                                     // calls getName on the moved user
+
+use(u)   // ❌ compile error: u has been moved
+```
+
+`move` transfers ownership into the bound reference. The source binding becomes invalid immediately — consistent with all other ownership transfer in Bestie.
+
+Without `move`, binding an `own` value is a **compile-time error**:
+
+```bestie
+val own u = User.new()
+val f: fn() -> str = u::getName   // ❌ compile error: u is own, use 'move u::getName'
+```
+
+**`ref` values — forbidden:**
+
+`ref` cannot escape scope or be stored, so binding a `ref` to a method reference is always a compile-time error:
+
+```bestie
+fun bad(user: ref User) {
+    val f = user::getName   // ❌ compile error: ref cannot be captured
+}
+```
+
+Use an unbound reference and pass the value explicitly instead:
+
+```bestie
+fun good(user: ref User) {
+    val f: fn(ref User) -> str = User::getName
+    f(user)   // ✅
+}
+```
+
+---
+
+Rules summary:
+
+* Value types — copied at binding site, no ownership tracking needed
+* `own` values — `move` required, source becomes invalid
+* `ref` values — forbidden, use unbound references instead
+* No allocation introduced in any case
 * Lowered at compile time
 
 ---
@@ -578,17 +686,46 @@ Capturing-based currying is illegal.
 
 ### 12.2 Explicit Partial Application
 
-Partial application is performed via **compile-time transformations**:
+`bind` performs partial application — it fixes one or more arguments of a function, producing a new function with fewer parameters.
+
+Bestie resolves `bind` **at compile time whenever possible**. When the bound value is only known at runtime, it is captured by copy — same semantics as explicit lambda capture, stack-allocated, no heap.
+
+**Compile-time constant — fully resolved at compile time:**
 
 ```bestie
-val add5 = add.bind(5)
+val add5 = add.bind(5)       // 5 is a constant — fully specialized, zero runtime presence
+add5(3)                       // compiles to add(5, 3) directly
+```
+
+**Runtime value — captured by copy, stack-allocated:**
+
+```bestie
+val n = getUserInput()
+val addN = add.bind(n)       // n is runtime — n is copied into addN
+addN(3)                       // compiles to add(n_copy, 3)
+```
+
+Equivalent to writing the explicit capture form:
+
+```bestie
+val addN = [n](b: int) => add(n, b)
+```
+
+**Binding multiple arguments:**
+
+```bestie
+fun clamp(min: int, max: int, val: int): int
+val clamp0to100 = clamp.bind(0, 100)   // fixes min and max
+clamp0to100(42)                         // compiles to clamp(0, 100, 42)
 ```
 
 Rules:
 
-* `bind` is compile-time only
-* No allocation
-* No captured state
+* Compile-time constant arguments → fully specialized at compile time
+* Runtime arguments → captured by copy, immutable, stack-allocated when possible
+* No heap allocation in either case
+* Captured values follow the same rules as explicit lambda captures — value types only, no `own`, no `ref`
+* `bind` arguments are bound left to right
 
 ---
 

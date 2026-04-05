@@ -555,11 +555,151 @@ The compiler may inline, elide, reorder, and optimize as long as observable beha
 
 ---
 
-## 13. Concurrency Rules (Preview)
+## 13. Lifetime Enforcement
+
+This section defines the **compiler mechanism** that enforces `ref` safety. The rules stated throughout this document (ref cannot outlive owner, cannot escape scope, cannot be stored) are enforced through **scope-based liveness analysis** within function bodies.
+
+The key simplification that makes this tractable: **`ref` cannot be stored in fields**. This eliminates the need for lifetime parameters in types — the analysis stays entirely within function bodies.
+
+---
+
+### 13.1 Rule: Lexical Scope Containment
+
+A `ref` is valid only within the scope where its source is alive. The compiler performs scope-based liveness analysis — no lifetime annotations required for this case.
+
+```bestie
+// ❌ compile error — x doesn’t outlive r
+fun bad() {
+    var r: ref int
+    {
+        val x = 42
+        r = ref x    // x dies before r’s scope ends
+    }
+    print(r)
+}
+
+// ✅ fine — x outlives the inner block where r lives
+fun good() {
+    val x = 42
+    {
+        val r = ref x
+        print(r)
+    }
+}
+```
+
+---
+
+### 13.2 Rule: No Move While Borrowed
+
+An `own` value cannot be moved while a `ref` to it is alive. The compiler tracks active borrows within the function body as a flow-sensitive analysis.
+
+```bestie
+val own u = User.new()
+val r = ref u
+val own v = move u    // ❌ compile error: u is borrowed by r
+```
+
+The borrow expires at the end of its enclosing scope. Moving is allowed once the borrow is gone:
+
+```bestie
+val own u = User.new()
+{
+    val r = ref u
+    use(r)
+}                      // r expires here
+val own v = move u     // ✅ borrow has expired
+```
+
+---
+
+### 13.3 Rule: Returning `ref` — Derivation and `from`
+
+Returning a `ref` from a function is only valid when the returned reference derives from a value that outlives the caller. The compiler enforces this through three cases:
+
+**Case 1 — Method returning from `this` (implicit, no annotation):**
+
+```bestie
+class User {
+    val name: str
+    fun getName(): ref str {
+        return ref this.name    // ✅ derives from this — always safe
+    }
+}
+```
+
+**Case 2 — Single `ref` parameter (lifetime elision, no annotation):**
+
+When a function has exactly one `ref` input, the returned `ref` is assumed to derive from it:
+
+```bestie
+fun first(xs: ref list<T>): ref T {
+    return ref xs[0]    // ✅ only one ref input — derivation is unambiguous
+}
+```
+
+**Case 3 — Multiple `ref` parameters (`from` annotation required):**
+
+When derivation is ambiguous, `from` makes it explicit:
+
+```bestie
+fun longer(a: ref str, b: ref str): ref str from a, b {
+    return if (a.len > b.len) ref a else ref b
+}
+```
+
+`from a, b` tells the compiler: the returned `ref` may originate from either `a` or `b`. The caller must ensure both outlive the result.
+
+**Returning a ref to a local is always a compile error:**
+
+```bestie
+fun bad(): ref int {
+    val x = 42
+    return ref x    // ❌ compile error: x doesn’t outlive the caller
+}
+```
+
+---
+
+### 13.4 Rule: No `ref` Across Thread Boundaries
+
+The compiler rejects any `ref` passed into a thread closure at the point of thread creation:
+
+```bestie
+val x = 42
+val r = ref x
+threadOs.of(() => print(r))    // ❌ compile error: ref cannot cross thread boundary
+```
+
+Immutable values and `own` transfers (via `move`) are the safe alternatives. See `concurrency.md`.
+
+---
+
+### 13.5 What the Compiler Checks vs. What It Does Not
+
+| Rule | How enforced |
+| ---- | ------------ |
+| `ref` doesn’t outlive source | Scope-based liveness analysis |
+| No move while borrowed | Flow-sensitive borrow tracking within function body |
+| `ref` not stored in fields | Type system |
+| `ref` doesn’t cross thread boundaries | Thread closure analysis |
+| Returned `ref` derives from valid input | `from` annotation + single-input elision |
+| `ptr<T>` bounds | Only when statically provable |
+
+**Not checked by the compiler:**
+
+* Aliasing of two `ref T` to the same value within a single thread — programmer responsibility, same as C
+* Validity of `ptr<T>` beyond static bounds — programmer responsibility
+
+This is not as strict as Rust’s exclusive `&mut` model, but it is significantly safer than C: no dangling refs for `own` values, no use-after-move, and no cross-thread ref races. The tradeoff favors simplicity and C-level performance.
+
+---
+
+## 14. Concurrency Rules
 
 * `own` values cannot be implicitly shared
-* `ref` cannot cross threads
-* `ptr<T>` crossing threads is explicit and unsafe
+* `ref` cannot cross thread boundaries (compile-time enforced — see 13.4)
+* `ptr<T>` crossing threads is explicit and programmer-owned
 
 These rules ensure:
 
@@ -568,7 +708,7 @@ These rules ensure:
 
 ---
 
-## 14. Explicit Unsafe Boundary
+## 15. Explicit Unsafe Boundary
 
 Bestie exposes low-level operations directly instead of hiding them.
 
@@ -583,11 +723,11 @@ Contract:
 * Unsafe power is explicit in source code
 * Ownership is never inferred from pointers
 * The compiler rejects statically provable misuse
-* Non-provable misuse remains the programmer's explicit responsibility
+* Non-provable misuse remains the programmer’s explicit responsibility
 
 ---
 
-## 15. FFI Pointer Rules
+## 16. FFI Pointer Rules
 
 When interacting with foreign systems:
 
@@ -608,7 +748,7 @@ FFI APIs must document pointer ownership explicitly.
 
 ---
 
-## 16. What This Model Rejects
+## 17. What This Model Rejects
 
 Explicitly rejected designs:
 
@@ -618,10 +758,11 @@ Explicitly rejected designs:
 * Unsafe blocks
 * Borrow inference complexity
 * Runtime lifetime tracking
+* Lifetime parameters in type fields
 
 ---
 
-## 17. Summary
+## 18. Summary
 
 Bestie’s memory and ownership model is:
 
@@ -634,6 +775,7 @@ Bestie’s memory and ownership model is:
 `own` answers **who frees**
 `ref` answers **who borrows**
 `ptr<T>` answers **where in memory**
+`from` answers **where a returned ref originates**
 
 Memory is not managed *for* the developer.
 Memory is managed **with** the developer — explicitly, safely, and predictably.

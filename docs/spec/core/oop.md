@@ -98,11 +98,12 @@ Bestie supports **multiple explicit class shapes**, each with strict guarantees.
 
 **Properties:**
 
-* Fields only
-* Immutable by default
+* Fields only — all fields are `val`, always
+* Deeply immutable — no mutable state anywhere in the graph
 * No identity semantics
 * No inheritance
 * No virtual methods
+* Always thread-safe
 
 ```bestie
 data class User {
@@ -113,9 +114,15 @@ data class User {
 
 **Rules:**
 
+* All fields are implicitly `val` — `var` fields are **forbidden**
+* Fields holding collections must use `.immutable` collections
 * Cannot be open or inherited
 * Cannot declare `protec` members
 * Inner classes must be `priv value class` only
+* Cannot use `ext`
+* May use `impl` with protocols (static dispatch only)
+
+If you need mutable fields, use a regular `class` instead.
 
 ---
 
@@ -223,7 +230,18 @@ open class Shape {
 * Virtual methods must be explicitly annotated with `@virtual`
 * `@override` mandatory
 * Single inheritance only
-* `open class` that is not subclassed triggers a compiler warning
+
+**Warning — unsubclassed `open` within module:**
+
+An `internal open class` with no subclasses anywhere in the module triggers a **compiler warning**:
+
+```
+warning: 'Shape' is declared open but has no subclasses — consider removing 'open'
+```
+
+The intent is to discourage the habit of marking classes open preemptively ("just in case we need to subclass it later"). `open` is a deliberate design decision, not a default safety net.
+
+`pub open class` and `protec open class` do **not** trigger this warning — external modules or subclasses within the hierarchy may extend them, and the compiler cannot know at module compile time.
 
 ---
 
@@ -275,10 +293,82 @@ protocol Object ext Hashable, Comparable, Printable
 
 * All parent protocol methods are included
 * Method resolution is compile-time
-* No diamond ambiguity
-* Conflicting defaults must be resolved explicitly
+* Protocols **do not form runtime hierarchies**
 
-Protocols **do not form runtime hierarchies**.
+---
+
+### 4.2 Default Method Conflict Resolution
+
+Conflict resolution follows the same rules as Java interfaces:
+
+---
+
+**Rule 1 — Class implementation always wins:**
+
+A concrete implementation in the class takes priority over any protocol default, regardless of how many protocols are involved.
+
+```bestie
+protocol A { fun greet(): str = "A" }
+
+class C impl A {
+    fun greet(): str = "C"    // wins — class beats protocol default
+}
+```
+
+---
+
+**Rule 2 — More specific protocol wins:**
+
+If protocol `B ext A` overrides a default from `A`, `B`'s version takes priority when a class implements `B`.
+
+```bestie
+protocol A { fun greet(): str = "A" }
+protocol B ext A { fun greet(): str = "B" }   // more specific
+
+class C impl B {
+    // no override needed — B.greet wins over A.greet
+}
+```
+
+---
+
+**Rule 3 — Ambiguous conflict requires explicit resolution:**
+
+When two independent protocols provide conflicting defaults and neither is more specific, the implementing class **must** explicitly override and resolve by calling the desired protocol's default via `Protocol.method(this)`:
+
+```bestie
+protocol A { fun greet(): str = "A" }
+protocol B { fun greet(): str = "B" }
+
+class C impl A, B {
+    @override
+    fun greet(): str = A.greet(this)    // explicit — pick A's default
+}
+```
+
+Without the explicit override, the compiler emits a **compile-time error**:
+
+```
+error: 'C' inherits conflicting defaults for 'greet' from protocols A and B — must override explicitly
+```
+
+---
+
+**Rule 4 — Class hierarchy beats protocol defaults:**
+
+A method inherited from a parent class takes priority over a protocol default, even if the protocol is implemented lower in the hierarchy.
+
+```bestie
+open class Base {
+    fun greet(): str = "Base"
+}
+
+protocol A { fun greet(): str = "A" }
+
+class Child ext Base impl A {
+    // Base.greet wins — no override needed, no conflict
+}
+```
 
 ---
 
@@ -352,11 +442,14 @@ Rules:
 
 ### 6.1 Default Implementation Resolution
 
-Order:
+Priority order (highest to lowest):
 
-1. Parent class
-2. Concrete subclass implementation
-3. Protocol default implementation
+1. Concrete implementation in the class itself
+2. Method inherited from the parent class
+3. More specific protocol default (protocol that extends another)
+4. Protocol default implementation
+
+When two protocol defaults are equally specific and conflict, explicit resolution is required — see section 4.2 Rule 3.
 
 Protocol defaults are **never implicitly chained**.
 
@@ -371,16 +464,19 @@ Inheritance in Bestie is explicit:
 
 ## 7. Visibility Modifiers
 
-Supported:
-
-* `pub` | `pkg` | `protec` | `priv`
+| Modifier | Scope                                             |
+| -------- | ------------------------------------------------- |
+| `pub`    | Visible outside the module (exported API)         |
+| `internal`    | Visible anywhere within the same module (default) |
+| `protec` | Visible to subclasses only                        |
+| `priv`   | Visible inside the declaring type only            |
 
 **Rules:**
 
+* `internal` is the default — no modifier means `internal`
 * Top-level declarations cannot be `priv`
-* `pkg` is default
-* `protec` applies only to inheritance
-* Inner declarations cannot widen visibility
+* `protec` applies only within inheritance hierarchies
+* Inner declarations cannot widen visibility beyond their enclosing declaration
 
 ---
 
@@ -518,19 +614,29 @@ Rules:
 
 ## 13. Thread Safety Guarantees
 
-Always thread-safe:
+Thread safety comes from the **type**, not the binding. `val` makes a binding immutable — it does not make the value deeply immutable or safe to share across threads.
 
-* data class
-* value class
-* enum
-* immutable classes
-* effectively immutable classes (all fields are val)
+Always thread-safe — deep immutability is declared explicitly:
+
+* `data class` — value semantics, no identity
+* `value class` — value semantics, no identity
+* `enum` — closed, no mutable state
+* Classes annotated `@immutable` — deep immutability enforced by the compiler
+* Primitive types (`int`, `float64`, `bool`, `char`, etc.)
+* Immutable collections — created via `.immutable` builder: `list<T>.immutable.build()`, `set<T>.immutable.build()`, etc.
+* `const` values — stored in read-only memory
+
+**Not** automatically thread-safe:
+
+* `val xs: list<int>` — the binding is immutable, but the list is mutable
+* A class with all `val` fields, if any field holds a mutable collection or a mutable class
+* `open class` and regular `class` instances unless annotated `@immutable`
 
 User responsibility:
 
-* open classes
-* mutable state
-* singleton-style global objects implemented in std-lib patterns
+* `open class` and mutable classes — use locks or ownership transfer
+* Mutable collections — use `.concurrent` builder or ownership transfer
+* Singleton-style global objects — use atomics or locks from std-api
 
 ---
 

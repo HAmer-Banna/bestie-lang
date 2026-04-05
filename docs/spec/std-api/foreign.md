@@ -93,11 +93,14 @@ Supported ABI tags:
 
 | Bestie   | C         |
 | -------- | --------- |
-| `int`    | `int32_t` |
-| `int64`  | `int64_t` |
-| `bool`   | `_Bool`   |
-| `byte`   | `uint8_t` |
-| `ptr<T>` | `T*`      |
+| `int`    | `intptr_t` |
+| `int32`  | `int32_t`  |
+| `int64`  | `int64_t`  |
+| `uint`   | `uintptr_t` / `size_t` |
+| `bool`   | `_Bool`    |
+| `byte` / `uint8` | `uint8_t` |
+| `char`   | `uint32_t` (Unicode scalar) |
+| `ptr<T>` | `T*`       |
 
 ---
 

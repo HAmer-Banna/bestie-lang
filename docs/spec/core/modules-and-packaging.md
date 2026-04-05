@@ -225,8 +225,10 @@ package net.http.client
 Rules:
 
 * Folder structure must match package structure
-* Packages never imply visibility
-* Packages cannot be imported across modules without dependency
+* Packages are **namespaces only** — they never gate or grant visibility
+* Visibility is determined by the module boundary, not the package
+* Two files in different packages within the same module can access each other's `internal` members
+* Packages cannot be imported across modules without a declared dependency
 * Packages do not participate in export logic
 
 ---
@@ -237,20 +239,25 @@ Rules:
 
 Bestie supports four visibility levels:
 
-| Modifier | Scope                             |
-| -------- | --------------------------------- |
-| `pub`    | Visible outside the module        |
-| `pkg`    | Visible inside the package        |
-| `protec` | Visible to subclasses             |
-| `priv`   | Visible inside the declaring type |
+| Modifier | Scope                                              |
+| -------- | -------------------------------------------------- |
+| `pub`    | Visible outside the module (exported API)          |
+| `internal`    | Visible anywhere within the same module (default)  |
+| `protec` | Visible to subclasses only                         |
+| `priv`   | Visible inside the declaring type only             |
+
+`internal` is the default visibility when no modifier is written. Any file within the same module can access an `internal` symbol, regardless of which package it belongs to — packages are namespaces only and never gate visibility.
 
 ---
 
 ### 6.2 Module Boundary Rule
 
-* The module boundary is the **primary visibility boundary**
+* The module boundary is the **primary and only visibility boundary**
+* `pub` — crosses the module boundary (exported API)
+* `internal` — stays within the module boundary (internal API)
+* `protec` and `priv` — stay within the type hierarchy
 * Only `pub` symbols may be exported
-* `pub` symbols not listed in `exports` are compile-time errors
+* `pub` symbols not listed in the module `exports` are compile-time errors
 
 Nothing is exported accidentally.
 
@@ -284,7 +291,7 @@ pub data class Url(
 The following can never be exported:
 
 * `priv` members
-* `pkg` members
+* `internal` members
 * Local classes
 * Local functions
 * Lambdas
