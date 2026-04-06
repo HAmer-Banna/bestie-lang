@@ -182,15 +182,125 @@ protocol Hashable ext Equable<T> {
 
 ---
 
+---
+
+## 7. Operator Overloading Protocols
+
+Bestie supports operator overloading through **explicit protocols**. The compiler lowers operator expressions to protocol method calls at compile time — fully monomorphized, no runtime dispatch, no vtables.
+
+All operator protocols are resolved at compile time. Using an operator on a type that does not implement the corresponding protocol is a **compile-time error**.
+
+---
+
+### 7.1 Arithmetic Operators
+
+```bestie
+protocol Addable<T> {
+    fun add(other: T): T        // a + b
+    fun addAssign(other: T)     // a += b
+}
+
+protocol Subtractable<T> {
+    fun sub(other: T): T        // a - b
+    fun subAssign(other: T)     // a -= b
+}
+
+protocol Multipliable<T> {
+    fun mul(other: T): T        // a * b
+    fun mulAssign(other: T)     // a *= b
+}
+
+protocol Divisible<T> {
+    fun div(other: T): T        // a / b
+    fun divAssign(other: T)     // a /= b
+}
+
+protocol Modulable<T> {
+    fun mod(other: T): T        // a % b
+    fun modAssign(other: T)     // a %= b
+}
+
+protocol Negatable {
+    fun neg(): Self             // -a (unary)
+}
+```
+
+---
+
+### 7.2 Index Operators
+
+```bestie
+protocol Indexable<I, T> {
+    fun get(index: I): T        // a[i]
+}
+
+protocol IndexAssignable<I, T> {
+    fun set(index: I, val: T)   // a[i] = v
+}
+```
+
+---
+
+### 7.3 Lowering Rules
+
+The compiler lowers operator syntax to protocol calls at compile time:
+
+| Syntax   | Lowered to          |
+| -------- | ------------------- |
+| `a + b`  | `a.add(b)`          |
+| `a - b`  | `a.sub(b)`          |
+| `a * b`  | `a.mul(b)`          |
+| `a / b`  | `a.div(b)`          |
+| `a % b`  | `a.mod(b)`          |
+| `-a`     | `a.neg()`           |
+| `a += b` | `a.addAssign(b)`    |
+| `a[i]`   | `a.get(i)`          |
+| `a[i]=v` | `a.set(i, v)`       |
+
+`==` and `!=` are lowered via `Equable`. `<`, `>`, `<=`, `>=` are lowered via `Comparable`.
+
+---
+
+### 7.4 Example
+
+```bestie
+data class Vec2 {
+    x: float64
+    y: float64
+}
+
+impl Vec2 : Addable<Vec2> {
+    fun add(other: Vec2): Vec2 = Vec2(x + other.x, y + other.y)
+    fun addAssign(other: Vec2) { x += other.x; y += other.y }
+}
+
+val a = Vec2(1.0, 2.0)
+val b = Vec2(3.0, 4.0)
+val c = a + b    // compile-time lowered to a.add(b)
+```
+
+---
+
+### 7.5 Rules
+
+* Operator protocols are **opt-in** — no type is forced to implement them
+* All dispatch is **static** — fully resolved at compile time
+* Implementing an assign variant (`addAssign`) requires the type to be mutable
+* `Self` in `Negatable` refers to the implementing type
+* Mixed-type operators (e.g. `Vec2 + float64`) are supported by parameterizing `T` differently: `impl Addable<float64>`
+
+---
+
 ## Summary
 
 The utility package provides:
 
 * Canonical utility for efficient string construction (`StringBuilder`)
-* Explicit absence modeling (`option`)
-* Typed failure (`result`)
+* Explicit absence modeling (`Option`)
+* Typed failure (`Result`)
 * Structural equality (`Equable`)
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)
+* Operator overloading (`Addable`, `Subtractable`, `Multipliable`, `Divisible`, `Modulable`, `Negatable`, `Indexable`, `IndexAssignable`)
 
 These utilities establish the rhythm of Bestie’s standard library: **explicit, orthogonal, and compiler-verifiable**.
