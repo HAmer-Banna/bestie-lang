@@ -73,32 +73,46 @@ Bestie provides three binding forms.
 
 ### 4.1 `const` — Compile-Time Constant
 
-`const` defines an immutable binding and immutable value resolved entirely at compile time.
+`const` defines a binding whose value is resolved **entirely at compile time** — both the binding and the value are permanently immutable.
 
-Properties:
+```bestie
+const PI: float64 = 3.14159265358979323846
+const MAX_CONNECTIONS: int = 1024
+const APP_NAME: str = "bestie-server"
+const BUFFER_SIZE: int = MAX_CONNECTIONS * 64   // other consts allowed
+```
 
-* Immutable binding and value
-* No runtime allocation
-* No mutation through references
-* Cannot reference mutable or runtime memory
-* Stored in read-only memory
+**Valid right-hand-side expressions:**
 
-Valid scopes:
+* Literals (`42`, `3.14`, `"hello"`, `true`)
+* Other `const` values
+* Arithmetic on `const` values — evaluated at compile time
+* `@pure` function calls where all arguments are `const` — the call is evaluated at compile time and the result becomes the constant's value
 
-* File
-* Class
-* Protocol
+**Valid scopes:**
 
-Invalid scopes:
+| Scope | Behavior |
+| ----- | -------- |
+| Module level | Placed in `.rodata`. If never addressed (no `ptr` to it), inlined as an immediate operand everywhere — zero memory access. |
+| Class / protocol body | Same as module level; scoped to the type namespace. |
+| Function body (local const) | Always inlined as an immediate — no stack slot allocated, no load instruction emitted. |
 
-* Function parameters
-* Runtime locals
+**Invalid:**
 
-Intended use:
+* `const` whose RHS contains a runtime value (`val`, `var`, function return, I/O) — compile error
+* `const` function parameter — parameters are always runtime values; use a type constraint instead
 
-* Mathematical constants
-* Compile-time configuration
-* Type-level invariants
+**Object file behavior:**
+
+A `const` that is never taken by address compiles to **zero bytes of data** — the value is substituted as an immediate operand at every use site. When its address is taken, it occupies a single slot in `.rodata` shared across the entire binary.
+
+```bestie
+// function-level const: inline into every use, no stack frame impact
+fun circleArea(r: float64): float64 {
+    const TAU: float64 = 6.28318530717958647692
+    return TAU * r * r / 2.0     // TAU is an immediate in the generated instruction
+}
+```
 
 ---
 
@@ -334,6 +348,267 @@ val good = m + m   // ✅ Meters inherits float64's + operator
 ```
 
 **If full interchangeability is needed**, use the original type directly. `type X as Y` is always a newtype — there is no alias-without-distinction form.
+
+---
+
+### 6.2 Value Range Constraints (`in`)
+
+A type may carry a **compile-time value range** using the `in` keyword. The range becomes part of the type's invariant — the compiler treats it as a guaranteed fact at every use site.
+
+```bestie
+type Score       as int32   in 0..=100
+type Port        as uint16  in 1..=65535
+type Probability as float64 in 0.0..=1.0
+type AsciiChar   as uint8   in 0..=127
+```
+
+Range constraints work on **any numeric type** — integers, unsigned integers, and floats.
+
+---
+
+#### Construction
+
+A constrained value must be constructed explicitly. The compiler validates at the construction point — never at use sites.
+
+**From a compile-time constant** — validated at compile time, zero runtime cost:
+
+```bestie
+const MAX: Score = 100 as Score   // ✅ 100 is in 0..=100 — compile-time verified
+const BAD: Score = 200 as Score   // ❌ compile error: 200 out of range 0..=100
+```
+
+**From a runtime value** — validated at runtime, returns an error on failure:
+
+```bestie
+val s = try (userInput as Score)   // ✅ returns ! RangeError if out of range
+```
+
+The check is a single compare + conditional branch at the construction site. After that, the value is trusted everywhere.
+
+**Unchecked construction** — for performance-critical paths where the programmer can guarantee the value is in range:
+
+```bestie
+@trusted val s = (userInput as Score)   // no runtime check — programmer's responsibility
+```
+
+`@trusted` suppresses the check. It is visible in code review and searchable. It carries the same responsibility as `ptr<T>` — correctness is on the programmer. Out-of-range values in a `@trusted` cast produce undefined behavior.
+
+---
+
+#### Inline Constraints on Parameters
+
+Range constraints can be applied inline on function parameters without declaring a named type:
+
+```bestie
+fun setVolume(level: int32 in 0..=100): void { ... }
+fun lerp(t: float64 in 0.0..=1.0, a: float64, b: float64): float64 { ... }
+```
+
+An inline constraint is an anonymous constrained type. The same construction and validation rules apply at the call site.
+
+---
+
+#### What the Compiler Does With Range Information
+
+This is where range constraints create binary-level differences. Every piece of range information is a fact the compiler exploits without the programmer doing anything further.
+
+**1. Single validation point — no repeated checks**
+
+The check happens once at construction. Every subsequent use of the value is bounds-check-free. A `Score` passed through ten functions never re-validates.
+
+**Object file impact:** Eliminates a `cmp + jae/jb` pair at every use. In a hot loop over a list of `Score` values, this removes N branches for N iterations.
+
+---
+
+**2. Array bounds check elimination**
+
+When a range-constrained value is used as an index into a collection whose size matches or exceeds the range, the bounds check is eliminated entirely:
+
+```bestie
+val table: list<str>[101]   // indices 0..=100
+val s: Score                // guaranteed 0..=100
+
+val name = table[s]         // ✅ no bounds check emitted — range ⊆ [0..=100]
+```
+
+**Object file impact:** Removes the `cmp + conditional-branch` before the load instruction. In SIMD loops over indexed lookups, this also unblocks vectorization (bounds checks are a barrier to auto-vectorization).
+
+---
+
+**3. Enum niche optimization**
+
+When a range-constrained type is used inside an `enum` payload, the unused bit patterns of the underlying type are available to the compiler to encode the discriminant — eliminating the tag field entirely.
+
+```bestie
+type Score as int32 in 0..=100
+// valid bit patterns: 0..=100
+// unused bit patterns: 101..=2^31-1 (over 2 billion niches)
+
+enum GameResult {
+    Win(Score)    // compiler uses bit patterns 101+ to encode the Lose/Draw discriminants
+    Lose
+    Draw
+}
+// sizeof(GameResult) == sizeof(int32) — no separate tag field
+```
+
+**Object file impact:** Saves 4–8 bytes per `enum` instance (the eliminated tag field + its padding). In a `list<GameResult>`, every element is 4 bytes instead of 8 — twice the elements fit in a cache line.
+
+---
+
+**4. Arithmetic overflow elimination**
+
+When the compiler can prove that arithmetic on range-constrained values stays within the valid range of the result type, overflow checks are eliminated:
+
+```bestie
+type Byte as uint8 in 0..=200
+
+val a: Byte
+val b: Byte
+val sum = (a as uint16) + (b as uint16)   // max = 400, fits in uint16 — no overflow possible
+```
+
+**Object file impact:** Eliminates `jo`/`jno` (overflow flag checks) or the `ADDS`/`ADDV` with branch instructions on ARM. In arithmetic-heavy loops, this is a measurable throughput improvement.
+
+---
+
+**5. Smaller internal storage (struct packing)**
+
+When a range-constrained type's range fits within a smaller underlying type, the compiler may use smaller storage **within struct layouts** while preserving the declared type in function signatures and operations.
+
+```bestie
+type WeekDay as int32 in 0..=6
+// range fits in 3 bits / 1 byte — compiler uses uint8 storage in structs
+```
+
+The declared type (`int32`) governs arithmetic and ABI. The compiler chooses the minimum storage in struct fields transparently.
+
+**Object file impact:** A struct with four `WeekDay` fields uses 4 bytes instead of 16. Better cache density.
+
+---
+
+**6. Float constraints eliminate NaN/Inf checks**
+
+A `float64 in 0.0..=1.0` is guaranteed finite and in range. The compiler can:
+- Skip `isNaN` / `isInfinite` guards before using the value
+- Apply SIMD strategies that are only valid for finite, bounded floats
+- Use approximation instructions (`RCPPS`, `RSQRTPS`) without correctness concerns
+
+---
+
+#### Rules
+
+* The `in` range uses the same `..` (exclusive) / `..=` (inclusive) syntax as range literals
+* Both bounds must be **compile-time constants**
+* The range must be a valid subrange of the underlying type's full range — `uint8 in -1..=100` is a compile error
+* `const` construction is always compile-time validated — no runtime check, no code emitted
+* Runtime construction via `try (x as T)` emits one check at the construction site only
+* Range information propagates through `type X as Y in range` — the newtype inherits the constraint
+* Two constrained types with different ranges are distinct types even if they share the underlying type
+
+---
+
+### 6.3 Compact Representation Guarantee
+
+The Bestie compiler is **obligated** to use the minimum valid representation for every type. This is not a quality-of-implementation optimization — it is a spec requirement. The compiler must never use more bits or bytes than the type's value set requires.
+
+This applies everywhere the compiler has type-level information: enum discriminants, payload types, struct fields, bool values, characters, sealed hierarchies, and any other composite type.
+
+---
+
+#### Enum Discriminant Sizing
+
+The discriminant (tag field) of an enum uses the minimum integer type needed to encode all variants. No enum pays for a 4-byte tag when 1 byte is sufficient.
+
+| Variant count | Discriminant storage | Bytes |
+| ------------- | -------------------- | ----- |
+| 2             | `uint1` (stored as `uint8`) | 1 |
+| 3 – 256       | `uint8`              | 1     |
+| 257 – 65 536  | `uint16`             | 2     |
+| 65 537+       | `uint32`             | 4     |
+
+```bestie
+enum Direction { North, South, East, West }
+// 4 variants → uint8 discriminant → 1 byte tag (not 4)
+```
+
+**Object file impact:** A struct containing a `Direction` field uses 1 byte for the tag, not 4. After field reordering, this tag may share a padding gap that already existed — net cost zero.
+
+---
+
+#### Niche Optimization — Discriminant-Free Enums
+
+When a payload type has **invalid bit patterns** (values the type can never legally hold), the compiler uses those patterns to encode discriminant values — eliminating the tag field entirely.
+
+The compiler performs niche analysis automatically. No annotation required.
+
+**Types with known niches:**
+
+| Type | Valid patterns | Available niches |
+| ---- | -------------- | ---------------- |
+| `bool` | `0`, `1` | 254 niche patterns (2–255) |
+| `char` | `0..=0xD7FF`, `0xE000..=0x10FFFF` | All surrogate and out-of-range codepoints |
+| `ptr<T>` (from `own`) | Non-null | `null` (0x0) — 1 niche |
+| `uint8 in 0..=200` | `0..=200` | 55 niche patterns (201–255) |
+
+```bestie
+enum MaybeChar {
+    Some(char)   // char has invalid codepoints — compiler uses one as the None discriminant
+    None
+}
+// sizeof(MaybeChar) == sizeof(char) == 4 bytes. No separate tag field.
+
+enum NonNullPtr {
+    Live(own Foo)   // own Foo is never null — compiler uses null as the Dead discriminant
+    Dead
+}
+// sizeof(NonNullPtr) == sizeof(ptr) — no tag byte
+```
+
+**Niche selection:** The compiler assigns niches greedily — most structurally constrained variant first. For enums with multiple payloads, the payload with the most available niches is analyzed first.
+
+**Object file impact:** Eliminates 1–8 bytes per enum instance (the tag field and its padding). In a `list<MaybeChar>`, every element is 4 bytes instead of 8 — twice the density per cache line.
+
+---
+
+#### Bool Representation
+
+`bool` is always stored as 1 byte. The values `0` and `1` are the only valid bit patterns. The compiler treats any use of a `bool` value as known to be in `{0, 1}` — no masking, no widening checks needed when promoting to a wider integer type.
+
+Multiple `bool` fields in a struct are **not** automatically bit-packed (bit-packing has read-modify-write cost on writes). They benefit from field reordering — consecutive `bool` fields are grouped, consuming the minimum number of bytes with no padding between them.
+
+---
+
+#### `char` Representation
+
+`char` is a 32-bit Unicode scalar. The valid range is `0..=0xD7FF` and `0xE000..=0x10FFFF`. The surrogate range (`0xD800..=0xDFFF`) and values above `0x10FFFF` are permanently invalid. The compiler exploits these as niches in enum payloads without any programmer action.
+
+---
+
+#### Sealed Class Type Tag
+
+A `sealed` class hierarchy has a finite, compile-time-known set of concrete types. The compiler uses a **minimum-size type tag** — the same sizing rule as enum discriminants — instead of a vtable pointer.
+
+```bestie
+sealed class Shape permits Circle, Rectangle, Triangle
+// 3 implementors → uint8 type tag → 1 byte (not a pointer-sized vtable)
+```
+
+Dispatch through a sealed type uses a `switch` on the tag byte, not an indirect call through a vtable. This eliminates the vtable pointer load and the indirect branch.
+
+---
+
+#### General Principle
+
+The compact representation guarantee extends to every place the compiler stores a discriminant, tag, flag, or type identifier:
+
+* Enum discriminants — minimum integer size
+* Niche optimization — zero bytes when payload has available invalid patterns
+* Sealed type tags — minimum integer size, not pointer-sized
+* `bool` fields — 1 byte, grouped by field reordering, no hidden padding
+* `char` — niches available to enclosing enum
+
+The programmer does nothing to enable this. It is the compiler's obligation. The only exception is types marked `@layout(stable)` for FFI compatibility — those are laid out exactly as declared and exempt from all reordering and compaction.
 
 ---
 

@@ -125,13 +125,133 @@ The compiler enforces exhaustiveness — missing variants are compile-time error
 
 ---
 
-## 3. Panics — Unrecoverable Faults
+## 3. Error Set Composition
+
+Error sets are **composable at compile time**. Multiple error sets can be combined into a larger set — either named or anonymous. The compiler verifies composition at every `try` call site.
+
+---
+
+### 3.1 Named Error Set Union
+
+A named error set can be declared as the union of existing sets:
+
+```bestie
+errors FileError = ParseError | IoError
+```
+
+`FileError` is a new flat error set whose variants are the union of all variants from `ParseError` and `IoError`. At runtime it is an integer tag — same representation as any other error set, just with more variants. The discriminant size follows the compact representation rules (§6.3 of `lang.md`).
+
+Named unions can chain:
+
+```bestie
+errors AppError = FileError | NetworkError | AuthError
+```
+
+No nesting at runtime. `AppError` is always a flat set of integer tags.
+
+---
+
+### 3.2 Anonymous Union in Function Signatures
+
+When a function can fail with errors from multiple sets, the union is written inline:
+
+```bestie
+fun process(path: str): int ! (ParseError | IoError)
+```
+
+Anonymous unions follow the same rules as named ones — flat, compact, exhaustively matchable. They are not a separate type from a named equivalent; `ParseError | IoError` and `FileError` (if declared identically) are structurally identical.
+
+---
+
+### 3.3 Subset Propagation — `try` Across Error Types
+
+`try` works across error set boundaries when the callee's error type is a **subset** of the caller's error type. The compiler verifies this statically. No explicit conversion, no runtime cost — the error tag value is valid in the superset unchanged.
+
+```bestie
+errors FileError = ParseError | IoError
+
+fun loadConfig(path: str): Config ! FileError {
+    val raw = try readFile(path)      // readFile returns ! IoError  — IoError ⊆ FileError ✅
+    val cfg = try parse(raw)          // parse returns ! ParseError — ParseError ⊆ FileError ✅
+    return cfg
+}
+```
+
+The compiler checks: is every variant in the callee's error set present in the caller's declared error set? If yes, `try` compiles to a direct propagation — one branch, zero overhead.
+
+If the callee's error type is **not** a subset, the compiler rejects the bare `try` and requires explicit handling (see §3.4).
+
+---
+
+### 3.4 Explicit Error Mapping
+
+When a callee's error type is not a subset of the caller's declared error type, the error must be explicitly converted at the call site:
+
+```bestie
+errors AppError { ConfigBad, NetworkDown, AuthFailed }
+
+fun start(): void ! AppError {
+    // IoError is not a subset of AppError — must map
+    val cfg = try loadConfig("app.toml") catch |e| return AppError.ConfigBad
+
+    // NetworkError is not a subset of AppError — map per variant
+    try connect() catch |e| switch (e) {
+        NetworkError.Timeout    => return AppError.NetworkDown
+        NetworkError.Refused    => return AppError.NetworkDown
+        NetworkError.AuthFailed => return AppError.AuthFailed
+    }
+}
+```
+
+There is no implicit coercion between unrelated error sets. Every boundary crossing is visible in source.
+
+---
+
+### 3.5 Inferred Error Type (`!` without a set)
+
+A function declared with bare `!` (no named set) has its error type **inferred by the compiler** from the body:
+
+```bestie
+fun run(): void ! {
+    val n = try parse("123")      // contributes ParseError
+    val f = try readFile("x.txt") // contributes IoError
+    // inferred return type: void ! (ParseError | IoError)
+}
+```
+
+The inferred type is the union of all error sets reachable via `try` in the body. It is resolved at compile time and written into the compiled signature — callers see the full concrete type.
+
+Bare `!` is a convenience for functions where enumerating the full union upfront would be verbose. It does not weaken exhaustiveness or type safety — callers still see and handle the full set.
+
+---
+
+### 3.6 ABI — How `!` Returns Are Represented
+
+A function returning `T ! E` uses a **register pair** on all targets:
+
+| Register | Content on success | Content on error |
+| -------- | ------------------ | ---------------- |
+| Return register(s) | The `T` value | Undefined |
+| Error register | `0` (no error) | Error tag (non-zero) |
+
+On x86_64: `rax`/`xmm0` carries `T`, `rdx` carries the error tag.
+On ARM64: `x0`/`v0` carries `T`, `x1` carries the error tag.
+
+The error tag is a compact integer — its size follows §6.3 (minimum discriminant size). A 3-variant error set uses a `uint8` tag; the upper bytes of the error register are zero-extended.
+
+For types `T` too large to fit in return registers, the caller passes a pointer to a result slot and the callee writes either `T` or the error tag into it via a discriminant flag at the slot's start.
+
+**Zero overhead on the success path:** checking `rdx == 0` is a single comparison the branch predictor learns immediately. No allocation, no stack walk, no heap touch.
+
+---
+
+## 4. Panics — Unrecoverable Faults
 
 A panic represents a **violated invariant**. The program cannot recover meaningfully. Panics terminate execution.
 
 **Panics cannot be caught.** There is no mechanism to intercept them.
 
-### 3.1 Sources of Panics
+### 4.1 Sources of Panics
 
 * Division by zero
 * Stack overflow
@@ -140,7 +260,7 @@ A panic represents a **violated invariant**. The program cannot recover meaningf
 * Explicit `panic()` call
 * Failed `assert()`
 
-### 3.2 Behavior by Build Mode
+### 4.2 Behavior by Build Mode
 
 | Build mode | Panic behavior                            |
 | ---------- | ----------------------------------------- |
@@ -150,13 +270,13 @@ A panic represents a **violated invariant**. The program cannot recover meaningf
 
 Build mode is set in `bestie-project.toml`.
 
-### 3.3 Explicit Panic
+### 4.3 Explicit Panic
 
 ```bestie
 panic("unreachable state reached")
 ```
 
-### 3.4 Assertions
+### 4.4 Assertions
 
 ```bestie
 assert(x > 0)                          // panics if false
@@ -203,6 +323,9 @@ fun readConfig(path: str): str ! IoError {
 4. Error set exhaustiveness in `switch` is **compile-time enforced**.
 5. Panics are **not catchable** — no mechanism exists to intercept them.
 6. `assert()` conditions are **compile-time evaluated when possible**.
+7. `try` across error set boundaries is valid only when the callee's set is a **subset** of the caller's declared set — verified at compile time.
+8. Bare `!` inferred types are resolved fully at compile time — the inferred type is concrete and visible in the compiled signature.
+9. Named error set unions (`errors A = B | C`) are resolved at compile time to a flat set of variants — no runtime nesting.
 
 ---
 
