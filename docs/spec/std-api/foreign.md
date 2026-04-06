@@ -147,17 +147,31 @@ own buf = Memory.wrap(alloc(128), size = 128)
 
 ## 7. No-Null Guarantee Preservation
 
-Foreign APIs may return null pointers.
+Bestie has no `null`, no `nil`, and no nullable pointer type. These concepts do not exist in the language. A `ptr<T>` in Bestie code is always treated as a valid address — it is programmer responsibility to not construct an invalid one.
 
-Bestie requires **explicit handling**:
+C APIs routinely return nullable pointers. At the FFI boundary, Bestie maps them to `option<ptr<T>>`:
 
 ```bestie
-foreign fun getenv(ptr<char>): ptr<char> | null
+// C: char* getenv(const char* name);  — may return NULL
+foreign fun getenv(name: ptr<char>): option<ptr<char>>
 ```
 
-Null must be checked before use.
+The FFI layer performs the mapping automatically:
+- C `NULL` (zero address) → `option.Not_Present`
+- Any non-zero C pointer → `option.Present(ptr<T>)`
 
-No implicit null propagation is allowed.
+The caller handles the result with pattern matching — the same as any other `option<T>`:
+
+```bestie
+switch (getenv("PATH")) {
+    option.Present(val p) => usePathPtr(p)
+    option.Not_Present    => println("PATH not set")
+}
+```
+
+**`null` is not a keyword, a type, a value, or a literal in Bestie.** It cannot appear anywhere in Bestie source code. Any C function that may return `NULL` must be declared with `option<ptr<T>>` as its return type — the compiler rejects a bare `ptr<T>` return for known-nullable C functions.
+
+No implicit null propagation is possible because null does not exist to propagate.
 
 ---
 

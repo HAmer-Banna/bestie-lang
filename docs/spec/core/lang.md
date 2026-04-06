@@ -544,12 +544,14 @@ The compiler performs niche analysis automatically. No annotation required.
 
 **Types with known niches:**
 
-| Type | Valid patterns | Available niches |
+| Type | Valid bit patterns | Available niches |
 | ---- | -------------- | ---------------- |
 | `bool` | `0`, `1` | 254 niche patterns (2–255) |
 | `char` | `0..=0xD7FF`, `0xE000..=0x10FFFF` | All surrogate and out-of-range codepoints |
-| `ptr<T>` (from `own`) | Non-null | `null` (0x0) — 1 niche |
+| `ptr<T>` (from `own`) | Any non-zero address | Zero address (0x0) — 1 niche |
 | `uint8 in 0..=200` | `0..=200` | 55 niche patterns (201–255) |
+
+> **Note:** Bestie has no `null` value — the zero address (0x0) is an **internal bit pattern** used only by the compiler as a niche slot. It is never a language-level value, never expressible in Bestie source code, and never returned from safe Bestie functions. The niche mechanism is entirely transparent to the programmer.
 
 ```bestie
 enum MaybeChar {
@@ -559,7 +561,7 @@ enum MaybeChar {
 // sizeof(MaybeChar) == sizeof(char) == 4 bytes. No separate tag field.
 
 enum NonNullPtr {
-    Live(own Foo)   // own Foo is never null — compiler uses null as the Dead discriminant
+    Live(own Foo)   // own Foo is always a valid address — compiler uses 0x0 as the Dead discriminant
     Dead
 }
 // sizeof(NonNullPtr) == sizeof(ptr) — no tag byte

@@ -117,8 +117,8 @@ data class User {
 * All fields are implicitly `val` — `var` fields are **forbidden**
 * Fields holding collections must use `.immutable` collections
 * Cannot be open or inherited
-* Cannot declare `protec` members
-* Inner classes must be `priv value class` only
+* Cannot declare `protected` members
+* Inner classes must be `private value class` only
 * Cannot use `ext`
 * May use `impl` with protocols (static dispatch only)
 
@@ -241,7 +241,7 @@ warning: 'Shape' is declared open but has no subclasses — consider removing 'o
 
 The intent is to discourage the habit of marking classes open preemptively ("just in case we need to subclass it later"). `open` is a deliberate design decision, not a default safety net.
 
-`pub open class` and `protec open class` do **not** trigger this warning — external modules or subclasses within the hierarchy may extend them, and the compiler cannot know at module compile time.
+`public open class` and `protected open class` do **not** trigger this warning — external modules or subclasses within the hierarchy may extend them, and the compiler cannot know at module compile time.
 
 ---
 
@@ -466,16 +466,16 @@ Inheritance in Bestie is explicit:
 
 | Modifier | Scope                                             |
 | -------- | ------------------------------------------------- |
-| `pub`    | Visible outside the module (exported API)         |
+| `public`    | Visible outside the module (exported API)         |
 | `internal`    | Visible anywhere within the same module (default) |
-| `protec` | Visible to subclasses only                        |
-| `priv`   | Visible inside the declaring type only            |
+| `protected` | Visible to subclasses only                        |
+| `private`   | Visible inside the declaring type only            |
 
 **Rules:**
 
 * `internal` is the default — no modifier means `internal`
-* Top-level declarations cannot be `priv`
-* `protec` applies only within inheritance hierarchies
+* Top-level declarations cannot be `private`
+* `protected` applies only within inheritance hierarchies
 * Inner declarations cannot widen visibility beyond their enclosing declaration
 
 ---

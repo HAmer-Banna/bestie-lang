@@ -241,10 +241,10 @@ Bestie supports four visibility levels:
 
 | Modifier | Scope                                              |
 | -------- | -------------------------------------------------- |
-| `pub`    | Visible outside the module (exported API)          |
+| `public`    | Visible outside the module (exported API)          |
 | `internal`    | Visible anywhere within the same module (default)  |
-| `protec` | Visible to subclasses only                         |
-| `priv`   | Visible inside the declaring type only             |
+| `protected` | Visible to subclasses only                         |
+| `private`   | Visible inside the declaring type only             |
 
 `internal` is the default visibility when no modifier is written. Any file within the same module can access an `internal` symbol, regardless of which package it belongs to — packages are namespaces only and never gate visibility.
 
@@ -253,11 +253,11 @@ Bestie supports four visibility levels:
 ### 6.2 Module Boundary Rule
 
 * The module boundary is the **primary and only visibility boundary**
-* `pub` — crosses the module boundary (exported API)
+* `public` — crosses the module boundary (exported API)
 * `internal` — stays within the module boundary (internal API)
-* `protec` and `priv` — stay within the type hierarchy
-* Only `pub` symbols may be exported
-* `pub` symbols not listed in the module `exports` are compile-time errors
+* `protected` and `private` — stay within the type hierarchy
+* Only `public` symbols may be exported
+* `public` symbols not listed in the module `exports` are compile-time errors
 
 Nothing is exported accidentally.
 
@@ -269,16 +269,16 @@ Nothing is exported accidentally.
 
 A symbol is exported if and only if:
 
-1. It is declared `pub`
+1. It is declared `public`
 2. It belongs to a module
 3. It is listed in the module’s `exports`
 
 Example:
 
 ```bestie
-pub fun parseUrl(input: str): Url { ... }
+public fun parseUrl(input: str): Url { ... }
 
-pub data class Url(
+public data class Url(
     val scheme: str,
     val host: str
 )
@@ -290,12 +290,12 @@ pub data class Url(
 
 The following can never be exported:
 
-* `priv` members
+* `private` members
 * `internal` members
 * Local classes
 * Local functions
 * Lambdas
-* Non-`pub` inner classes
+* Non-`public` inner classes
 
 ---
 

@@ -162,46 +162,66 @@ fun f(): int {
 
 ### 3.2 Partial Functions
 
-A partial function explicitly declares that it may not return a value.
+`T ?` is syntactic sugar for `option<T>` as a return type. A partial function either returns a value (wrapped in `option.Present`) or returns nothing (`option.Not_Present`). The `?` modifier is a declaration-site shorthand — the caller always receives an `option<T>`.
 
 ```bestie
-fun getUser(id: int): User ?
+fun getUser(id: int): User ?   // equivalent to: fun getUser(id: int): option<User>
 ```
 
-Rules:
-
-* Caller must handle partiality
-* Compiler enforces exhaustiveness
-* No implicit exceptions
-
-Example:
+Inside the function body:
+- `return value` → compiler wraps as `option.Present(value)`
+- bare `return` → compiler emits `option.Not_Present`
 
 ```bestie
 fun getUser(id: int): User ? {
     if (exists(id)) {
-        return repository.find(id)
+        return repository.find(id)   // → option.Present(user)
     }
-    return
+    return                           // → option.Not_Present
 }
 ```
 
+Rules:
+
+* Caller always receives `option<T>` — no hidden null, no truthiness check
+* Compiler enforces exhaustiveness — the absent case must be handled
+* No implicit exceptions, no sentinel values
+
+---
+
 #### 3.3 Calling Partial Functions
 
-Calling a partial function forces the caller to handle control flow explicitly.
+The result of a partial function is an `option<T>`. It must be explicitly handled. There is no truthiness check — Bestie has no null and no implicit presence test.
+
+**Pattern matching — full control:**
 
 ```bestie
-fun process(id: int): void {
-    val user = getUser(id)
-    if (user) {
-        sendEmail(user)
-    }
+switch (getUser(id)) {
+    option.Present(val user) => sendEmail(user)
+    option.Not_Present       => println("user not found")
 }
+```
+
+**`if`-let — bind and enter block only when present:**
+
+```bestie
+if (val user = getUser(id)) {
+    sendEmail(user)   // user is User here, not option<User>
+}
+```
+
+**`else` unwrap — provide a fallback or divert:**
+
+```bestie
+val user = getUser(id) else { return }           // absent → early return
+val user = getUser(id) else { User.anonymous() } // absent → fallback value
 ```
 
 Compiler enforces:
 
-* Partial calls cannot be used as complete expressions
-* Results must be guarded or transformed
+* `option<T>` cannot be used directly where `T` is expected — unwrapping is required
+* All branches of `switch` on `option<T>` must be covered
+* `if`-let binds the inner `T` value — the outer `option<T>` is not accessible inside the block
 
 ### 3.4 Lambdas and Partiality
 
@@ -221,7 +241,59 @@ val findUser = (x: int): User ? => if (x > 0) return repo.get(x);
 
 ---
 
-## 4. Multiple Return Values and Tuples
+## 4. No-Null Guarantee
+
+Bestie has no `null`, no `nil`, no `NULL`, and no `nullptr`. These concepts do not exist in the language at any level.
+
+This promise holds across all layers of the system:
+
+---
+
+### 4.1 Pure Bestie Code
+
+There is no null literal. There is no nullable type. There is no way to write null in a Bestie source file. The compiler has no concept of a "null value" — only `option.Not_Present` for the absent case.
+
+| In other languages | In Bestie |
+| ------------------ | --------- |
+| `null`, `nil`, `nullptr` | Does not exist |
+| `T?` (nullable reference) | `option<T>` (explicit, typed) |
+| Null pointer dereference | Cannot occur through safe code |
+| Sentinel `-1` or `0` for "no value" | `option<T>` |
+| Returning `null` | `return` (bare) in a `T ?` function |
+
+---
+
+### 4.2 `ptr<T>` — Raw Pointer
+
+`ptr<T>` is Bestie's escape hatch for unsafe memory operations. It can physically hold any bit pattern, including the zero address. However:
+
+* The zero address in a `ptr<T>` is not called "null" — it is an **invalid address**
+* Safe Bestie code never produces a zero-address `ptr<T>`
+* The compiler's niche optimization uses the zero address bit pattern internally — this is invisible to the programmer
+* Any `ptr<T>` that might hold the zero address comes from `foreign` code or `@trusted` unsafe operations — both are explicit in source
+
+---
+
+### 4.3 Third-Party Bestie Libraries
+
+A library written in Bestie is structurally incapable of introducing null. It can only express absence via `option<T>` or `T ?`. This is enforced by the type system — not a convention, not a guideline.
+
+---
+
+### 4.4 FFI / Foreign C Libraries
+
+C functions that return nullable pointers are mapped to `option<ptr<T>>` at the FFI boundary. The FFI layer converts C `NULL` (zero address) → `option.Not_Present` automatically. The `null` keyword is not used in the foreign function declaration — see `std-api/foreign.md` §7.
+
+---
+
+### 4.5 The Structural Guarantee
+
+No code path in a Bestie program — core, stdlib, third-party, or FFI wrapper — can return a value typed as something the caller must null-check. Every absent case is an explicit `option.Not_Present` handled at the call site through pattern matching or an `else` unwrap. The compiler enforces this exhaustively.
+
+---
+
+## 5. Multiple Return Values and Tuples
+
 
 Bestie allows functions to return **multiple values** using **tuples**.
 
@@ -300,7 +372,7 @@ Rules:
 
 ---
 
-## 5. Function Types
+## 6. Function Types
 
 Function types are **explicit and structural**.
 
@@ -323,7 +395,7 @@ Rules:
 
 ---
 
-## 6. Lambdas
+## 7. Lambdas
 
 Lambdas are anonymous functions with **explicit and restricted semantics**.
 
@@ -428,7 +500,7 @@ Rules:
 
 ---
 
-## 7. Higher-Order Functions
+## 8. Higher-Order Functions
 
 ```bestie
 fun apply(f: fn(int) -> int, x: int): int {
@@ -445,7 +517,7 @@ Rules:
 
 ---
 
-## 8. Variable Arguments (Varargs)
+## 9. Variable Arguments (Varargs)
 
 Variadic parameters are declared with `...` after the element type.
 `val` and `var` carry their normal semantics — `val` is the default and preferred form.
@@ -490,7 +562,7 @@ Rules:
 
 ---
 
-## 9. Method References
+## 10. Method References
 
 ### 9.1 Unbound Method References
 
@@ -580,7 +652,7 @@ Rules summary:
 
 ---
 
-## 10. Extension Functions
+## 11. Extension Functions
 
 Extension functions add behavior **without modifying types** and **without runtime cost**.
 
@@ -662,7 +734,7 @@ Rules:
 
 ---
 
-## 11. Function Composition
+## 12. Function Composition
 
 ```bestie
 fun compose<A, B, C>(
@@ -677,7 +749,7 @@ No implicit currying or composition exists.
 
 ---
 
-## 12. Currying and Partial Application
+## 13. Currying and Partial Application
 
 ### 12.1 No Implicit Currying
 
@@ -729,7 +801,7 @@ Rules:
 
 ---
 
-## 13. Recursion
+## 14. Recursion
 
 Recursion is explicit.
 
@@ -741,7 +813,7 @@ Rules:
 
 ---
 
-## 14. FP and Memory Model
+## 15. FP and Memory Model
 
 FP fully respects ownership.
 
@@ -758,7 +830,7 @@ Ensures:
 
 ---
 
-## 15. FP and OOP Interoperability
+## 16. FP and OOP Interoperability
 
 * Methods are functions with receivers
 * Extension functions bridge FP and OOP
@@ -770,7 +842,7 @@ It does not replace OOP.
 
 ---
 
-## 16. Immutability in FP
+## 17. Immutability in FP
 
 FP in Bestie strongly prefers immutability.
 
@@ -793,7 +865,7 @@ Enforced by:
 
 ---
 
-## 17. What Bestie Deliberately Avoids in FP
+## 18. What Bestie Deliberately Avoids in FP
 
 * Implicit currying
 * Lazy evaluation by default
@@ -804,7 +876,7 @@ Enforced by:
 
 ---
 
-## 18. Summary
+## 19. Summary
 
 Functional programming in Bestie is:
 
