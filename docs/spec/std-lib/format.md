@@ -24,6 +24,7 @@ It is part of **std-lib**, not `std-api`, because:
 3. **No implicit schema inference**
 4. **Explicit errors**
 5. **Composable with user-defined types**
+6. **Unified codec model, not a forced universal data shape**
 
 If two formats do similar things, **they behave the same**.
 
@@ -31,7 +32,7 @@ If two formats do similar things, **they behave the same**.
 
 ## 2. Supported Formats
 
-Initial formats:
+Initial official formats:
 
 * JSON
 * XML
@@ -39,7 +40,7 @@ Initial formats:
 * TOML
 * YAML
 
-Each format lives in its own namespace:
+Each official codec lives in its own namespace:
 
 ```text
 bestie.lib.format.json
@@ -48,6 +49,9 @@ bestie.lib.format.csv
 bestie.lib.format.toml
 bestie.lib.format.yaml
 ```
+
+These namespaces are **official std-lib codecs**, not the only formats Bestie can ever handle.
+The standard library ships a curated set; future formats do not require changing `std-lib` itself.
 
 ---
 
@@ -73,6 +77,25 @@ protocol Serializer<T> {
 
 All formats use `impl` with these protocols.
 
+The **unified part** of `std-lib.format` is the codec interface:
+
+* `parse<T>(input)`
+* `serialize(value)`
+* shared error handling
+* shared explicitness rules
+
+The unified part is **not** a mandatory in-memory tree such as "everything is `map<str, X>`".
+Bestie avoids flattening structurally different formats into one lossy representation.
+
+Examples:
+
+* JSON may map naturally to a user type or a `map`
+* CSV naturally maps to rows
+* XML naturally maps to an explicit document/tree model
+* `.properties` naturally maps to `map<str, str>`
+
+Formats share one codec model while preserving their own structure.
+
 ---
 
 ## 4. JSON Example
@@ -89,6 +112,7 @@ Rules:
 * No dynamic typing
 * No implicit number coercion
 * No silent field dropping
+* Parsing into `map<str, T>` is allowed when the target shape is explicitly requested
 
 ---
 
@@ -106,6 +130,7 @@ Rules:
 * Explicit element mapping
 * No XPath magic
 * Deterministic structure
+* XML is not forced into a `map` model
 
 ---
 
@@ -123,6 +148,7 @@ Rules:
 * Header handling is explicit
 * No schema guessing
 * No implicit type conversion
+* CSV remains row-oriented, not object-tree-oriented
 
 ---
 
@@ -142,10 +168,32 @@ Rules:
 * Field names must match
 * Missing fields are errors
 * Extra fields are errors unless explicitly allowed
+* Generic container targets such as `map<str, str>` or `list<Row>` are valid only when explicitly requested by the caller
 
 ---
 
-## 8. Custom Format Support
+## 8. Official vs External Codecs
+
+`bestie.lib.format.*` is reserved for **official standard codecs** maintained as part of Bestie.
+
+External libraries may define additional codecs without waiting for a std-lib update.
+They use the same `Parser<T>` / `Serializer<T>` protocols, but live in their own package namespace.
+
+Examples:
+
+```text
+acme.format.properties
+org.tools.format.ini
+company.config.format.hocon
+```
+
+This keeps the standard library stable while still allowing the ecosystem to grow.
+
+If a format becomes widely important and broadly stable, it may later be promoted into `bestie.lib.format.*`.
+
+---
+
+## 9. Custom Format Support
 
 Users may define custom serializers/parsers:
 
@@ -158,9 +206,24 @@ class UserJson impl Serializer<User>, Parser<User> {
 
 No reflection hooks are required.
 
+Custom codecs may target:
+
+* user-defined data classes
+* explicit document models
+* explicit container shapes such as `map<str, str>` when the format naturally fits them
+
+Example:
+
+```bestie
+import acme.format.properties
+
+own props = properties.parse<map<str, str>>(input)
+own text = properties.serialize(props)
+```
+
 ---
 
-## 9. Error Model
+## 10. Error Model
 
 All parsing errors are:
 
@@ -179,7 +242,7 @@ enum ParseError {
 
 ---
 
-## 10. Intentional Non-Features
+## 11. Intentional Non-Features
 
 This library intentionally avoids:
 
@@ -188,12 +251,13 @@ This library intentionally avoids:
 * Implicit defaults
 * Loose typing
 * Partial parsing
+* A required universal "document as map" representation
 
 Correctness is preferred over convenience.
 
 ---
 
-## 11. Summary
+## 12. Summary
 
 `std-lib.format` is:
 
@@ -201,6 +265,7 @@ Correctness is preferred over convenience.
 * Predictable
 * Explicit
 * Safe
+* Open to new codecs through the same protocol model
 
 It provides **data interchange**, not data guessing.
 

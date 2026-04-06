@@ -26,13 +26,11 @@ Only primitives that must be understood by the compiler live in core. Everything
 
 ## 2. Core Numeric Types
 
-The following numeric types are part of the **core language**:
+Core numeric primitives match the **Primitive Types** section of the [core language spec](../core/lang.md). In short:
 
-* `int`
-* `long`
-* `float`
-* `double`
-* `decimal`
+* **Signed integers:** `int8`, `int16`, `int32`, `int64`, and pointer-sized `int`
+* **Unsigned integers:** `uint8`, `uint16`, `uint32`, `uint64`, and pointer-sized `uint` (`byte` is an alias for `uint8`)
+* **Floating-point:** `float32` and `float64` (IEEE 754)
 
 ### 2.1 Design Rules
 
@@ -43,7 +41,7 @@ The following numeric types are part of the **core language**:
 
 ```bestie
 val x : int = 10
-val y : long = x.toLong()   // explicit
+val y : int64 = x as int64   // explicit
 ```
 
 ---
@@ -51,8 +49,8 @@ val y : long = x.toLong()   // explicit
 ## 3. Arithmetic Semantics
 
 * Arithmetic is **strict and predictable**
-* No silent overflow for `int` and `long`
-* Overflow behavior is defined and checked at compile time where possible
+* Signed integer overflow is **defined** (wrap in release, trap in debug; see core spec), not undefined behavior
+* Overflow on constant expressions may be caught at compile time where provable
 
 ```bestie
 val x : int = 2_000_000_000

@@ -25,7 +25,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
 ## 1. Core Language (`core`)
 
 **Components included:**
-`lang.md`, `fp.md`, `oop.md`, `memory.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+`lang.md`, `types.md`, `fp.md`, `oop.md`, `memory.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
 
 ### Properties
 
