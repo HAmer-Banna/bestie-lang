@@ -29,17 +29,27 @@ import bestie.framework.template
 
 ## Core Concepts
 
-- `View`: named render target (for example `users/list`).
-- `Model`: explicit key/value data passed to the view.
+- `View`: named render target (e.g. `"users/list"`).
+- `ViewModel`: typed model bound to a view, declared with `@ViewModel`.
 - `Layout`: outer template wrapping page fragments.
-- `Partial`: reusable template section.
+- `Partial`: reusable template section, declared with `@Partial`.
 - `Renderer`: compiles and renders templates with escape rules.
+
+## Annotation Reference
+
+| Annotation | Target | Effect |
+|---|---|---|
+| `@ViewModel(view)` | class | Binds the class as the expected model type for a named view |
+| `@Partial(name)` | class | Marks a model as the bound type for a named partial |
+| `@Escapes(mode)` | class | Declares the output escaping mode (`html`, `text`, `none`) |
+
+`@ViewModel` allows the compiler to verify that all fields referenced in the template file exist on the model class. Unknown field references in templates are compile-time errors when the template is pre-compiled.
 
 ## Rendering Rules
 
 - Auto-escaping is enabled by default for HTML outputs.
-- Raw output requires explicit opt-in markers.
-- Missing model keys are compile-time or startup-time errors when possible.
+- Raw output requires an explicit `{! raw_expr !}` marker in the template.
+- Missing model keys referenced in templates are compile-time errors (with pre-compilation) or startup-time errors.
 - Rendering is side-effect free by default (except explicit I/O integrations).
 
 ## MVC Usage Pattern
@@ -47,24 +57,41 @@ import bestie.framework.template
 Typical flow:
 
 1. Controller/handler gathers domain data
-2. Data is mapped to a view model
+2. Data is mapped to a `ViewModel`
 3. Renderer resolves layout + view + partials
 4. Escaped output is returned to `web` response
 
-## Minimal Example
+## Example
 
 ```bestie
 import bestie.framework.template
 
-fun renderHome(userName: str) -> str {
-    let model = template::model()
-    model.put("name", userName)
-    return template::render("home/index", model)
+@ViewModel("home/index")
+class HomeViewModel {
+    val userName: str
+    val itemCount: int
 }
+
+@RestController("/")
+class HomeController(val renderer: template::Renderer) {
+
+    @Get("/")
+    fun home(@Ctx ctx: web::Context) -> web::HtmlResponse {
+        let model = HomeViewModel { userName: ctx.principal.name, itemCount: 42 }
+        return web::html(renderer.render(model))
+    }
+}
+```
+
+Template file `home/index.html`:
+
+```html
+<h1>Welcome, {{ userName }}</h1>
+<p>You have {{ itemCount }} items.</p>
 ```
 
 ## Non-Goals
 
 - No runtime code generation in production path
 - No implicit global model mutation
-- No reflection-based field extraction by default
+- No reflection-based field extraction

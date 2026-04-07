@@ -1,16 +1,16 @@
 # `bestie.framework.web`
 
-HTTP-based web framework with a servlet-style execution model and minimal core abstractions.
+HTTP web framework with annotation-driven routing and a servlet-style execution model.
 
 ## Purpose
 
-`web` provides structured request/response handling on top of `bestie.api.http` without introducing runtime reflection, hidden dispatch, or VM-style behavior.
+`web` provides structured request/response handling on top of `bestie.api.http`. Its primary value over the raw HTTP API is **annotation-driven routing and controller dispatch**: route registration, path/query/body parameter binding, middleware composition, and response serialization are all handled by compile-time code generation — no boilerplate, no runtime reflection.
 
 It is designed for:
 
-- Predictable HTTP services
-- Clear middleware pipelines
-- Explicit route-to-handler mapping
+- REST APIs and server-rendered web applications
+- Predictable, auditable middleware pipelines
+- Controller-style service organization
 - Easy integration with `di`, `template`, and `orm`
 
 ## Layering and Dependencies
@@ -31,33 +31,101 @@ import bestie.framework.web
 
 ## Core Concepts
 
-- `Request` and `Response` are explicit values passed through handlers.
-- `Router` maps HTTP method + path to a handler function.
-- `Middleware` is a composable interception step around handlers.
-- `Context` holds per-request scoped values (trace id, auth principal, locale, etc.).
-- `Server` owns listener lifecycle and graceful shutdown hooks.
+- `Controller`: class whose methods are compiled into route handlers.
+- `Request` / `Response`: explicit values passed through handlers.
+- `Router`: generated at compile time from controller annotations.
+- `Middleware`: composable interception step; applied via annotation or explicit registration.
+- `Context`: per-request scoped values (trace id, auth principal, locale, etc.).
+- `Server`: owns listener lifecycle and graceful shutdown hooks.
+
+## Annotation-Driven Routing
+
+Route registration is generated entirely at compile time from annotations on controller classes and their methods. There is no runtime scanning.
+
+### Controller Annotations
+
+| Annotation | Target | Effect |
+|---|---|---|
+| `@Controller(prefix)` | class | Groups routes under a path prefix |
+| `@RestController(prefix)` | class | Like `@Controller` but auto-serializes return values to JSON |
+| `@Get(path)` | method | Registers a GET route |
+| `@Post(path)` | method | Registers a POST route |
+| `@Put(path)` | method | Registers a PUT route |
+| `@Delete(path)` | method | Registers a DELETE route |
+| `@Patch(path)` | method | Registers a PATCH route |
+
+### Parameter Injection Annotations
+
+| Annotation | Target | Effect |
+|---|---|---|
+| `@PathParam(name)` | parameter | Binds a path segment (e.g. `/users/:id`) |
+| `@QueryParam(name)` | parameter | Binds a query string value |
+| `@Body` | parameter | Deserializes the full request body |
+| `@Header(name)` | parameter | Binds a specific request header value |
+| `@Ctx` | parameter | Injects the current request `Context` |
+
+### Middleware and Security Annotations
+
+| Annotation | Target | Effect |
+|---|---|---|
+| `@Use(MiddlewareType)` | class or method | Applies a middleware to the controller or a single route |
+| `@Auth` | class or method | Requires an authenticated principal in `Context` |
+| `@Roles(roles...)` | class or method | Requires one of the listed roles on the principal |
+
+All of these are compile-time — the compiler plugin validates bindings and generates the dispatch wiring. Missing path params, type mismatches, or unknown middleware types are compile-time errors.
 
 ## Execution Model
 
-The model is intentionally simple and servlet-like:
-
-1. Accept connection and parse request
-2. Build request context
-3. Run middleware chain
-4. Invoke route handler
-5. Serialize response and write to socket
-6. Finalize request-scoped resources
+1. Accept connection and parse request (`std-api.http`)
+2. Build request `Context`
+3. Run middleware chain (in declaration order)
+4. Dispatch to matched controller method
+5. Serialize return value to `Response`
+6. Write response to socket
+7. Finalize request-scoped resources
 
 All phases are explicit and observable in user code.
 
-## Non-Goals
+## Controller Example
 
-- No runtime annotation scanning
-- No controller auto-discovery by reflection
-- No hidden global mutable state
-- No implicit thread-per-request guarantee (actual strategy is configurable)
+```bestie
+import bestie.framework.web
+import bestie.framework.di
 
-## Minimal Example
+@RestController("/users")
+@Use(LoggingMiddleware)
+@Auth
+class UserController(val service: UserService) {
+
+    @Get("/")
+    fun list(@QueryParam("page") page: int) -> List<UserDto> {
+        return service.listUsers(page)
+    }
+
+    @Get("/:id")
+    fun get(@PathParam("id") id: str) -> UserDto {
+        return service.findById(id)
+    }
+
+    @Post("/")
+    fun create(@Body req: CreateUserRequest) -> UserDto {
+        return service.createUser(req)
+    }
+
+    @Delete("/:id")
+    @Roles("admin")
+    fun delete(@PathParam("id") id: str) -> web::NoContent {
+        service.deleteUser(id)
+        return web::NoContent
+    }
+}
+```
+
+The compiler generates all route registrations, parameter extraction, and response serialization from the annotations above.
+
+## Minimal Imperative Example
+
+For simple scripts or cases where annotation-style feels like overkill:
 
 ```bestie
 import bestie.framework.web
@@ -73,9 +141,48 @@ fun main() {
 }
 ```
 
+## Custom Middleware
+
+```bestie
+import bestie.framework.web
+
+class LoggingMiddleware : web::Middleware {
+    fun handle(req: web::Request, ctx: web::Context, next: web::Next) -> web::Response {
+        io::println("→ ${req.method} ${req.path}")
+        let res = next.call(req, ctx)
+        io::println("← ${res.status}")
+        return res
+    }
+}
+```
+
+## Server Bootstrap with DI
+
+```bestie
+import bestie.framework.web
+import bestie.framework.di
+
+fun main() {
+    let container = buildContainer()
+    let app = web::app()
+
+    app.register(container.get(UserController))
+    app.register(container.get(ProductController))
+
+    app.listen("0.0.0.0", 8080)
+}
+```
+
+## Non-Goals
+
+- No runtime annotation scanning or reflection
+- No controller auto-discovery from classpath
+- No hidden global mutable state
+- No implicit thread-per-request guarantee (strategy is configurable)
+
 ## Integration Notes
 
-- Use `di` for service wiring instead of global singletons.
-- Use `template` for MVC server-rendered views.
-- Use `orm` for repository access inside route services.
-- Use `stream` for chunked or reactive response flows.
+- Use `di` for constructor injection into controllers (controllers are resolved through the container).
+- Use `template` for MVC server-rendered views (return a `View` from a `@Controller` method).
+- Use `orm` for repository access inside controller services.
+- Use `stream` for chunked or SSE response bodies.
