@@ -18,13 +18,17 @@ Primary goals:
 `test` is a `std-framework` package that depends mainly on:
 
 - `core`
-- `std-lib.utilities`
-- optional `std-api` modules based on test scope
+- `bestie.lib.util`
+- optional `bestie.api` modules based on test scope
 
-Import style:
+Import style (explicit per-symbol):
 
 ```bestie
-import bestie.framework.test
+import bestie.framework.test.Suite
+import bestie.framework.test.Test
+import bestie.framework.test.BeforeEach
+import bestie.framework.test.assert_eq
+import bestie.framework.test.assert_true
 ```
 
 ## Core Concepts
@@ -32,15 +36,15 @@ import bestie.framework.test
 - `Suite`: logical group of related tests, declared with `@Suite`.
 - `Case`: single named test function, declared with `@Test`.
 - `Fixture`: setup/teardown container (`@BeforeEach`, `@AfterEach`, `@BeforeAll`, `@AfterAll`).
-- `Assert`: expectation utilities with rich failure output.
-- `Mock`/`Stub`: explicit doubles for integration boundaries.
+- `Assert`: expectation functions with rich failure output.
+- Fakes/stubs: explicit hand-written doubles for integration boundaries.
 
 ## Annotation Reference
 
 | Annotation | Target | Effect |
 |---|---|---|
 | `@Suite` | class | Declares a test suite; methods annotated with `@Test` are auto-registered |
-| `@Test` | method | Registers a test case; name defaults to method name |
+| `@Test` | method | Registers a test case; display name defaults to method name |
 | `@Test(name)` | method | Registers with an explicit display name |
 | `@BeforeEach` | method | Runs before every test in the suite |
 | `@AfterEach` | method | Runs after every test in the suite |
@@ -50,77 +54,95 @@ import bestie.framework.test
 | `@Parallel` | class or method | Permits concurrent execution |
 | `@Timeout(ms)` | method | Fails the test if it exceeds the given duration |
 
+The compiler generates the test registry from these annotations — no reflection scanning occurs at runtime.
+
 ## Example
 
 ```bestie
-import bestie.framework.test
+import bestie.framework.test.Suite
+import bestie.framework.test.Test
+import bestie.framework.test.BeforeEach
+import bestie.framework.test.Skip
+import bestie.framework.test.assert_eq
+import bestie.framework.test.assert_true
+import bestie.framework.test.assert_throws
 
 @Suite
 class UserServiceTests {
 
-    val service: UserService
-    val repo: FakeUserRepository
+    var service: UserService
+    var repo: FakeUserRepository
 
     @BeforeEach
-    fun setup() {
-        repo = FakeUserRepository()
-        service = UserService(repo)
+    fun setup(): void {
+        repo = FakeUserRepository.new()
+        service = UserService.new(repo)
     }
 
     @Test("creates a user with the given email")
-    fun createUser() {
-        let user = service.create("ada@example.com")
-        test::assert_eq(user.email, "ada@example.com")
-        test::assert_true(repo.contains(user.id))
+    fun createUser(): void {
+        val user = service.create("ada@example.com")
+        assert_eq(user.email, "ada@example.com")
+        assert_true(repo.contains(user.id))
     }
 
     @Test
-    fun rejectsBlankEmail() {
-        test::assert_throws(fun() {
+    fun rejectsBlankEmail(): void {
+        assert_throws(fun(): void {
             service.create("")
         })
     }
 
     @Test
     @Skip("pending payment integration")
-    fun chargesUserOnSignup() { ... }
+    fun chargesUserOnSignup(): void { ... }
 }
 ```
 
-## Assertions
+## Assertion Functions
 
 ```bestie
-test::assert_eq(actual, expected)
-test::assert_ne(actual, expected)
-test::assert_true(expr)
-test::assert_false(expr)
-test::assert_null(value)
-test::assert_not_null(value)
-test::assert_throws(fun() { ... })
-test::assert_throws_type<ErrorType>(fun() { ... })
+assert_eq(actual, expected)
+assert_ne(actual, expected)
+assert_true(expr)
+assert_false(expr)
+assert_throws(fun(): void { ... })
 ```
 
 Failures include the expression source, expected and actual values, and the call site.
 
-## Mocks and Stubs
+## Explicit Test Doubles
 
-Explicit doubles only. No magic auto-mocking.
+Fakes are hand-written explicit implementations — no magic auto-mocking:
 
 ```bestie
-import bestie.framework.test
+class FakeUserRepository impl UserRepository {
 
-class FakeUserRepository : UserRepository {
-    val store = mutable Map<int, User>()
+    var inserted: list<User> = list<User>.build()
 
-    fun findById(id: int) -> User? { return store.get(id) }
-    fun insert(user: User, tx: orm::Transaction) { store.put(user.id, user) }
-    fun contains(id: int) -> bool { return store.has(id) }
+    fun findById(id: int): User ? {
+        for (u in inserted) {
+            if (u.id == id) { return u }
+        }
+        return
+    }
+
+    fun insert(user: User, tx: Transaction): void {
+        inserted.add(user)
+    }
+
+    fun contains(id: int): bool {
+        for (u in inserted) {
+            if (u.id == id) { return true }
+        }
+        return false
+    }
 }
 ```
 
 ## Execution Model
 
-- Tests are discoverable via `@Suite` / `@Test` without reflection scanning (the compiler generates the registry).
+- Tests are discovered via `@Suite` / `@Test`; the compiler generates the registry (no reflection).
 - Isolation mode is configurable (process-level or module-level).
 - Parallel runs are enabled where tests or suites declare `@Parallel`.
 - Flaky retries are opt-in and separately reported.

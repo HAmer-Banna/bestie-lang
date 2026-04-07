@@ -19,14 +19,17 @@ This framework sits in `std-framework` and depends on lower layers only:
 
 - `core`
 - `std-lib`
-- `std-api.http`
-- `std-api.io` (optional, for static files and streaming bodies)
-- `std-api.network` (optional, for lower-level transport tuning)
+- `bestie.api.http`
+- `bestie.api.io` (optional, for static files and streaming bodies)
+- `bestie.api.network` (optional, for lower-level transport tuning)
 
-Import style:
+Import style (explicit per-symbol):
 
 ```bestie
-import bestie.framework.web
+import bestie.framework.web.App
+import bestie.framework.web.Request
+import bestie.framework.web.Response
+import bestie.framework.web.Context
 ```
 
 ## Core Concepts
@@ -36,7 +39,7 @@ import bestie.framework.web
 - `Router`: generated at compile time from controller annotations.
 - `Middleware`: composable interception step; applied via annotation or explicit registration.
 - `Context`: per-request scoped values (trace id, auth principal, locale, etc.).
-- `Server`: owns listener lifecycle and graceful shutdown hooks.
+- `App`: owns listener lifecycle and graceful shutdown hooks.
 
 ## Annotation-Driven Routing
 
@@ -76,7 +79,7 @@ All of these are compile-time — the compiler plugin validates bindings and gen
 
 ## Execution Model
 
-1. Accept connection and parse request (`std-api.http`)
+1. Accept connection and parse request (`bestie.api.http`)
 2. Build request `Context`
 3. Run middleware chain (in declaration order)
 4. Dispatch to matched controller method
@@ -89,8 +92,17 @@ All phases are explicit and observable in user code.
 ## Controller Example
 
 ```bestie
-import bestie.framework.web
-import bestie.framework.di
+import bestie.framework.web.RestController
+import bestie.framework.web.Use
+import bestie.framework.web.Auth
+import bestie.framework.web.Roles
+import bestie.framework.web.Get
+import bestie.framework.web.Post
+import bestie.framework.web.Delete
+import bestie.framework.web.PathParam
+import bestie.framework.web.QueryParam
+import bestie.framework.web.Body
+import bestie.framework.web.NoContent
 
 @RestController("/users")
 @Use(LoggingMiddleware)
@@ -98,25 +110,25 @@ import bestie.framework.di
 class UserController(val service: UserService) {
 
     @Get("/")
-    fun list(@QueryParam("page") page: int) -> List<UserDto> {
+    fun list(@QueryParam("page") page: int): list<UserDto> {
         return service.listUsers(page)
     }
 
     @Get("/:id")
-    fun get(@PathParam("id") id: str) -> UserDto {
+    fun get(@PathParam("id") id: str): UserDto {
         return service.findById(id)
     }
 
     @Post("/")
-    fun create(@Body req: CreateUserRequest) -> UserDto {
+    fun create(@Body req: CreateUserRequest): UserDto {
         return service.createUser(req)
     }
 
     @Delete("/:id")
     @Roles("admin")
-    fun delete(@PathParam("id") id: str) -> web::NoContent {
+    fun delete(@PathParam("id") id: str): NoContent {
         service.deleteUser(id)
-        return web::NoContent
+        return NoContent.new()
     }
 }
 ```
@@ -125,16 +137,19 @@ The compiler generates all route registrations, parameter extraction, and respon
 
 ## Minimal Imperative Example
 
-For simple scripts or cases where annotation-style feels like overkill:
+For simple scripts or cases where annotation-style is unnecessary:
 
 ```bestie
-import bestie.framework.web
+import bestie.framework.web.App
+import bestie.framework.web.Request
+import bestie.framework.web.Response
+import bestie.framework.web.Context
 
-fun main() {
-    let app = web::app()
+fun main(): void {
+    val app = App.new()
 
-    app.get("/health", fun(req, ctx) {
-        return web::response(200, "ok")
+    app.get("/health", fun(req: Request, ctx: Context): Response {
+        return Response.new(200, "ok")
     })
 
     app.listen("0.0.0.0", 8080)
@@ -144,13 +159,17 @@ fun main() {
 ## Custom Middleware
 
 ```bestie
-import bestie.framework.web
+import bestie.framework.web.Middleware
+import bestie.framework.web.Request
+import bestie.framework.web.Response
+import bestie.framework.web.Context
+import bestie.framework.web.Next
 
-class LoggingMiddleware : web::Middleware {
-    fun handle(req: web::Request, ctx: web::Context, next: web::Next) -> web::Response {
-        io::println("→ ${req.method} ${req.path}")
-        let res = next.call(req, ctx)
-        io::println("← ${res.status}")
+class LoggingMiddleware impl Middleware {
+    fun handle(req: Request, ctx: Context, next: Next): Response {
+        print("→ ${req.method} ${req.path}")
+        val res = next.call(req, ctx)
+        print("← ${res.status}")
         return res
     }
 }
@@ -159,12 +178,12 @@ class LoggingMiddleware : web::Middleware {
 ## Server Bootstrap with DI
 
 ```bestie
-import bestie.framework.web
-import bestie.framework.di
+import bestie.framework.web.App
+import bestie.framework.di.Container
 
-fun main() {
-    let container = buildContainer()
-    let app = web::app()
+fun main(): void {
+    val container = buildContainer()
+    val app = App.new()
 
     app.register(container.get(UserController))
     app.register(container.get(ProductController))

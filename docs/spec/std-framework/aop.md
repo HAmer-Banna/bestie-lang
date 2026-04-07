@@ -16,10 +16,13 @@ It exists to:
 
 `aop` is part of `std-framework` and integrates with compiler-supported transformation hooks and annotations.
 
-Import style:
+Import style (explicit per-symbol):
 
 ```bestie
-import bestie.framework.aop
+import bestie.framework.aop.Aspect
+import bestie.framework.aop.Pointcut
+import bestie.framework.aop.Around
+import bestie.framework.aop.JoinContext
 ```
 
 ## Core Concepts
@@ -28,7 +31,7 @@ import bestie.framework.aop
 - `Pointcut`: compile-time match rule for join points, declared with `@Pointcut`.
 - `Advice`: code injected at matched join points (`@Before`, `@After`, `@Around`).
 - `Join Point`: supported target location (function, method, constructor boundary).
-- `JoinContext`: runtime value passed to advice carrying method metadata and arguments.
+- `JoinContext`: value passed to advice carrying the method name and argument list.
 
 ## Annotation Reference
 
@@ -39,8 +42,9 @@ import bestie.framework.aop
 | `@Before(pointcut)` | method | Advice runs before each matched join point |
 | `@After(pointcut)` | method | Advice runs after each matched join point (always) |
 | `@AfterReturn(pointcut)` | method | Advice runs after a successful return |
-| `@AfterThrow(pointcut)` | method | Advice runs after an exception propagates |
-| `@Around(pointcut)` | method | Advice wraps the join point; must call `proceed()` to continue |
+| `@AfterThrow(pointcut)` | method | Advice runs after an error propagates |
+| `@Around(pointcut)` | method | Advice wraps the join point; must call `ctx.proceed()` to continue |
+| `@Order(n)` | class | Sets the execution priority when multiple aspects apply (lower = earlier) |
 
 Pointcut expressions are evaluated and resolved at compile time. Unresolved or ambiguous pointcuts are compile-time errors.
 
@@ -49,51 +53,59 @@ Pointcut expressions are evaluated and resolved at compile time. Unresolved or a
 - Weaving occurs at compile time only.
 - Generated code is inspectable in build artifacts.
 - Failures in pointcut resolution are compile-time errors.
-- Aspect ordering is explicit and deterministic (declared via `@Order(n)`).
+- Aspect ordering is deterministic via `@Order`.
 
 ## Example: Timing Aspect
 
 ```bestie
-import bestie.framework.aop
+import bestie.framework.aop.Aspect
+import bestie.framework.aop.Pointcut
+import bestie.framework.aop.Around
+import bestie.framework.aop.JoinContext
+import bestie.lib.datetime.DateTime
 
 @Aspect
 class TimingAspect {
 
-    @Pointcut("@annotation(web.Get) || @annotation(web.Post)")
-    fun webHandlers() {}
+    @Pointcut("@annotation(Get) || @annotation(Post)")
+    fun webHandlers(): void {}
 
     @Around("webHandlers()")
-    fun measureTime(ctx: aop::JoinContext) -> any {
-        let start = DateTime.now()
-        let result = ctx.proceed()
-        let elapsed = DateTime.now() - start
-        metrics::record("handler.latency", elapsed, tags: { route: ctx.methodName })
-        return result
+    fun measureTime(ctx: JoinContext): void {
+        val start = DateTime.now()
+        ctx.proceed()
+        val elapsed = DateTime.now() - start
+        metrics.record("handler.latency", elapsed, ctx.methodName)
     }
 }
 ```
 
-## Example: Logging Aspect
+## Example: Audit Logging Aspect
 
 ```bestie
-import bestie.framework.aop
+import bestie.framework.aop.Aspect
+import bestie.framework.aop.Order
+import bestie.framework.aop.Pointcut
+import bestie.framework.aop.Before
+import bestie.framework.aop.AfterThrow
+import bestie.framework.aop.JoinContext
 
 @Aspect
 @Order(10)
 class AuditAspect {
 
     @Pointcut("@annotation(Roles)")
-    fun securedMethods() {}
+    fun securedMethods(): void {}
 
     @Before("securedMethods()")
-    fun logAccess(ctx: aop::JoinContext) {
-        let principal = ctx.arg<Context>("ctx").principal
-        io::println("AUDIT: ${principal.id} called ${ctx.methodName}")
+    fun logAccess(ctx: JoinContext): void {
+        val principal = ctx.arg(Context).principal
+        print("AUDIT: ${principal.id} called ${ctx.methodName}")
     }
 
     @AfterThrow("securedMethods()")
-    fun logFailure(ctx: aop::JoinContext, err: error) {
-        io::println("AUDIT FAIL: ${ctx.methodName} threw ${err}")
+    fun logFailure(ctx: JoinContext): void {
+        print("AUDIT FAIL: ${ctx.methodName} raised an error")
     }
 }
 ```

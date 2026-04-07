@@ -16,10 +16,12 @@ It is intended to:
 
 `di` is a `std-framework` module that can be used by other frameworks (`web`, `orm`, `gui`, `stream`) and application code.
 
-Import style:
+Import style (explicit per-symbol):
 
 ```bestie
-import bestie.framework.di
+import bestie.framework.di.Container
+import bestie.framework.di.Injectable
+import bestie.framework.di.Singleton
 ```
 
 ## Core Concepts
@@ -29,6 +31,7 @@ import bestie.framework.di
 - `Scope`: lifecycle model (`@Singleton`, `@Scoped`, `@Transient`).
 - `Module`: grouped binding declarations.
 - `Provider`: function/object that creates instances.
+- `Resolver`: passed to factory functions to resolve other bindings.
 
 ## Annotation-Driven Wiring
 
@@ -42,24 +45,27 @@ Annotations allow types to declare their own wiring requirements. The compiler v
 | `@Singleton` | class | One instance per container lifetime |
 | `@Scoped` | class | One instance per named scope (e.g. per request) |
 | `@Transient` | class | New instance on every resolution |
-| `@Inject` | constructor or field | Explicit injection point (required when multiple constructors exist) |
+| `@Inject` | constructor | Explicit injection point (required when multiple constructors exist) |
 | `@Named(name)` | class or param | Disambiguates multiple bindings of the same type |
 
 ### Example
 
 ```bestie
-import bestie.framework.di
+import bestie.framework.di.Injectable
+import bestie.framework.di.Singleton
+import bestie.framework.di.Scoped
+import bestie.framework.di.Named
 
 @Injectable
 @Singleton
-class ConsoleLogger : Logger {
-    fun log(msg: str) { io::println(msg) }
+class ConsoleLogger impl Logger {
+    fun log(msg: str): void { print(msg) }
 }
 
 @Injectable
 @Scoped
 class UserService(@Named("primary") val db: Database, val logger: Logger) {
-    fun findById(id: int) -> User? { ... }
+    fun findById(id: int): User ? { ... }
 }
 ```
 
@@ -70,14 +76,15 @@ The container resolves `UserService` by injecting the `@Singleton` `ConsoleLogge
 For cases where annotation-driven wiring is insufficient (third-party types, complex factories):
 
 ```bestie
-import bestie.framework.di
+import bestie.framework.di.Container
+import bestie.framework.di.Resolver
 
-fun buildContainer() -> di::Container {
-    let c = di::container()
+fun buildContainer(): Container {
+    val c = Container.new()
 
     c.bind(Logger).to(ConsoleLogger).singleton()
-    c.bind(Database).named("primary").to_factory(fun(r) {
-        return PostgresDatabase(url: env("DB_URL"))
+    c.bind(Database).named("primary").toFactory(fun(r: Resolver): Database {
+        return PostgresDatabase.new(url: env("DB_URL"))
     }).singleton()
     c.bind(UserService).to(UserService).scoped("request")
 

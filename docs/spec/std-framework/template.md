@@ -21,10 +21,11 @@ Primary use cases:
 - `bestie.lib.format`
 - `bestie.api.io` (optional for template loading backends)
 
-Import style:
+Import style (explicit per-symbol):
 
 ```bestie
-import bestie.framework.template
+import bestie.framework.template.ViewModel
+import bestie.framework.template.Renderer
 ```
 
 ## Core Concepts
@@ -64,7 +65,13 @@ Typical flow:
 ## Example
 
 ```bestie
-import bestie.framework.template
+import bestie.framework.template.ViewModel
+import bestie.framework.template.Renderer
+import bestie.framework.web.RestController
+import bestie.framework.web.Get
+import bestie.framework.web.Ctx
+import bestie.framework.web.Context
+import bestie.framework.web.HtmlResponse
 
 @ViewModel("home/index")
 class HomeViewModel {
@@ -73,12 +80,12 @@ class HomeViewModel {
 }
 
 @RestController("/")
-class HomeController(val renderer: template::Renderer) {
+class HomeController(val renderer: Renderer) {
 
     @Get("/")
-    fun home(@Ctx ctx: web::Context) -> web::HtmlResponse {
-        let model = HomeViewModel { userName: ctx.principal.name, itemCount: 42 }
-        return web::html(renderer.render(model))
+    fun home(@Ctx ctx: Context): HtmlResponse {
+        val model = HomeViewModel.new(userName: ctx.principal.name, itemCount: 42)
+        return HtmlResponse.new(renderer.render(model))
     }
 }
 ```
