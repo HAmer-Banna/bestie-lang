@@ -1,4 +1,4 @@
-# Bestie Standard Library — Algorithms (`std.algorithms.md`)
+# Bestie Standard Library — Algorithms (`bestie.lib.algorithms`)
 
 This document defines the **general-purpose algorithms** provided by Bestie’s standard library.
 
@@ -31,7 +31,7 @@ They are reusable, composable, and predictable.
 
 ## 2. Supported Algorithm Categories
 
-`std.algorithms` provides:
+`bestie.lib.algorithms` provides:
 
 * Ordering & searching
 * Aggregation
@@ -43,7 +43,8 @@ These algorithms operate on:
 
 * `Iterable<T>`
 * `Iterator<T>`
-* Std-lib collections (list, set, map, deque, heap)
+* Std-lib collections (`set`, `map`, `deque`, `heap`)
+* Core `list<T>`
 
 ---
 
@@ -52,7 +53,7 @@ These algorithms operate on:
 ### 3.1 `sort`
 
 ```bestie
-fun sort<T: Comparable>(data: mut Iterable<T>)
+fun sort<T impl Comparable>(data: var list<T>)
 ```
 
 Purpose:
@@ -69,7 +70,7 @@ Properties:
 Example:
 
 ```bestie
-var nums = list.of(4, 1, 3)
+var nums = list<int>.of(4, 1, 3)
 sort(nums)
 ```
 
@@ -82,7 +83,7 @@ Use when:
 ### 3.2 `stableSort`
 
 ```bestie
-fun stableSort<T: Comparable>(data: mut Iterable<T>)
+fun stableSort<T impl Comparable>(data: var list<T>)
 ```
 
 Purpose:
@@ -107,8 +108,8 @@ Use when:
 ### 4.1 `binarySearch`
 
 ```bestie
-fun binarySearch<T: Comparable>(
-    data: Iterable<T>,
+fun binarySearch<T impl Comparable>(
+    data: list<T>,
     target: T
 ): option<int>
 ```
@@ -123,8 +124,9 @@ Example:
 ```bestie
 val idx = binarySearch(nums, 3)
 
-if idx.isPresent() {
-    print(idx.get())
+switch (idx) {
+    case option.Present(val i) => print(i)
+    case option.Not_Present    => print("not found")
 }
 ```
 
@@ -137,13 +139,13 @@ Failure is represented by `Not_Present`, not `-1`.
 ### 5.1 `min`
 
 ```bestie
-fun min<T: Comparable>(a: T, b: T): T
+fun min<T impl Comparable>(a: T, b: T): T
 ```
 
 ### 5.2 `max`
 
 ```bestie
-fun max<T: Comparable>(a: T, b: T): T
+fun max<T impl Comparable>(a: T, b: T): T
 ```
 
 Rules:
@@ -157,7 +159,7 @@ Rules:
 ### 5.3 `clamp`
 
 ```bestie
-fun clamp<T: Comparable>(
+fun clamp<T impl Comparable>(
     value: T,
     lower: T,
     upper: T
@@ -177,8 +179,8 @@ Guarantees:
 
 ```bestie
 fun partition<T>(
-    data: mut Iterable<T>,
-    predicate: (T) -> bool
+    data: var list<T>,
+    predicate: fn(T) -> bool
 ): int
 ```
 
@@ -211,7 +213,7 @@ val idx = partition(nums, x => x % 2 == 0)
 fun fold<T, R>(
     data: Iterable<T>,
     initial: R,
-    op: (R, T) -> R
+    op: fn(R, T) -> R
 ): R
 ```
 
@@ -241,7 +243,7 @@ Rules:
 fun zip<A, B>(
     a: Iterable<A>,
     b: Iterable<B>
-): Iterable<(A, B)>
+): Iterator<(A, B)>
 ```
 
 Rules:
@@ -262,9 +264,9 @@ for (x, y) in zip(xs, ys) {
 
 ## 9. Error & Safety Guarantees
 
-Algorithms in `std.algorithms`:
+Algorithms in `bestie.lib.algorithms`:
 
-* Never throw by default
+* Never use exception-style control flow
 * Never hide allocation
 * Never assume mutability
 * Never cross thread boundaries implicitly
@@ -275,9 +277,9 @@ Misuse (e.g. binarySearch on unsorted data) is a **logic error**, not undefined 
 
 ## 10. Relationship with Functional Utilities
 
-`std.algorithms` complements:
+`bestie.lib.algorithms` complements:
 
-* `std.functional` (map, filter, etc.)
+* `bestie.lib.functional` (`map`, `filter`, etc.)
 * `patterns.Iterator`
 * `patterns.Iterable`
 
@@ -287,7 +289,7 @@ Algorithms are **foundational**, not syntactic sugar.
 
 ## 11. What Is Deliberately Excluded
 
-Not included in `std.algorithms`:
+Not included in `bestie.lib.algorithms`:
 
 * Parallel algorithms
 * Lazy infinite streams
@@ -305,7 +307,7 @@ These belong to:
 
 ## 12. Summary
 
-`std.algorithms` is:
+`bestie.lib.algorithms` is:
 
 * Predictable
 * Fast

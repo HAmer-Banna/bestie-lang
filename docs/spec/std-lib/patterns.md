@@ -88,12 +88,16 @@ protocol Iterable<T> {
 The `Factory<T>` protocol represents **object creation without exposing construction details**.
 
 ```bestie
-@partial
-protocol Factory<T> {
-    fun create(): T
-    fun of(args: ...): T
+protocol Factory<T> ext CreateFactory<T>, OfFactory<T, A> {
 }
 
+protocol CreateFactory<T> {
+    fun create(): T
+}
+
+protocol OfFactory<T, A> {
+    fun of(arg: A): T
+}
 ```
 
 ### Semantics
@@ -114,6 +118,8 @@ Factories are preferred when:
 * Objects must be pooled or reused
 
 Factories do **not** imply singleton behavior.
+
+Additional `OfFactory` arities may be defined when a family of factories needs multiple explicit constructor shapes.
 
 ---
 

@@ -71,17 +71,18 @@ Reasons:
 * Std-lib collections already provide structured storage
 * Mathematical matrices are domain-specific, not language primitives
 
-As a result, **std-lib collections such as `list<T>.matrix` use a C-style flat layout** only as a storage optimization, not as a mathematical abstraction.
+As a result, flat numeric storage should use **core array-backed list forms** such as `list<T>.array` and sized array forms such as `list<T>[n]` or `list<T>[n][m]`.
 
 ```bestie
-val m : list<int>.matrix = list<int>.matrix.of(3, 3)
+val flat : list<int>.array = list<int>.array.build()
+val grid : list<int>[3][3]
 ```
 
-This representation:
+These representations:
 
-* Is row-major
-* Uses contiguous memory
-* Has no algebraic meaning by itself
+* Are row-major when used as flat numeric grids
+* Use contiguous memory
+* Have no algebraic meaning by themselves
 
 ---
 
@@ -149,7 +150,7 @@ Math operations in Bestie:
 * Can be evaluated at compile time when inputs are constant
 
 ```bestie
-const val x = pow(2, 10)  // resolved at compile time
+const x: int = pow(2, 10)  // resolved at compile time
 ```
 
 ---

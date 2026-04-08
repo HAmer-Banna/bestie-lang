@@ -29,8 +29,8 @@ Bestie’s functional model is guided by the following principles:
 
 All functional operations are defined in:
 
-```
-import bestie.lib.functional;
+```bestie
+import bestie.lib.functional
 ```
 
 Without this import, none of the functional symbols are visible.
@@ -43,9 +43,9 @@ Without this import, none of the functional symbols are visible.
 
 Transforms each element of a collection into a new value.
 
-```
+```bestie
 val xs = list<int>.of(1, 2, 3);
-val ys = map(xs, x => x * 2);
+val ys = map(xs, (x: int) => x * 2)
 ```
 
 * `xs` is not modified
@@ -58,9 +58,9 @@ val ys = map(xs, x => x * 2);
 
 Selects elements that satisfy a predicate.
 
-```
+```bestie
 val xs = list<int>.of(1, 2, 3, 4);
-val ys = filter(xs, x => x % 2 == 0);
+val ys = filter(xs, (x: int) => x % 2 == 0)
 ```
 
 ---
@@ -69,8 +69,8 @@ val ys = filter(xs, x => x % 2 == 0);
 
 Reduces a collection into a single value.
 
-```
-val sum = fold(xs, 0, (acc, x) => acc + x);
+```bestie
+val sum = fold(xs, 0, (acc: int, x: int) => acc + x)
 ```
 
 * The initial value is mandatory
@@ -82,8 +82,8 @@ val sum = fold(xs, 0, (acc, x) => acc + x);
 
 Lambdas are anonymous functions with explicit parameters.
 
-```
-(x, y) => x + y
+```bestie
+(x: int, y: int) => x + y
 ```
 
 Rules:
@@ -98,8 +98,10 @@ Rules:
 
 Functions can accept and return other functions.
 
-```
-val twice = f => x => f(f(x));
+```bestie
+fun twice(f: fn(int) -> int): fn(int) -> int {
+    return (x: int) => f(f(x))
+}
 ```
 
 Higher-order behavior is resolved entirely at compile time.
@@ -110,13 +112,13 @@ Higher-order behavior is resolved entirely at compile time.
 
 Bestie supports partial application explicitly.
 
-```
-val add = (a, b) => a + b;
-val add10 = partial(add, 10);
+```bestie
+fun add(a: int, b: int): int = a + b
+val add10 = add.bind(10)
 ```
 
-* `partial` is a standard library function
-* Partial application never captures mutable state
+* `bind` follows the core callable model
+* Partial application never captures mutable state implicitly
 
 ---
 
@@ -124,8 +126,10 @@ val add10 = partial(add, 10);
 
 Currying is supported through function definitions, not syntax sugar.
 
-```
-val add = a => b => a + b;
+```bestie
+fun add(a: int): fn(int) -> int {
+    return (b: int) => a + b
+}
 ```
 
 Currying is explicit and intentional.
@@ -136,10 +140,10 @@ Currying is explicit and intentional.
 
 Function composition is provided as a library utility.
 
-```
-val f = x => x + 1;
-val g = x => x * 2;
-val h = compose(f, g);
+```bestie
+val f: fn(int) -> int = (x: int) => x + 1
+val g: fn(int) -> int = (x: int) => x * 2
+val h = compose(f, g)
 ```
 
 Execution order is explicit and left-to-right.
@@ -163,8 +167,8 @@ Collections themselves remain structurally simple and behavior-free.
 
 The following is **intentionally invalid**:
 
-```
-xs.map(x => x * 2)
+```bestie
+xs.map((x: int) => x * 2)
 ```
 
 This restriction:
@@ -179,11 +183,11 @@ This restriction:
 
 Functional error handling is expressed via explicit types, not exceptions.
 
-```
-val result = map(xs, x => safeDivide(10, x));
+```bestie
+val results = map(xs, (x: int) => safeDivide(10, x))
 ```
 
-Propagation rules are defined by the involved types, not by the functional system.
+Propagation rules are defined by the involved types (`!`, `option`, `result`), not by the functional system.
 
 ---
 

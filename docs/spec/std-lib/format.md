@@ -61,7 +61,7 @@ The standard library ships a curated set; future formats do not require changing
 
 ```bestie
 protocol Parser<T> {
-    fun parse(input: str): T | ParseError
+    fun parse(input: str): T ! ParseError
 }
 ```
 
@@ -103,8 +103,8 @@ Formats share one codec model while preserving their own structure.
 ```bestie
 import bestie.lib.format.json
 
-own user = json.parse<User>(input)
-own text = json.serialize(user)
+val user = try json.parse<User>(input)
+val text = json.serialize(user)
 ```
 
 Rules:
@@ -121,8 +121,8 @@ Rules:
 ```bestie
 import bestie.lib.format.xml
 
-own doc = xml.parse<Document>(input)
-own output = xml.serialize(doc)
+val doc = try xml.parse<Document>(input)
+val output = xml.serialize(doc)
 ```
 
 Rules:
@@ -139,8 +139,8 @@ Rules:
 ```bestie
 import bestie.lib.format.csv
 
-own rows = csv.parse<list<Row>>(input)
-own text = csv.serialize(rows)
+val rows = try csv.parse<list<Row>>(input)
+val text = csv.serialize(rows)
 ```
 
 Rules:
@@ -200,7 +200,7 @@ Users may define custom serializers/parsers:
 ```bestie
 class UserJson impl Serializer<User>, Parser<User> {
     fun serialize(u: User): str = ...
-    fun parse(s: str): User | ParseError = ...
+    fun parse(s: str): User ! ParseError = ...
 }
 ```
 
@@ -232,7 +232,7 @@ All parsing errors are:
 * Non-exceptional
 
 ```bestie
-enum ParseError {
+errors ParseError {
     SyntaxError,
     MissingField,
     InvalidType,
@@ -268,7 +268,3 @@ Correctness is preferred over convenience.
 * Open to new codecs through the same protocol model
 
 It provides **data interchange**, not data guessing.
-
----
-
-This document is **finalized**.

@@ -8,7 +8,13 @@ Bestie uses lowercase for foundational abstractions such as `option<T>` and `res
 
 ## 1. StringBuilder
 
-`StringBuilder` is the canonical utility for efficient string construction.
+`StringBuilder` is a **`class`** — the canonical utility for efficient string construction.
+
+It is a `class` (not `value class` or `data class`) because:
+
+* It has **mutable internal state** (a growable byte buffer and a write cursor)
+* It has **identity** — two `StringBuilder` instances that produce the same string are still distinct objects
+* It **owns its backing buffer**, which is heap-allocated and freed when the builder is freed
 
 ### Design
 
@@ -97,7 +103,7 @@ fun parseInt(s: str): result<int, ParseError> {
 ### Guidelines
 
 * Prefer `result` for expected, recoverable failures
-* Do not mix `result` and `throw` without justification
+* Do not mix `result` and panic-based invariant handling without justification
 
 ---
 
@@ -166,7 +172,7 @@ protocol Comparable<T> {
 ### Definition
 
 ```bestie
-protocol Hashable ext Equable<T> {
+protocol Hashable<T> ext Equable<T> {
   fun hash(): int
 }
 ```
@@ -264,12 +270,9 @@ The compiler lowers operator syntax to protocol calls at compile time:
 ### 7.4 Example
 
 ```bestie
-data class Vec2 {
-    x: float64
-    y: float64
-}
-
-impl Vec2 : Addable<Vec2> {
+class Vec2 impl Addable<Vec2> {
+    var x: float64
+    var y: float64
     fun add(other: Vec2): Vec2 = Vec2(x + other.x, y + other.y)
     fun addAssign(other: Vec2) { x += other.x; y += other.y }
 }
@@ -296,8 +299,8 @@ val c = a + b    // compile-time lowered to a.add(b)
 The utility package provides:
 
 * Canonical utility for efficient string construction (`StringBuilder`)
-* Explicit absence modeling (`Option`)
-* Typed failure (`Result`)
+* Explicit absence modeling (`option`)
+* Typed failure (`result`)
 * Structural equality (`Equable`)
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)

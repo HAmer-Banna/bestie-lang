@@ -9,6 +9,34 @@ This document covers the standard-library collection layer: `set`, `map`, `deque
 
 ---
 
+## 0. Class Kind and Ownership Rationale
+
+### Class kind
+
+All four standard-library collection types — `set<T>`, `map<K,V>`, `deque<T>`, `heap<T>` — are **`class`**.
+
+They are not `value class` or `data class` because:
+
+* They have **mutable internal state** by default (element count, backing buffer, tree/bucket structure)
+* They have **identity** — two collections containing the same elements are equal in content but are distinct objects in memory
+* They **own their backing storage** — the internal buffer or node pool is heap-allocated and freed when the collection is freed
+
+The `.immutable` modifier produces a variant that exposes no mutation API, but the underlying type is still a `class`.
+
+### Field-level ownership for element types
+
+A collection's ownership of its elements is determined by the element type's `own` qualifier:
+
+| Declaration | Meaning |
+| ----------- | ------- |
+| `set<User>` | The set holds **copies** of `User` values. `User` is a value type. |
+| `set<own User>` | The set **owns** each `User` instance. `freeDeep()` frees all elements. |
+| `set<ref User>` | The set **borrows** `User` instances. It is not responsible for freeing them. |
+
+The same rule applies to `map<K,V>`, `deque<T>`, and `heap<T>` for both key and value types.
+
+---
+
 ## 1. Supported Collections
 
 | Collection | Variations         | Default |
@@ -27,7 +55,7 @@ Collection family names stay lowercase across Bestie so they remain aligned with
 
 ## 2. Construction Model
 
-Collections are created using **builders**, **size annotations**, or **literals**, depending on intent.
+Collections are created using **builders**, **`of()` construction**, **size annotations**, or **literals**, depending on intent.
 
 There is no hidden allocation strategy.
 Growth/reallocation behavior is defined by the selected collection variation.
@@ -37,9 +65,9 @@ Growth/reallocation behavior is defined by the selected collection variation.
 ### 2.1 Builder Construction
 
 ```bestie
-val ys = set<int>.tree().add(1).add(2)
-val zs = map<int,str>.hash().put(1,"a").put(2,"b")
-val dq = deque<int>.queue().build()
+val ys = set<int>.tree.build().add(1).add(2)
+val zs = map<int,str>.hash.build().put(1,"a").put(2,"b")
+val dq = deque<int>.queue.build()
 ```
 
 Rules:
@@ -50,7 +78,24 @@ Rules:
 
 ---
 
-### 2.2 Core `list<T>` Boundary
+### 2.2 `of()` Construction
+
+Collections may also be created directly from explicit values:
+
+```bestie
+val xs = set<int>.of(1, 2, 3)
+val ys = deque<int>.queue.of(1, 2, 3)
+```
+
+Rules:
+
+* `of()` is explicit construction, not hidden conversion
+* Element values are visible at the call site
+* The backing variation remains explicit when the collection family requires it
+
+---
+
+### 2.3 Core `list<T>` Boundary
 
 `list<T>` is entirely part of the core language.
 This includes:
@@ -80,7 +125,7 @@ This includes:
 ```bestie
 val xs = set<int>.build()                   // hash-backed
 val ys = map<int,str>.build()               // hash-backed
-val dq = deque<int>.queue().build()         // queue
+val dq = deque<int>.queue.build()           // queue
 ```
 
 ---
@@ -90,8 +135,8 @@ val dq = deque<int>.queue().build()         // queue
 If multiple variations from the **same category** are chained, the **last one wins**.
 
 ```bestie
-val x = set<int>.hash.tree().build()       // tree
-val y = map<int,str>.linked.hash().build() // hash
+val x = set<int>.hash.tree.build()         // tree
+val y = map<int,str>.linked.hash.build()   // hash
 ```
 
 Conflicts across incompatible categories are **compile-time errors**.
@@ -101,6 +146,7 @@ Conflicts across incompatible categories are **compile-time errors**.
 ## 4. Immutability and Concurrency
 
 Collections support explicit mutation and concurrency semantics.
+Bestie targets deterministic memory layout for collections **whenever the chosen representation permits it**.
 
 ### 4.1 Mutation Semantics
 
@@ -191,8 +237,8 @@ All collections use **consistent method naming**.
 | deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
 | map        | `put`, `get`, `remove`, `containsKey`                             |
 
-All collections provide **efficient iterators** with no hidden indirection.
-Element access syntax is explicit (for example: `map["food"]`).
+All collections provide **efficient iterators** with no hidden indirection beyond the selected collection representation.
+Element access syntax is explicit (for example: `prices["food"]`).
 
 ---
 
@@ -202,11 +248,11 @@ Std-lib collections **do not include functional methods** (`map`, `filter`, `fol
 
 Functional behavior is provided by:
 
-* `std.functional`
+* `bestie.lib.functional`
 * Extension functions
 
 ```bestie
-val sum = std.functional.sum(xs)
+val sum = bestie.lib.functional.fold(xs, 0, (acc: int, x: int) => acc + x)
 ```
 
 This keeps collections minimal and zero-cost.
@@ -227,7 +273,7 @@ Bestie collections are:
 
 * Generic and type-safe
 * Explicitly constructed
-* Deterministic in memory layout
+* Deterministic in memory layout whenever the selected representation permits it
 * Ownership-aware
 * Compile-time validated
 * Free of hidden allocation behavior

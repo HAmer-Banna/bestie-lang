@@ -27,9 +27,24 @@ They do not change the core memory model.
 
 ---
 
+## 1.1 Class Kinds and Ownership Rationale
+
+All three allocator types in this package are **`class`** — not `value class` or `data class`.
+
+The reasoning applies uniformly:
+
+* Each allocator has **mutable internal state** (an allocation cursor, a used-bytes counter, allocation records)
+* Each allocator has **identity** — copying an arena would produce two objects that believe they own the same backing buffer, leading to double-free
+* Each allocator **owns its backing memory** via a raw `ptr<byte>` that it is responsible for freeing through `release()`
+* `value class` is copy-by-value and cannot contain `own` fields — neither property is compatible with a mutable memory region
+
+Field ownership inside allocators uses raw `ptr<byte>` for the backing buffer. `ptr<T>` carries no ownership qualifier — the allocator itself is the owner and discharges the obligation through `release()`. All other internal fields (capacity, used bytes) are plain integer primitives with no qualifier.
+
+---
+
 ## 2. Arena
 
-`Arena` is a **value class** that provides region-based allocation.
+`Arena` is a **`class`** that provides region-based allocation.
 
 It allows fast allocation and bulk deallocation with well-defined lifetime semantics.
 
@@ -45,12 +60,12 @@ val arena = Arena.of(1, MB)
 ### Allocation
 
 ```bestie
-arena.add(42)
-arena.add(listOfInts)
+val n = arena.add(42)         // ref int
+val xs = arena.add(listOfInts) // ref list<int>
 ```
 
-* `add(T)` allocates a single value
-* `add(list<T>)` allocates a contiguous sequence
+* `add(T)` allocates a single value and returns a `ref T` into arena-owned storage
+* `add(list<T>)` allocates a contiguous sequence and returns a `ref list<T>` into arena-owned storage
 
 All allocations belong to the arena and share the same lifetime.
 
@@ -62,19 +77,20 @@ arena.release() // invalidate arena
 ```
 
 * `reset()` clears all allocations but keeps the arena usable
-* `release()` permanently invalidates the arena; further use is a compile-time error
+* `release()` permanently invalidates the arena; further safe use is rejected when statically provable
 
 ### Rules
 
-* Arenas do not move memory
+* Arenas do not move memory after allocation
 * Arenas do not escape their owning scope
-* Arenas do not participate in ownership transfer
+* Arena-returned references may not outlive the arena
+* Arenas do not participate in ordinary `own` transfer semantics
 
 ---
 
 ## 3. FixedBuffer
 
-`FixedBuffer` allocates from a fixed-capacity contiguous region.
+`FixedBuffer` is a **`class`** that allocates from a fixed-capacity contiguous region.
 
 It is useful when memory limits must be strict and known in advance.
 
@@ -113,7 +129,7 @@ fixed.release() // invalidates backing region
 
 ## 4. Debug
 
-`Debug` wraps another allocator and adds diagnostics.
+`Debug` is a **`class`** that wraps another allocator and adds diagnostics.
 
 It is intended for leak tracking, double-free detection, and usage reporting in development builds.
 
