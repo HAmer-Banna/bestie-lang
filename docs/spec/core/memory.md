@@ -596,23 +596,81 @@ This section defines the complete relationship between class kinds and the memor
 
 ### 10.1.1 `own` and `ref` Field Rules per Class Kind
 
-`ref` fields are **forbidden in all class kinds** without exception. A `ref` cannot escape its source's scope; storing it in a field would require lifetime parameters on types, which Bestie explicitly rejects (see §13).
+#### Two distinct uses of `ref`
 
-`own` fields are permitted only on class kinds that are heap-allocated reference types and support identity semantics. They are forbidden on value types because copying a value type would duplicate the ownership obligation.
+`ref` plays two completely different roles in Bestie. Conflating them produces the contradiction. They must be kept separate:
 
-| Class kind | `own` fields | `ptr<T>` fields | Reason |
-| ---------- | ------------ | --------------- | ------ |
-| `value class` | ❌ Forbidden | ✅ Allowed (unsafe) | Copy-by-value would produce two owners of the same heap object |
-| `data class` | ❌ Forbidden | ✅ `ptr<const T>` only (unsafe) | Deeply immutable — no ownership to transfer; copying would duplicate obligation |
-| `enum` (tag-only) | ❌ N/A | ❌ N/A | No payload fields |
-| `enum` (payload) | ✅ Allowed | ✅ Allowed (unsafe) | Makes enum move-only — see §4.3 |
-| `class` | ✅ Allowed | ✅ Allowed (unsafe) | Standard reference type; owns sub-objects |
-| `open class` | ✅ Allowed | ✅ Allowed (unsafe) | Same as `class` |
-| `abstract class` | ✅ Allowed | ✅ Allowed (unsafe) | Fields visible to concrete subclasses |
+| Use | Syntax | What it means | Compiler enforcement |
+| --- | ------ | -------------- | -------------------- |
+| **Field ownership qualifier** | `val ref course: Course` (in a class body) | This field is non-owning. Do not free it. | Ownership accounting only — `free()`/`freeDeep()` skip this field |
+| **Local borrow** | `val r = ref x` or `fun f(x: ref Course)` | A scope-bounded borrow of an existing value | Scope-based liveness analysis — cannot outlive its source |
+
+These are not the same thing. The rule in §13 — "a locally-obtained `ref` borrow cannot be assigned to a class field" — applies exclusively to the local borrow form. It has nothing to say about field ownership qualifiers.
+
+---
+
+#### `ref` as a field ownership qualifier (class fields only)
+
+Declaring a field with `ref` as its ownership qualifier is the mechanism for expressing "this class borrows this object — someone else owns it and is responsible for freeing it."
+
+```bestie
+class Student {
+    val own address: Address    // Student owns address — freed with Student
+    val ref course: Course      // Student borrows course — NOT freed with Student
+}
+```
+
+This is the foundational use case established in §2. `student.freeDeep()` frees `address` and skips `course`. The compiler does not track the lifetime of `course` — that is the programmer's responsibility (the Course must outlive the Student).
+
+**`ref` field qualifiers are permitted only on heap-allocated reference-type class kinds.** They are forbidden on value types because:
+
+* `value class` — value classes are fully independent copies. Adding a non-owning reference creates an external lifetime dependency that breaks copy safety. If you copy the value class, both copies point to the same object, and neither owns it — the original owner can free the object while both copies still hold the pointer.
+* `data class` — deeply immutable means the entire object graph is stable and self-contained. A `ref` to an external mutable object breaks this guarantee — the referenced object could be freed or changed through another owner.
+* `enum` payload — same reasoning as `value class`; payload variants have value semantics.
+
+For value-type fields with no `own` or `ref` qualifier, the compiler always applies **copy semantics** — the value is embedded inline or copied by value. No ownership tracking is needed.
+
+---
+
+#### Ownership qualifier rules per class kind (full table)
+
+| Class kind | `own` fields | `ref` field qualifier | `ptr<T>` fields |
+| ---------- | ------------ | --------------------- | --------------- |
+| `value class` | ❌ Copy would duplicate ownership | ❌ Breaks copy-safety and lifetime independence | ✅ Allowed (unsafe) |
+| `data class` | ❌ All fields are `val`; deep immutability | ❌ External ref breaks deep immutability | ✅ `ptr<const T>` only (unsafe) |
+| `enum` (tag-only) | ❌ No payload | ❌ No payload | ❌ No payload |
+| `enum` (payload) | ✅ Makes enum move-only (§4.3) | ❌ Value-type semantics | ✅ Allowed (unsafe) |
+| `class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
+| `open class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
+| `abstract class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
 
 `ptr<T>` fields are always in the programmer's responsibility domain — the compiler enforces no ownership semantics on raw pointers. The class that holds a `ptr<T>` field is responsible for freeing the pointed-to memory through explicit `release()`, `free()`, or similar calls.
 
-`data class` specifically allows only `ptr<const T>` fields — not `ptr<T>` — because the type is deeply immutable and a mutable raw pointer field would allow mutation through the pointer, violating the immutability contract.
+`data class` allows only `ptr<const T>` fields — not `ptr<T>` — because a mutable raw pointer field would allow mutation through the pointer, violating deep immutability.
+
+---
+
+#### Ownership qualifier requirement for reference-type fields
+
+For fields whose type is a reference type (`class`, `open class`, `abstract class`), the `own` or `ref` qualifier is **required**. The compiler cannot determine freeing semantics from the type alone.
+
+```bestie
+class Team {
+    val own leader: Employee       // ✅ required — Team owns this Employee
+    val ref department: Department // ✅ required — Team borrows this Department
+    val member: Employee           // ❌ compile-time error — ambiguous: own or ref?
+}
+```
+
+For fields whose type is a value type (`value class`, `data class`, `enum`, primitives), no qualifier is needed — the value is always embedded by copy.
+
+---
+
+#### What `ref` field qualifier does NOT mean
+
+* It does NOT create a compile-time-tracked borrow — lifetime enforcement applies only to local `ref` borrows (§13)
+* It does NOT prevent the programmer from freeing the referenced object while the field still points to it — that is programmer responsibility
+* It does NOT produce a `ref T` type — the field's type is still `Course`, not `ref Course`. `ref` is a qualifier, not a type constructor.
 
 ---
 
@@ -822,9 +880,31 @@ The compiler may inline, elide, reorder, and optimize as long as observable beha
 
 ## 13. Lifetime Enforcement
 
-This section defines the **compiler mechanism** that enforces `ref` safety. The rules stated throughout this document (ref cannot outlive owner, cannot escape scope, cannot be stored) are enforced through **scope-based liveness analysis** within function bodies.
+This section defines the **compiler mechanism** that enforces `ref` safety. The rules apply exclusively to **local `ref` borrows** — values obtained via `ref` expressions or `ref` parameters (the local borrow form of `ref`). Field ownership qualifiers (`val ref course: Course` in a class declaration) are a separate concept and are not subject to these rules — see §10.1.1.
 
-The key simplification that makes this tractable: **`ref` cannot be stored in fields**. This eliminates the need for lifetime parameters in types — the analysis stays entirely within function bodies.
+The rules in this section are enforced through **scope-based liveness analysis** within function bodies.
+
+The key simplification that makes this tractable: **a locally-obtained `ref` borrow cannot be assigned to a class field**. The `ref` qualifier on a class field *declaration* is not an assignment of a local borrow — it is a compile-time ownership annotation. The restriction is: you cannot take a `ref` borrow of a local or parameter value and store that borrow into a field whose lifetime exceeds the borrow's scope. This eliminates the need for lifetime parameters in types — the analysis stays entirely within function bodies.
+
+```bestie
+// ❌ What this rule forbids — storing a local borrow into a long-lived field:
+fun bad(c: ref Course): Student {
+    return Student.new(course: c)
+    // ERROR: c is a locally-scoped ref borrow; it cannot populate a field
+    //        that outlives this function call
+}
+
+// ✅ What is allowed — ref as a field ownership qualifier at declaration time:
+class Student {
+    val own address: Address
+    val ref course: Course      // OK: ownership qualifier, not a stored local borrow
+}
+
+// ✅ Constructing with a reference-type value (no local ref involved):
+val own c = Course.new(...)
+val own s = Student.new(address: addr, course: c)
+// Student holds a non-owning reference to c; c is still owned by this scope
+```
 
 ---
 
