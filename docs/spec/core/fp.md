@@ -386,14 +386,78 @@ Usage:
 val f: fn(int) -> int = square
 ```
 
-Rules:
+### 6.1 Lowering Model
 
-* No implicit boxing
-* No hidden heap allocation
-* Callable values lower to a light callable representation
-* Non-capturing functions lower to direct code references
-* Capturing callables lower to fixed-size compiler-known callable objects
-* No vtables or heap-managed closure objects
+Every callable value has a concrete compile-time lowering. There are two representations:
+
+---
+
+**Thin callable** — a bare function pointer. One word.
+
+Used when:
+
+* The callable is a named function or non-capturing lambda
+* The callee is statically known at the call site and inlined or directly called
+
+```
+[ code_ptr ]   (1 word)
+```
+
+At a direct call site where the callee is statically known, the compiler emits a direct `call` instruction. No representation is materialized at all.
+
+---
+
+**Fat callable** — a code pointer plus a context pointer. Two words.
+
+Used when:
+
+* The callable captures one or more values (explicit `[x]` or `[var x]` captures)
+* A bound method reference carries an instance (copy or moved `own`)
+* A `bind()` result carries runtime-bound arguments
+
+```
+[ code_ptr | context_ptr ]   (2 words)
+```
+
+`context_ptr` points to the **capture struct**, which is a fixed-size, stack-allocated record holding the captured values in capture-declaration order.
+
+For bound method references with `own` move, the context struct holds the moved value inline. For value-type copies, the struct holds the copied value inline.
+
+`context_ptr` is a typed `ptr<CaptureStruct>`. The `CaptureStruct` type is anonymous and compiler-generated — not accessible in user code.
+
+---
+
+**Unification at higher-order function call sites:**
+
+When a callable is passed to or stored in a `fn(T) -> R` typed location, the fat two-word representation is always used. Non-capturing callables placed in this context carry a `context_ptr` of null (zero address). The callee-side calling convention checks `context_ptr != null` before dereferencing.
+
+This means:
+
+* Passing a non-capturing lambda to `fun apply(f: fn(int) -> int)` — `f` is fat with null context
+* Passing a capturing lambda — `f` is fat with a live context pointer
+* The call through `f` uses the indirect calling convention in both cases
+
+When the callee type is fully known at the call site (monomorphic HOF or inlined call), the compiler may specialize and emit a direct call without the fat-pointer indirection.
+
+---
+
+**Capture struct lifetime:**
+
+The capture struct is stack-allocated at the lambda or `bind()` creation site. It lives as long as the callable value is live. The callable may not outlive the scope of its capture struct. The compiler enforces this through the same scope-based liveness analysis used for `ref`.
+
+---
+
+**Calling convention summary:**
+
+| Callable kind | Representation | Call instruction |
+| ------------- | -------------- | ---------------- |
+| Named function, statically known | none (direct) | `call fn_ptr` |
+| Non-capturing lambda, statically known | thin (1 word) or none | `call fn_ptr` |
+| Non-capturing lambda, passed as `fn(T)->R` | fat (2 words, null context) | indirect call |
+| Capturing lambda | fat (2 words, live context) | indirect call |
+| Bound method — value copy | fat (2 words, inline context) | indirect call |
+| Bound method — `own` move | fat (2 words, inline context) | indirect call |
+| `bind()` with runtime args | fat (2 words, live context) | indirect call |
 
 ---
 

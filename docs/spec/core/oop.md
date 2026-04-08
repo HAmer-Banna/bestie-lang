@@ -123,6 +123,13 @@ data class User {
 * Cannot use `ext`
 * May use `impl` with protocols (static dispatch only)
 
+**Construction:**
+
+* Always receives a compiler-generated memberwise `init()` (see section 11.4)
+* `init()` may not be fallible — `data class` construction cannot return `!`
+* `@virtual` calls in `init()` are impossible (no virtual methods permitted)
+* `@noInit` suppresses the generated init; `@noConstruct` forbids all construction
+
 If you need mutable fields, use a regular `class` instead.
 
 ---
@@ -153,6 +160,13 @@ value class Point {
 * Cannot contain `own` fields
 * Cannot be open
 * Inner classes forbidden
+
+**Construction:**
+
+* Always receives a compiler-generated memberwise `init()` (see section 11.4)
+* No `super.init(...)` — `value class` cannot use `ext`
+* Because `own` fields are forbidden, no ownership drops are emitted for partial init failure
+* Laid out inline when used as a field of another class (see section 11.9)
 
 ---
 
@@ -212,6 +226,13 @@ class File {
 * May use `ext` with an `open class` or `abstract class` base
 * May use `impl` with one or more protocols
 
+**Construction:**
+
+* Receives a compiler-generated memberwise `init()` if none is declared (see section 11.4)
+* If using `ext`, every `init()` must call `super.init(...)` as its first statement (see section 11.3)
+* May have fallible `init()` returning `! ErrorSet` (see section 11.6)
+* `@virtual` calls inside `init()` are a compile-time error (see section 11.7)
+
 ---
 
 ### 3.5 open class
@@ -231,6 +252,12 @@ open class Shape {
 * Virtual methods must be explicitly annotated with `@virtual`
 * `@override` mandatory
 * Single inheritance only
+
+**Construction:**
+
+* `init()` follows standard rules (see section 11)
+* Subclasses must call `super.init(...)` as the first statement in every `init()` (see section 11.3)
+* `@virtual` methods must not be called from `init()` — the derived subclass is not yet initialized (see section 11.7)
 
 **Warning — unsubclassed `open` within module:**
 
@@ -256,6 +283,12 @@ Partial implementation with shared logic
 * May contain abstract methods
 * Cannot be instantiated
 * Follows all open class rules
+
+**Construction:**
+
+* May declare `init()` with shared initialization logic
+* `abstract class` `init()` is only reachable via `super.init(...)` from a concrete subclass
+* `T.new(...)` on an abstract class is a compile-time error — instantiation is forbidden
 
 ---
 
@@ -493,6 +526,8 @@ Rules:
 * Explicit qualification required
 * Visibility constrained by outer declaration
 
+For construction rules specific to inner classes — including how the outer `init()` owns and sequences inner construction, and how fallible inner init propagates — see section 11.9.
+
 ---
 
 ## 9. `this` and `super` Resolution
@@ -510,6 +545,7 @@ Rules:
 * Compile-time resolvable only
 * Refers to immediate parent
 * Forbidden in inner classes and protocols
+* `super.init(...)` must be the **first statement** in any derived class `init()` — see section 11.3
 
 ---
 
@@ -523,15 +559,227 @@ Rules:
 
 ## 11. Construction Rules (`init` / `new`)
 
-* `new()` allocates
-* `init()` initializes
-* Enforced at compile time
-* Builders/factories may wrap both
+### 11.1 Two-Phase Construction Model
 
-Restrictions:
-* `@noNew`
-* `@noInit`
-* `@noConstruct`
+Every class construction follows two distinct phases:
+
+1. **Allocation (`new()`)** — raw memory is allocated for the object according to its compile-time-known layout. No fields are initialized. This is performed by the runtime allocator and is not user-visible.
+2. **Initialization (`init()`)** — user-defined `init()` runs, fields are assigned, and base-class initialization is completed.
+
+Both phases always complete atomically from the caller's perspective. A partially-constructed object is **never observable** by user code. The caller receives either a fully-initialized object or an error.
+
+`new()` and `init()` are always called together via the construction syntax `T.new(args)`. They cannot be invoked independently by user code unless the class is annotated with `@noNew` or `@noInit`.
+
+---
+
+### 11.2 Field Initialization Order
+
+Fields are initialized in **declaration order**, top to bottom, as they appear in the class body.
+
+```bestie
+class Connection {
+    host: str        // initialized first
+    port: int        // initialized second
+    socket: Socket   // initialized third
+}
+```
+
+Rules:
+
+* Each field must be assigned exactly once inside `init()` before any use
+* A field may not be read before it is assigned in the same `init()` body
+* The compiler enforces full initialization of all fields before `init()` returns
+* Fields with default values (e.g., `port: int = 80`) are treated as if the assignment appears at the top of `init()` before any user code, in declaration order
+
+---
+
+### 11.3 Base-Class Initialization Order
+
+In a derived class, `super.init(...)` **must be the first statement** in every `init()` body.
+
+```bestie
+open class Shape {
+    color: str
+
+    init(color: str) {
+        this.color = color
+    }
+}
+
+class Circle ext Shape {
+    radius: int
+
+    init(color: str, radius: int) {
+        super.init(color)       // must be first
+        this.radius = radius    // derived fields follow
+    }
+}
+```
+
+Rules:
+
+* `super.init(...)` before any access to `this` fields or methods
+* The compiler rejects any `init()` in a derived class that does not call `super.init(...)` as the first statement
+* All base fields are fully initialized before any derived field assignment begins
+* This applies transitively — if the base itself derives from another class, its `super.init(...)` must be first in its own `init()`
+* Since Bestie supports single inheritance only (`ext` binds exactly one class), initialization order is always a linear chain with no diamond ambiguity
+
+---
+
+### 11.4 Compiler-Generated Memberwise Initializer
+
+If no `init()` is declared, the compiler generates a **memberwise initializer**: one parameter per field, in declaration order, with each parameter name matching the field name.
+
+```bestie
+data class Point {
+    x: int
+    y: int
+}
+// compiler generates: init(x: int, y: int)
+// called as: Point.new(x: 3, y: 4)
+```
+
+Rules:
+
+* The compiler-generated init is **removed entirely** once any explicit `init()` is declared. No implicit default-argument constructor is retained.
+* For a derived class with no explicit `init()`, the compiler generates a memberwise init that calls `super.init(...)` for the base fields first, then initializes derived fields, in declaration order.
+* `data class` and `value class` always receive a compiler-generated memberwise init unless `@noInit` suppresses it.
+* If a field has no default value and no `init()` is declared, the field **must** appear as a parameter in the generated init — there is no zero-initialization of arbitrary types.
+
+---
+
+### 11.5 Multiple `init()` Overloads
+
+A class may declare multiple `init()` overloads, distinguished by parameter types (standard overload resolution applies).
+
+```bestie
+class Server {
+    host: str
+    port: int
+
+    init(host: str, port: int) {
+        this.host = host
+        this.port = port
+    }
+
+    init(host: str) {
+        this.init(host, port: 80)    // delegating constructor
+    }
+}
+```
+
+Rules:
+
+* An `init()` may delegate to another `init()` overload of the same class using `this.init(...)`, which must be the first statement
+* `this.init(...)` and `super.init(...)` are mutually exclusive as the first statement — only one applies per `init()` body
+* Delegation chains must terminate; circular delegation is a compile-time error
+* All paths through every `init()` overload must fully initialize all fields before returning
+
+---
+
+### 11.6 Fallible Construction
+
+`init()` may declare a recoverable failure via the `!` return type.
+
+```bestie
+errors ConnectionError { InvalidHost, PortOutOfRange }
+
+class Connection {
+    host: str
+    port: int
+
+    init(host: str, port: int): ! ConnectionError {
+        if port > 65535 { return !PortOutOfRange }
+        this.host = host
+        this.port = port
+    }
+}
+
+val conn = Connection.new("localhost", 9000) catch |err| { ... }
+```
+
+Rules:
+
+* Fallible `init()` propagates using the standard `!` error-return mechanism
+* On error return, the compiler inserts field-drop logic for any fields already initialized, in **reverse initialization order**
+* Base-class fields (initialized via `super.init()`) are dropped after all derived fields are dropped — the reverse of the initialization chain
+* The partially-constructed object is freed before the error is returned to the caller; the caller never holds a partially-initialized instance
+* Panic during `init()` is unrecoverable; the program terminates immediately. Partially-initialized fields are not dropped. This is consistent with the language-wide guarantee that panics do not unwind.
+
+---
+
+### 11.7 Virtual Methods Forbidden During Construction
+
+Calling `@virtual` methods from within any `init()` body is a **compile-time error**.
+
+```bestie
+open class Base {
+    @virtual fun configure() { ... }
+
+    init() {
+        this.configure()    // error: @virtual call forbidden in init()
+    }
+}
+```
+
+Reason: during `init()`, the derived class is not yet fully initialized. Dispatching to an overridden method in the derived class would access uninitialized derived fields.
+
+Rules:
+
+* Any call to a `@virtual`-annotated method within an `init()` body — on `this`, on `super`, or on a field value — is rejected at compile time
+* Calls to non-virtual methods and protocol methods with static dispatch are permitted
+* This restriction applies to all `init()` overloads, including delegating constructors
+
+---
+
+### 11.8 Construction Restrictions (Annotations)
+
+| Annotation | Effect |
+| ------------ | ------- |
+| `@noNew` | Prevents direct `T.new(...)` calls at call sites. Forces use of a factory function. The class may still be allocated internally by a factory. |
+| `@noInit` | Suppresses the compiler-generated memberwise init and forbids calling `init()` directly. Used for types built entirely via static factory methods or FFI. |
+| `@noConstruct` | Combines `@noNew` and `@noInit`. No user-visible construction path exists. Useful for singleton types, opaque handles, and types managed entirely by a runtime or external system. |
+
+```bestie
+@noNew
+class DbHandle {
+    init(conn: RawConn) { ... }     // callable internally by factory only
+}
+
+fun openDb(dsn: str): DbHandle ! DbError {
+    ...
+    return DbHandle.new(conn)       // permitted inside the module
+}
+// DbHandle.new(...) at an external call site → compile-time error
+```
+
+---
+
+### 11.9 Inner Class Construction
+
+Inner classes have no implicit reference to the outer instance (see section 8). Their construction follows the same rules as any top-level class.
+
+```bestie
+class Outer {
+    class Inner {
+        val: int
+        init(val: int) { this.val = val }
+    }
+
+    inner: Inner
+
+    init() {
+        this.inner = Inner.new(val: 42)    // outer explicitly constructs inner
+    }
+}
+```
+
+Rules:
+
+* The outer class's `init()` is responsible for constructing any inner class instances it owns, as part of its normal field initialization order
+* An inner class's `init()` cannot implicitly reference the outer instance — any access must be passed explicitly as a parameter
+* Inner class construction failure (fallible `init()`) propagates to the enclosing `init()` via the standard `!` mechanism and triggers field drops as per section 11.6
+* `value class` inner classes are copy-initialized; their fields are laid out inline in the outer object's memory
 
 ---
 

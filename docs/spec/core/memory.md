@@ -404,6 +404,38 @@ This is how Bestie avoids C-style leaks while staying simpler than Rust's full l
 
 ---
 
+### 7.4 Compiler Role — Report Only, No Implicit Cleanup
+
+The compiler **does not silently insert `free()` or `freeDeep()` calls**. It is a static analysis and error reporting engine, not an implicit memory manager.
+
+| Compiler behavior | When triggered |
+| ----------------- | -------------- |
+| **Leak error** | An `own` value's obligation is not discharged before it goes out of scope |
+| **Double-free error** | An ownership obligation is discharged more than once |
+| **Use-after-move error** | A moved-from binding is accessed |
+
+These are compile-time errors. The program does not compile.
+
+There is no RAII-style auto-drop at scope exit. The programmer must explicitly call `free()`, `freeDeep()`, or `move`. This is a deliberate design choice: implicit cleanup is hidden behavior, and Bestie refuses to hide memory.
+
+```bestie
+fun bad() {
+    val own u = User.new()
+    // ❌ compile error: ownership of 'u' is not discharged before scope exits
+}
+
+fun good() {
+    val own u = User.new()
+    u.freeDeep()    // ✅ explicit discharge
+}
+```
+
+**Exception — construction failure cleanup:**
+
+The one case where the compiler inserts cleanup automatically is fallible `init()` failure (see oop.md section 11.6). When a fallible `init()` returns an error, the compiler emits field-drop logic in reverse initialization order before returning the error to the caller. This is not silent: it is a specified protocol that is deterministic and part of the two-phase construction contract. The programmer declares the failure path with `! ErrorSet`; the compiler handles the cleanup mechanics for the already-initialized fields. This is not RAII — it is a well-defined, bounded exception to the no-implicit-cleanup rule, scoped entirely to the construction failure path.
+
+---
+
 ## 8. Raw Pointers (`ptr<T>`)
 
 ### 8.1 Definition
@@ -785,7 +817,123 @@ Explicitly rejected designs:
 
 ---
 
-## 18. Summary
+## 18. Object and Tag Layout
+
+This section defines the concrete in-memory layout for every class kind. These rules are stable and must be honored by the IR and codegen stages.
+
+---
+
+### 18.1 Regular `class` and `data class` (no virtual dispatch)
+
+No object header. No type tag. No vtable pointer.
+
+Fields are laid out in **declaration order**. The compiler may reorder fields for alignment padding reduction, provided it does so consistently and the result is observable only through `ptr<T>` field-offset arithmetic (which is always a programmer responsibility).
+
+```
+[ field_0 | field_1 | ... | field_n ]
+```
+
+`value class` follows the same rule. It is always inlined at the point of use — stack, or inline within an enclosing object — and is never heap-allocated through `new()`.
+
+---
+
+### 18.2 `open class` with `@virtual` — Vtable Layout
+
+An object in a live `@virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before all user-declared fields.
+
+```
+[ vtable_ptr | field_0 | field_1 | ... ]
+```
+
+The vtable is a read-only, statically allocated table of function pointers. Each `@virtual` method on the class occupies one slot, in declaration order. Slots are inherited from parent classes in the order they appear in the parent's vtable, followed by the subclass's own `@virtual` methods.
+
+Vtable pointer size equals the platform pointer size (4 bytes on 32-bit, 8 bytes on 64-bit).
+
+The compiler emits one vtable per concrete class. Abstract classes do not emit a vtable (they cannot be instantiated).
+
+---
+
+### 18.3 Sealed `@virtual` Hierarchy — Compact Tag Dispatch
+
+When an `open class` hierarchy is declared `sealed` with a `permits` list, the compiler replaces the vtable pointer with a **compact type tag**.
+
+Tag size: the smallest unsigned integer that can distinguish all permitted types.
+
+| Permitted types | Tag type |
+| --------------- | -------- |
+| 1–255 | `uint8` |
+| 256–65535 | `uint16` |
+| > 65535 | `uint32` (rare) |
+
+```
+[ tag: uint8 | padding | field_0 | field_1 | ... ]
+```
+
+Tag values are compiler-assigned. The base type's tag = 0 if it is concrete; otherwise tags start at 0 for the first permitted subtype. The assignment is deterministic: permitted types in declaration order receive consecutive tag values starting at 0.
+
+Dispatch on a sealed hierarchy lowers to a `switch` on the tag value, with direct calls to the target method — no vtable indirection.
+
+---
+
+### 18.4 `enum` — Tag-Only Variant
+
+A tag-only `enum` (no payload) lowers to an unsigned integer of the smallest fitting size, using the same sizing rule as the sealed tag above.
+
+```
+[ tag: uint8 ]   // for ≤ 255 variants
+```
+
+The tag is the entire representation. No padding, no additional fields.
+
+---
+
+### 18.5 `enum` with Payload Variants — Discriminated Union
+
+An `enum` with one or more payload variants uses a **discriminated union** layout:
+
+```
+[ tag | padding | payload_union ]
+```
+
+* `tag` — same sizing rule as above
+* `padding` — inserted by the compiler to align the payload to the maximum alignment of any variant's payload type
+* `payload_union` — sized to the largest payload variant, with each variant's fields laid out from the start of the union region
+
+The total size of the discriminated union is:
+```
+sizeof(tag) + sizeof(padding) + sizeof(largest_payload)
+```
+rounded up to the alignment of the largest payload type.
+
+Tag-only variants occupy the tag slot only; their payload region is undefined and not accessed.
+
+---
+
+### 18.6 `option<T>` — Niche Optimization
+
+`option<T>` uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
+
+| `T` | Optimization |
+| --- | ------------ |
+| Reference or `own` heap-allocated type | Zero-address niche: `Not_Present` = all-zero word; `Present(x)` = non-zero address |
+| `ptr<T>` (raw pointer) | No niche — `ptr<T>` may legitimately hold the zero address; `option<ptr<T>>` uses a tag |
+| Primitive with a reserved bit pattern (e.g., `bool`) | Compiler-specific niche if unambiguous |
+| All other types | Explicit tag: `[ tag: uint8 | padding | value ]` |
+
+The niche optimization is invisible to user code. `option<T>` always behaves as a two-variant type; the layout is a compiler implementation detail.
+
+---
+
+### 18.7 Layout Stability Guarantees
+
+* Field order (after compiler reordering) is stable across recompilations of the same source
+* Vtable slot indices are stable within a compilation unit
+* Tag values for sealed hierarchies and enums are stable within a compilation unit
+* Cross-module ABI stability requires `@stable` annotation (not yet defined — tracked for a future spec revision)
+
+---
+
+## 19. Summary  <!-- formerly §18 — renumbered after §18 Object and Tag Layout was inserted -->
 
 Bestie’s memory and ownership model is:
 
