@@ -2,12 +2,13 @@
 
 This document defines **how Bestie handles errors and failures**.
 
-Bestie has two and only two failure mechanisms:
+Bestie has two and only two failure paths:
 
 * **`!` error returns** — for expected, recoverable failures. Compile-time typed values. Zero runtime cost.
 * **Panics** — for invariant violations and unrecoverable faults. Terminate the program. Cannot be caught.
 
-There is no `throw`, no `catch`, no exception hierarchy, and no runtime exception unwinding machinery.
+There is no `throw`, no exception hierarchy, and no runtime exception unwinding machinery.
+`catch` exists only as an **inline operator on `!` values**, following Zig-style error handling. It is not an exception mechanism.
 
 ---
 
@@ -83,15 +84,21 @@ fun run(): void ! {
 
 ---
 
-### 2.4 Inline Handling with `catch`
+### 2.4 Inline Recovery with `catch`
 
 ```bestie
-val n = parse("123") catch |e| { 0 }                             // fallback value
-val n = parse("123") catch |e ParseError.InvalidFormat| { -1 }   // typed match
+val n = parse("123") catch 0
+
+val n = parse("123") catch |e| switch (e) {
+    case ParseError.InvalidFormat => -1
+    case ParseError.Overflow      => -2
+    case ParseError.UnexpectedEnd => -3
+}
 ```
 
+* `catch` handles only `!` error returns
 * `catch` produces the fallback value inline
-* Typed `catch` matches a specific error variant
+* Recovery remains explicit and local to the expression
 * No allocation, no unwinding
 
 ---
@@ -115,9 +122,9 @@ Error sets are closed and can be exhaustively matched in a `switch`:
 
 ```bestie
 switch (err) {
-    ParseError.InvalidFormat  => print("bad format")
-    ParseError.Overflow       => print("overflow")
-    ParseError.UnexpectedEnd  => print("truncated")
+    case ParseError.InvalidFormat => print("bad format")
+    case ParseError.Overflow      => print("overflow")
+    case ParseError.UnexpectedEnd => print("truncated")
 }
 ```
 
@@ -196,9 +203,9 @@ fun start(): void ! AppError {
 
     // NetworkError is not a subset of AppError — map per variant
     try connect() catch |e| switch (e) {
-        NetworkError.Timeout    => return AppError.NetworkDown
-        NetworkError.Refused    => return AppError.NetworkDown
-        NetworkError.AuthFailed => return AppError.AuthFailed
+        case NetworkError.Timeout    => return AppError.NetworkDown
+        case NetworkError.Refused    => return AppError.NetworkDown
+        case NetworkError.AuthFailed => return AppError.AuthFailed
     }
 }
 ```
@@ -309,8 +316,8 @@ fun readConfig(path: str): str ! IoError {
 | -------------------- | ---------------------------------------------------- |
 | `?` partial function | Function may simply not return (no error reason)     |
 | `! ErrorSet`         | Recoverable failure with a typed reason — preferred  |
-| `Option<T>`          | Absence of a value (not a failure)                   |
-| `Result<T, E>`       | Stdlib interop or composable error pipelines         |
+| `option<T>`          | Absence of a value (not a failure)                   |
+| `result<T, E>`       | Stdlib interop or composable error pipelines         |
 | `panic()`            | Violated invariant — no recovery possible            |
 
 ---
@@ -331,12 +338,12 @@ fun readConfig(path: str): str ! IoError {
 
 ## 7. What Bestie Deliberately Avoids
 
-* `throw` / `catch` — replaced by `!` and panics
-* Exception hierarchies — replaced by error sets
+* `throw` and exception hierarchies
+* Exception-style runtime catching
 * Runtime exception unwinding machinery
 * Unchecked exceptions — every `!` must be handled or propagated
 * Hidden propagation — every `try` is visible at the call site
-* Recoverable system faults — violated invariants terminate, they do not throw
+* Recoverable system faults modeled as hidden runtime traps
 
 ---
 

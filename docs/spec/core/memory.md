@@ -238,6 +238,19 @@ Rules:
 * Moved-from bindings are invalid and cannot be used
 * Ownership back-links must use `ref` or `ptr`, not `own`
 
+In ownership-validated code, every successful `new()` creates exactly one **ownership obligation**.
+The compiler tracks that obligation flow-sensitively until it is discharged exactly once by one of these actions:
+
+* `free()`
+* `freeDeep()`
+* transfer to another owner via `move`
+* return to the caller as an owned result
+
+If an ownership obligation reaches the end of its valid lifetime without being discharged, the compiler reports a **leak error**.
+If the same obligation is discharged more than once, the compiler reports a **double-free error**.
+
+This guarantee applies to code that stays within `own/ref` semantics. Explicit unsafe escapes through `ptr`, FFI, or trusted low-level constructs remain programmer responsibility.
+
 ---
 
 ### 5.2 Ownership Transfer
@@ -332,7 +345,7 @@ Rules:
 
 * Value returns follow value semantics
 * Returned objects are **owned by the caller**
-* Ownership transfer at return sites is explicit in semantics
+* Returning an owned value transfers its ownership obligation to the caller
 * Returning `ref` requires the owner to outlive the caller
 * Returned `own` values cannot be duplicated by assignment
 
@@ -344,7 +357,7 @@ This eliminates:
 
 ---
 
-## 7. Deallocation: `free()` vs `freeDeep()`
+## 7. Deallocation and Ownership Discharge
 
 ### 7.1 `free()`
 
@@ -356,8 +369,8 @@ student.free()
 
 * Frees **only the object itself**
 * Does **not** recurse into owned fields
-* Leaves owned sub-objects intact
-* Triggers a compiler warning when direct `own` fields still exist
+* Is valid only when all direct `own` fields have already had their ownership obligations discharged
+* Is a compile-time error if live direct `own` fields would be leaked
 
 ---
 
@@ -379,6 +392,15 @@ For deterministic ownership cleanup:
 
 * Use `freeDeep()` for ownership trees
 * Or free owned fields manually before `free()`
+
+### 7.3 Ownership Accounting Rule
+
+For ownership-validated code, Bestie enforces a simple invariant:
+
+> every `new()` must be matched by exactly one ownership discharge.
+
+The compiler maintains this accounting through moves, returns, container ownership, and explicit frees.
+This is how Bestie avoids C-style leaks while staying simpler than Rust's full lifetime system.
 
 ---
 
@@ -684,6 +706,7 @@ Immutable values and `own` transfers (via `move`) are the safe alternatives. See
 | `ref` not stored in fields | Type system |
 | `ref` doesn’t cross thread boundaries | Thread closure analysis |
 | Returned `ref` derives from valid input | `from` annotation + single-input elision |
+| Every `new()` is discharged exactly once in safe ownership code | Ownership accounting over `own` values |
 | `ptr<T>` bounds | Only when statically provable |
 
 **Not checked by the compiler:**

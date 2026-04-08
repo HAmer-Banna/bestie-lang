@@ -300,7 +300,7 @@ All other collections live in `bestie.lib.collections`, including:
 Example:
 
 ```bestie
-val xs = list<int>.linked().build()
+val xs = list<int>.linked.build()
 ```
 
 ---
@@ -894,7 +894,7 @@ As an expression, `if` must produce a value:
 val x: int = if (cond) 4 else 0
 ```
 
-If a value does not have a natural empty representation, `Option<T>` must be used.
+If a value does not have a natural empty representation, `option<T>` must be used.
 
 As a statement, `if` may omit `else`.
 When used inside a function without `else`, the function becomes **partial**:
@@ -923,9 +923,9 @@ Properties:
 
 ```bestie
 val x = switch (v) {
-  1 => 10
-  2 => 20
-  else => 0
+  case 1 => 10
+  case 2 => 20
+  case _ => 0
 }
 ```
 
@@ -1102,7 +1102,7 @@ Rules:
 
 ## 23. `defer`
 
-`defer` schedules a statement to execute at the **end of the enclosing scope**, regardless of how the scope exits — normal return, early return, or exception unwind.
+`defer` schedules a statement to execute at the **end of the enclosing scope**, regardless of how the scope exits — normal return, early return, or error propagation through `try`.
 
 It is compile-time lowered. There is no runtime mechanism, no allocation, and no overhead.
 
@@ -1144,7 +1144,7 @@ for (item in items) {
 ### 19.4 Rules
 
 * `defer` executes at the end of its **enclosing scope block**, not the function
-* `defer` body cannot use `return`, `throw`, or `try`
+* `defer` body cannot use `return` or `try`
 * `defer` captures the variables it references **by binding** at declaration time
 * Multiple defers in one scope execute **LIFO**
 * Compile-time lowered — no runtime mechanism
@@ -1277,7 +1277,7 @@ case option.Present(var user) => { user.name = "updated"; save(user) }
 
 * Every `switch` must be exhaustive — missing cases are a **compile-time error**
 * `_` wildcard satisfies exhaustiveness and must be the last case
-* Pattern matching is **compile-time lowered** — no runtime type tags, no dispatch tables
+* Pattern matching is **compile-time lowered** to comparisons, branches, and sealed-tag tests where needed — no reflection and no runtime dispatch tables
 * Guards do not affect exhaustiveness; a guarded case does not count as covering its pattern
 * Matching is **structural** for `data class` and `enum` with payloads
 * Nested patterns are supported

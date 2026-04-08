@@ -197,8 +197,8 @@ The result of a partial function is an `option<T>`. It must be explicitly handle
 
 ```bestie
 switch (getUser(id)) {
-    option.Present(val user) => sendEmail(user)
-    option.Not_Present       => println("user not found")
+    case option.Present(val user) => sendEmail(user)
+    case option.Not_Present       => println("user not found")
 }
 ```
 
@@ -390,8 +390,10 @@ Rules:
 
 * No implicit boxing
 * No hidden heap allocation
-* Functions are referenced, not wrapped
-* Fully known at compile time
+* Callable values lower to a light callable representation
+* Non-capturing functions lower to direct code references
+* Capturing callables lower to fixed-size compiler-known callable objects
+* No vtables or heap-managed closure objects
 
 ---
 
@@ -481,21 +483,19 @@ Rules:
 
 * `[var x]` captures a mutable copy — the original binding is unchanged
 * Mutations to `var` captures persist between invocations
-* A lambda with `var` captures must be stored in a `var` binding
 * Cannot be shared across threads — mutable state forbids it
-* Cannot be returned from a function — captured state is stack-bound
-* Can be passed to functions (caller's stack holds the state)
+* May be passed, stored, and returned as a light callable value
 * `own` values cannot be captured as `var`
-* No heap allocation — captured state is inline in the lambda's stack frame
+* No heap allocation — captured state is inline in the callable value
 * Capture layout is compile-time known
 
 ---
 
 ### 6.5 Lambda Allocation Model
 
-* Lambdas do not allocate — compile-time lowered to inline code or function pointers
-* Immutable captures — part of a zero-size or fixed-size compile-time-known frame
-* Mutable captures — inline in the lambda's stack frame, no heap
+* Lambdas do not heap-allocate — compile-time lowered to inline code or light callable values
+* Immutable captures — part of a zero-size or fixed-size compile-time-known callable context
+* Mutable captures — inline in the callable value, no heap
 * Heap allocation for lambdas is **not part of the core language**
 
 ---
@@ -512,7 +512,8 @@ Rules:
 
 * Function arguments are explicit
 * No runtime boxing
-* No dynamic dispatch unless explicitly annotated
+* Calls are direct or inlined when the callee is known at compile time
+* Indirect call occurs only when a callable value is actually passed around
 * Fully compatible with ownership and concurrency rules
 
 ---
@@ -586,7 +587,7 @@ Rules:
 
 ### 9.2 Bound Method References
 
-A bound method reference binds an instance to a method, producing a zero-argument callable.
+A bound method reference binds an instance to a method, producing a zero-argument light callable.
 The behavior depends on the type of the bound object.
 
 ---
@@ -598,7 +599,7 @@ val p = Point(x = 1, y = 2)
 val f: fn() -> int = p::getX    // ✅ p is copied into f
 ```
 
-The value is copied at the point of binding. No ownership concerns.
+The value is copied into the callable's inline context at the point of binding. No ownership concerns.
 
 ---
 
@@ -612,7 +613,7 @@ f()                                     // calls getName on the moved user
 use(u)   // ❌ compile error: u has been moved
 ```
 
-`move` transfers ownership into the bound reference. The source binding becomes invalid immediately — consistent with all other ownership transfer in Bestie.
+`move` transfers ownership into the callable's inline context. The source binding becomes invalid immediately — consistent with all other ownership transfer in Bestie.
 
 Without `move`, binding an `own` value is a **compile-time error**:
 
@@ -738,9 +739,9 @@ Rules:
 
 ```bestie
 fun compose<A, B, C>(
-    f: (B) -> C,
-    g: (A) -> B
-): (A) -> C {
+    f: fn(B) -> C,
+    g: fn(A) -> B
+): fn(A) -> C {
     return (x: A) => f(g(x))
 }
 ```
@@ -760,7 +761,7 @@ Capturing-based currying is illegal.
 
 `bind` performs partial application — it fixes one or more arguments of a function, producing a new function with fewer parameters.
 
-Bestie resolves `bind` **at compile time whenever possible**. When the bound value is only known at runtime, it is captured by copy — same semantics as explicit lambda capture, stack-allocated, no heap.
+Bestie resolves `bind` **at compile time whenever possible**. When the bound value is only known at runtime, it is captured by copy — same semantics as explicit lambda capture, stored in a fixed-size callable context, no heap.
 
 **Compile-time constant — fully resolved at compile time:**
 
@@ -769,7 +770,7 @@ val add5 = add.bind(5)       // 5 is a constant — fully specialized, zero runt
 add5(3)                       // compiles to add(5, 3) directly
 ```
 
-**Runtime value — captured by copy, stack-allocated:**
+**Runtime value — captured by copy in the callable context:**
 
 ```bestie
 val n = getUserInput()
@@ -794,7 +795,7 @@ clamp0to100(42)                         // compiles to clamp(0, 100, 42)
 Rules:
 
 * Compile-time constant arguments → fully specialized at compile time
-* Runtime arguments → captured by copy, immutable, stack-allocated when possible
+* Runtime arguments → captured by copy, immutable, inline in the callable value
 * No heap allocation in either case
 * Captured values follow the same rules as explicit lambda captures — value types only, no `own`, no `ref`
 * `bind` arguments are bound left to right

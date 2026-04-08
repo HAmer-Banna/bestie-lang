@@ -74,7 +74,8 @@ This is **early binding**.
 
 * Requires `@virtual`
 * `@override` mandatory
-* Vtables generated only when required
+* Vtables generated only for open `@virtual` hierarchies
+* Sealed `@virtual` hierarchies may use compact tags and direct dispatch instead of vtables
 * Dispatch happens at runtime
 
 This is **late binding**, and is **opt-in only**.
@@ -404,6 +405,7 @@ Rules:
 * Must use `as`
 * Fails at compile time if statically impossible
 * Runtime check exists only for `@virtual` hierarchies
+* Sealed hierarchies may lower the check to a compact type-tag test
 * Runtime check uses compiler-emitted type metadata, not reflection APIs
 
 ---
@@ -543,7 +545,8 @@ Applies to:
 * Protocols
 * File-level functions
 
-No runtime impact.
+No reflection or registration overhead.
+Sealing may improve dispatch and layout because the full implementor set is known at compile time.
 
 ### 12.1 Sealed Classes
 
@@ -568,7 +571,8 @@ Properties:
 Rules:
 * Base must be open or abstract
 * No implicit inheritance outside the permit list
-* Sealing does not affect dispatch or memory layout
+* Sealing may replace pointer-sized runtime metadata with compact type tags
+* Calls through sealed hierarchies may lower to direct tag-switch dispatch instead of vtables
 
 ### 12.2 Sealed Protocols
 
