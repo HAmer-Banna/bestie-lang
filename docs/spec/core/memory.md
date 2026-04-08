@@ -166,31 +166,64 @@ math.PI
 
 ### 4.1 Value Types
 
-Includes:
+Value types are **copied on assignment**. Every binding holds its own independent copy. No heap allocation is required simply to hold the value.
 
-* All primitives
-* Tuples
-* `data class`
-* `value class`
-*  collections
+| Kind | Value type? | Notes |
+| ---- | ----------- | ----- |
+| Primitives (`int`, `float64`, `bool`, `byte`, …) | ✅ | Stack-allocated, zero overhead |
+| `tuple` | ✅ | Laid out inline, copied structurally |
+| `value class` | ✅ | Copy-by-value, inlined at point of use |
+| `data class` | ✅ | Copy-by-value, deeply immutable |
+| `enum` (tag-only) | ✅ | Integer tag, no heap |
+| `enum` (with payload) | ✅ unless contains `own` fields — see §4.3 | Discriminated union, stack-allocated |
 
 Properties:
 
-* Copied on assignment
-* Safe to pass across threads
-* No ownership tracking needed
+* Copied on assignment — each binding is independent
+* Thread-safe by default — no shared mutable state possible through value semantics
+* No ownership tracking required for the value itself
 
 ---
 
 ### 4.2 Reference Types
 
+The following class kinds are **heap-allocated reference types**. A value of these kinds is a reference to a heap object, not the object itself.
+
+| Kind | Reference type? | Notes |
+| ---- | --------------- | ----- |
+| `class` | ✅ | Default: heap-allocated, identity semantics |
+| `open class` | ✅ | Same, plus vtable pointer in layout |
+| `abstract class` | ✅ | Cannot be instantiated directly |
+
+Reference types require explicit ownership qualification (`own` or `ref`) on bindings and fields to express who is responsible for freeing the heap object.
+
 Reference and indirection semantics exist **only** via explicit constructs:
 
-* `ref T` for borrowed references
-* `ptr<T>` for raw addresses
-* `own` qualifiers on bindings/fields for explicit ownership responsibility
+* `ref T` — a borrowed, scoped, non-owning reference
+* `ptr<T>` — a raw address, unsafe, no lifetime or ownership guarantees
+* `own` qualifier — explicit declaration of ownership responsibility
 
-There is no implicit reference behavior.
+There is no implicit reference behavior. No class kind is automatically reference-counted or garbage-collected.
+
+---
+
+### 4.3 `enum` with `own` Payload — Move-Only Semantics
+
+An `enum` variant that holds an `own` field becomes **non-copyable** — copying the enum would duplicate an ownership obligation, which is forbidden.
+
+```bestie
+enum Result {
+    Ok(own Response)    // owns a heap-allocated Response
+    Err(int)
+}
+```
+
+Rules:
+
+* An `enum` value containing an `own` field must be **moved**, not copied
+* The ownership obligation follows the move — the source binding becomes invalid
+* An `enum` where no variant carries an `own` field retains normal value (copy) semantics
+* The compiler infers move-only status from the presence of `own` in any variant's payload
 
 ---
 
@@ -552,6 +585,184 @@ Inlining rules ensure:
 * No hidden pointers
 * Predictable field layout
 * Cache-friendly access
+
+---
+
+## 10.1 Class Kinds — Ownership, Addressability, and Pointer Rules
+
+This section defines the complete relationship between class kinds and the memory model. It answers: which kinds can carry `own` fields, what `.address()` returns, what `ptr<T>` mutation is permitted, and how protocols interact with memory.
+
+---
+
+### 10.1.1 `own` and `ref` Field Rules per Class Kind
+
+`ref` fields are **forbidden in all class kinds** without exception. A `ref` cannot escape its source's scope; storing it in a field would require lifetime parameters on types, which Bestie explicitly rejects (see §13).
+
+`own` fields are permitted only on class kinds that are heap-allocated reference types and support identity semantics. They are forbidden on value types because copying a value type would duplicate the ownership obligation.
+
+| Class kind | `own` fields | `ptr<T>` fields | Reason |
+| ---------- | ------------ | --------------- | ------ |
+| `value class` | ❌ Forbidden | ✅ Allowed (unsafe) | Copy-by-value would produce two owners of the same heap object |
+| `data class` | ❌ Forbidden | ✅ `ptr<const T>` only (unsafe) | Deeply immutable — no ownership to transfer; copying would duplicate obligation |
+| `enum` (tag-only) | ❌ N/A | ❌ N/A | No payload fields |
+| `enum` (payload) | ✅ Allowed | ✅ Allowed (unsafe) | Makes enum move-only — see §4.3 |
+| `class` | ✅ Allowed | ✅ Allowed (unsafe) | Standard reference type; owns sub-objects |
+| `open class` | ✅ Allowed | ✅ Allowed (unsafe) | Same as `class` |
+| `abstract class` | ✅ Allowed | ✅ Allowed (unsafe) | Fields visible to concrete subclasses |
+
+`ptr<T>` fields are always in the programmer's responsibility domain — the compiler enforces no ownership semantics on raw pointers. The class that holds a `ptr<T>` field is responsible for freeing the pointed-to memory through explicit `release()`, `free()`, or similar calls.
+
+`data class` specifically allows only `ptr<const T>` fields — not `ptr<T>` — because the type is deeply immutable and a mutable raw pointer field would allow mutation through the pointer, violating the immutability contract.
+
+---
+
+### 10.1.2 `.address()` Return Type Rules
+
+`.address()` returns a pointer to the **language-level memory representation** of the value. The const-ness of the returned pointer is determined by two rules applied in order:
+
+**Rule 1 — Class kind immutability is absolute:**
+
+| Class kind | `.address()` always returns |
+| ---------- | --------------------------- |
+| `data class` | `ptr<const T>` — regardless of binding mutability. Deep immutability is a type-level guarantee. |
+| `value class` with all `val` fields | `ptr<const T>` |
+| `value class` with any `var` field | Follows Rule 2 |
+| `class`, `open class`, `abstract class` | Follows Rule 2 |
+| `enum` | `ptr<const T>` — enums are value types; tag and payload are not mutated through pointers |
+
+**Rule 2 — Binding mutability determines const-ness for mutable types:**
+
+| Binding | `.address()` returns |
+| ------- | -------------------- |
+| `val T` | `ptr<const T>` |
+| `var T` | `ptr<T>` |
+| `own T` (heap-allocated class) | `ptr<T>` — owner has full access |
+| `ref T` (borrowed reference) | `ptr<const T>` — a borrow cannot produce a mutable pointer; mutation through borrowed address would bypass the borrow rules |
+
+```bestie
+// class — mutable binding → mutable pointer
+val own user = User.new()
+val p1 = user.address()          // ptr<User>
+
+// class — immutable binding → const pointer
+val u2: User = someUser
+val p2 = u2.address()            // ptr<const User>
+
+// data class — always const regardless of binding
+var dt: DateTime = DateTime.new(...)
+val p3 = dt.address()            // ptr<const DateTime>  — var binding but data class is immutable
+
+// value class — var binding → mutable pointer
+var pt: Point = Point.new(1, 2)
+val p4 = pt.address()            // ptr<Point>
+
+// ref — always const pointer
+fun inspect(r: ref User) {
+    val p5 = r.address()         // ptr<const User>
+}
+```
+
+**Ephemeral address warning for value types:**
+
+Value types (`value class`, `data class`, primitives) live on the stack or inline within another object. Their `.address()` is valid only within the scope of the binding. If the binding goes out of scope or is moved, the pointer becomes dangling. This is not a compile-time error — it is programmer responsibility, consistent with all other `ptr<T>` usage. The compiler does not insert bounds checks or lifetime enforcement on `ptr<T>`.
+
+---
+
+### 10.1.3 Mutation Through `ptr<T>` — What Can Be Changed
+
+Mutation through a pointer follows the **field's own declared mutability**, not just the pointer's const-ness.
+
+**Rule: `ptr<T>` gives access governed by field mutability.**
+
+```bestie
+class Server {
+    var port: int        // mutable field
+    val name: str        // immutable field
+}
+
+val own s = Server.new(port: 8080, name: "prod")
+val p: ptr<Server> = s.address()
+
+p.val.port = 9090    // ✅ allowed — port is var
+p.val.name = "dev"   // ❌ compile-time error — name is val
+```
+
+**Rule: `ptr<const T>` forbids all mutation through the pointer, regardless of field mutability.**
+
+```bestie
+val s2: Server = ...
+val p2: ptr<const Server> = s2.address()
+
+p2.val.port = 9090   // ❌ compile-time error — ptr<const T> forbids all writes
+```
+
+**`data class` through `ptr<T>`:** Because all `data class` fields are implicitly `val`, even a `ptr<DataClass>` (non-const) cannot mutate any field — all field assignments are rejected at compile time. The const-ness of the pointer is effectively irrelevant for data classes; both `ptr<T>` and `ptr<const T>` give read-only access.
+
+```bestie
+var dt: DateTime = DateTime.new(...)
+val p: ptr<DateTime> = dt.address()    // ptr<DateTime>, not ptr<const DateTime>
+
+p.val.date = Date.new(...)             // ❌ compile-time error — date is val in data class
+```
+
+**`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is unsafe code) but is programmer-exclusive responsibility.
+
+---
+
+### 10.1.4 Protocols and Memory
+
+Protocols are **zero-cost compile-time abstractions**. They have no memory footprint of their own.
+
+**Static protocol dispatch (default):**
+
+A variable declared as a protocol type stores the concrete object directly, with the concrete object's layout. The protocol type is a compile-time view — not a separate allocation, not a fat pointer.
+
+```bestie
+val p: Printable = Circle.new(radius: 5)
+// p stores a Circle — layout is Circle's layout
+// no boxing, no fat pointer, no vtable in p itself
+```
+
+The concrete type must be statically known at the point of assignment. This means:
+
+* `val p: Printable = Circle.new()` — ✅ concrete type is known at compile time
+* `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `@virtual` instead
+
+`.address()` on a protocol-typed variable resolves to the concrete type's pointer:
+
+```bestie
+val p: Printable = circle
+val addr = p.address()   // ptr<const Circle> — concrete type is known at compile time
+```
+
+**Dynamic dispatch via `@virtual`:**
+
+When dynamic dispatch is needed (elements of different concrete types), use `@virtual` methods and an `open class` hierarchy. The vtable pointer lives inside the object (see §18.2), not in a separate indirection layer. There is no fat-pointer protocol mechanism in Bestie.
+
+**Protocols have no fields, no size, no allocation.** Attempting to store a protocol as a standalone value without a concrete type is a compile-time error.
+
+---
+
+### 10.1.5 `value class` — Addressability Caution
+
+`value class` is designed for inline embedding and stack use. Calling `.address()` on a `value class` is valid but carries the following restrictions:
+
+* The returned pointer is valid only within the scope of the binding — it is **not safe** to return, store in a field, or pass across thread boundaries
+* If the binding is a function parameter passed by value, `.address()` gives the address of the local copy — not the caller's storage
+* Assigning to the binding after taking its address does **not** invalidate the pointer (the address of the storage slot is stable within the scope), but the content at that address changes immediately
+
+```bestie
+fun bad(p: Point): ptr<Point> {
+    return p.address()    // ❌ compile-time error — returning ptr to local value type
+}
+
+fun ok(p: Point) {
+    val addr = p.address()    // ✅ valid within this scope only
+    use(addr)
+}
+```
+
+`own` fields are forbidden on `value class`, so there is never an ownership complication from taking an address of a `value class` field.
 
 ---
 
