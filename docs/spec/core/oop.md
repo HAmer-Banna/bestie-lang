@@ -783,6 +783,64 @@ Rules:
 
 ---
 
+### 11.10 No Implicit Zero Initialization
+
+Bestie **never zero-initializes fields implicitly**. Every field must receive a value either from a default expression in the class body or from every code path through every `init()`. Forgetting to initialize any field is a **compile-time error**.
+
+```bestie
+class Counter {
+    count: int          // ❌ no default, no init() — compile-time error
+}
+
+class Counter {
+    count: int = 0      // ✅ explicit default in class body
+}
+```
+
+This rule applies to all class kinds: `class`, `open class`, `abstract class`, `data class`, and `value class`.
+
+There is no "zero state" implicitly assigned to any type. Absence of a value is not the same as zero — if a field genuinely may not hold a value, it must be declared as `option<T>`:
+
+```bestie
+class Session {
+    userId: int
+    token: option<str>       // explicitly absent until authenticated
+
+    init(userId: int) {
+        this.userId = userId
+        this.token = option.None   // absence is visible and intentional
+    }
+
+    fun authenticate(tok: str) {
+        this.token = option.Present(tok)
+    }
+}
+```
+
+Using `option<T>` for lazy or conditional fields makes the absent state a first-class part of the type. The caller must handle both `Present` and `None` — no accidental null dereference, no silent missing-value bug.
+
+---
+
+### 11.11 `@Initialize` — Third-Party Plugin Convention
+
+The core language enforces explicit initialization for all fields. For use cases where zero or default initialization of an entire class body is desirable — for example, configuration holders or data-transfer objects — a **third-party compiler plugin** may provide an `@Initialize` annotation that generates default field values automatically:
+
+```bestie
+// Provided by a third-party plugin — not part of the core language
+@Initialize
+class Config {
+    maxConnections: int     // plugin generates: = 0
+    timeout: float64        // plugin generates: = 0.0
+    host: str               // plugin generates: = ""
+}
+```
+
+The plugin synthesizes the appropriate zero/default value for each field based on its type, removing the need to write `= 0` or `= ""` everywhere when that is the desired behavior.
+
+The core language itself is unchanged: without the plugin, `@Initialize` is an unknown annotation and the compiler will still reject uninitialized fields. This is explicitly an **opt-in escape hatch**, in the spirit of Java's Lombok project — extending the language through the plugin system without compromising the core's explicit-initialization guarantee.
+
+---
+
 ## 12. Sealed Declarations (File-Scoped)
 
 Sealing defines **closed, finite sets** of declarations.

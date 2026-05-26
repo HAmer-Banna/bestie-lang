@@ -131,6 +131,8 @@ Properties:
 
 File-level `val` must be annotated with `@immutable`.
 
+> For a complete per-type breakdown of what `val`, `@immutable val`, `.immutable`, and `const` each prevent, see `core/immutability.md`.
+
 ---
 
 ### 4.3 `var` — Mutable Binding (Restricted)
@@ -195,6 +197,48 @@ Properties:
 * No storage
 * Compile-time only
 * Suppresses unused diagnostics
+
+---
+
+### 4.7 Definite Assignment
+
+Bestie enforces **definite assignment** for all local bindings.
+A `val` or `var` must be assigned before it is read. Reading an uninitialized local is a **compile-time error**.
+
+```bestie
+val x: int
+print(x)       // ❌ compile-time error: 'x' used before initialization
+
+val y: int = 5
+print(y)       // ✅
+```
+
+The compiler tracks every reachable control-flow path. A binding that may be uninitialized on **any** path is rejected:
+
+```bestie
+val result: int
+
+if (cond) {
+    result = 42
+}
+print(result)   // ❌ compile-time error: 'result' may not be initialized on the false branch
+```
+
+Correct forms:
+
+```bestie
+val result: int = if (cond) 42 else 0   // ✅ always initialized
+
+// or use option<T> when absence is intentional
+val result: option<int> = if (cond) option.Present(42) else option.None
+```
+
+Rules:
+
+* No implicit zero-initialization of locals — the programmer is always in control
+* Conditional initialization requires either a guaranteed `else` branch or `option<T>`
+* The same rule applies inside loops — a binding declared before a loop must be assigned before the loop can read it
+* `val` bindings assigned exactly once satisfy definite assignment; assigning a second time is a compile-time error
 
 ---
 
@@ -270,28 +314,22 @@ Properties:
 
 ### 5.3 Core Collections
 
-Bestie includes exactly one collection in the core language: `list<T>`.
+Bestie includes exactly one collection in the core language: `array<T>`.
 
-`list<T>` is built-in and available without `import`.
-It participates directly in the language's type, memory, and loop rules.
+`array<T>` is built-in and available without `import`.
+It provides fixed-capacity contiguous storage, deterministic layout, and index-based access.
 
-Core `list<T>` supports:
+Core `array<T>` supports:
 
-* `list<T>.build()` with no import
-* Built-in variations such as `array` and `linked`
-* Indexing via `xs[i]`
-* List literals such as `{1,2,3}` when the target type is `list<T>`
-* Sized array forms such as `list<int>[10]` and `list<int>[2][3]`
-* Core methods such as `add`, `remove`, `get`, `insert`, and `indexOf`
-* Ownership, immutability, and concurrency semantics defined by the core specification
-* Builder-chain resolution at compile time
+* `array<T>[n]` — sized declaration, capacity `n`, initially empty
+* `array<T>[] = {v1, v2, ...}` — capacity and size inferred from a literal
+* Indexing via `arr[i]` — panics on out-of-bounds access
+* Core methods: `add`, `get`, `size`, `capacity`, `isEmpty`, `isFull`
+* Capacity is fixed at construction — adding past capacity is a panic
 
-Bestie does **not** provide a separate built-in array type.
-Array semantics are expressed through the core `list<T>`.
-The default `list<T>` is array-backed unless another core variation is selected.
+All dynamic and higher-level collections live in `bestie.lib.collections`, including:
 
-All other collections live in `bestie.lib.collections`, including:
-
+* `list<T>` — dynamic, resizable, with `linked` and future sequence variations
 * `set<T>`
 * `map<K,V>`
 * `deque<T>`
@@ -300,8 +338,59 @@ All other collections live in `bestie.lib.collections`, including:
 Example:
 
 ```bestie
-val xs = list<int>.linked.build()
+val arr : array<int>[5]
+arr.add(1)
+arr.add(2)
+val first = arr[0]
 ```
+
+---
+
+### 5.4 Literal Type Inference and Disambiguation
+
+Bestie uses the **binding's declared type** to resolve what a `{...}` or `{k: v, ...}` literal means. When no type is declared, the compiler applies a **default inference rule**.
+
+#### Default inference rules (no type annotation)
+
+| Literal form | Inferred type | Example |
+| ------------ | ------------- | ------- |
+| `{v, v, ...}` | `array<T>` | `val s = {1, 2, 3}` → `array<int>` |
+| `{k: v, k: v, ...}` | `map<K,V>.hash` | `val m = {1: "a", 2: "b"}` → `map<int,str>.hash` |
+
+`{1, 2, 3}` without a type annotation is always an `array<int>`, never a `list` or `set`. This is intentional: the default is the most efficient, lowest-overhead form.
+
+#### Explicit disambiguation
+
+When the desired type differs from the default, an explicit type annotation on the binding overrides inference:
+
+```bestie
+val a = {1, 2, 3}                       // array<int>   — default
+val b : list<int>    = {1, 2, 3}        // list<int>    — explicit
+val c : set<int>     = {1, 2, 3}        // set<int>     — explicit (deduplicates)
+val d : deque<int>   = {1, 2, 3}        // deque<int>   — explicit
+
+val e = {1: "a", 2: "b"}               // map<int,str>.hash — default
+val f : map<int,str>.linked = {1: "a"} // map<int,str>.linked — explicit variation
+```
+
+The annotation drives the entire resolution — no ambiguity, no implicit coercion between types.
+
+#### Compiler hints for partial annotation
+
+When only a variation needs to change (not the full type), the annotation can target just the variation:
+
+```bestie
+val g : map<str,int>.tree = {"x": 1, "y": 2}   // tree-backed map from literal
+val h : list<int>.linked  = {1, 2, 3}           // linked list from literal
+```
+
+#### Rules
+
+* Without a type annotation, `{v, ...}` **always** resolves to `array<T>` — never `list`, `set`, or `deque`
+* Without a type annotation, `{k: v, ...}` **always** resolves to `map<K,V>.hash`
+* The compiler never silently picks a different collection type from a literal — it either uses the annotation or the default
+* A mismatched annotation is a compile-time error: `val x : set<str> = {"a": 1}` is rejected because a map literal cannot satisfy a `set<str>` type
+* Multi-dimensional array literals follow the same rule: `{{1,2},{3,4}}` without annotation infers `array<array<int>>`
 
 ---
 

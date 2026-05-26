@@ -340,65 +340,187 @@ If named meaning, invariants, or methods are needed, use a class or a `data clas
 
 ---
 
-## 5. `list<T>`
+## 5. `array<T>`
 
-`list<T>` is the only collection built into the core language.
+`array<T>` is Bestie's built-in fixed-capacity contiguous collection.
 
-It provides the language's array semantics and participates directly in memory, loop, and ownership rules.
+It provides direct element storage, deterministic layout, and index-based access with **no hidden allocation** beyond what the declaration site requests.
+
+`array<T>` is designed to be easy to use for the common case of holding a known number of values without forcing the programmer to reach for a dynamic collection.
 
 ### Construction Forms
 
 | Form | Meaning |
 | ---- | ------- |
-| `list<T>.build()` | Default builder |
-| `list<T>.array.build()` | Explicit array-backed list |
-| `list<T>.linked.build()` | Explicit linked variation |
-| `{1, 2, 3}` | List literal when target type is `list<T>` |
-| `list<int>[10]` | Sized array form |
-| `list<int>[2][3]` | Multi-dimensional sized array form |
+| `array<T>[n]` | Fixed-capacity array of `n` elements, initially empty |
+| `array<T>[] = {v1, v2, ...}` | Capacity and initial size inferred from the literal |
+| `array<T>[n].fill(value)` | Fixed-capacity array, all `n` slots pre-filled with `value` |
+
+Examples:
+
+```bestie
+val arr  : array<int>[5]                    // capacity 5, size 0 — fill with add()
+val arr2 : array<int>[] = {1, 2, 3, 4, 5}  // capacity 5, size 5 — initialized from literal
+val arr3 : array<int>[5] = array<int>[5].fill(0)  // capacity 5, size 5 — all zeros
+```
+
+`fill()` is the explicit escape hatch for pre-sized buffers and default-value grids, avoiding the need to write large literals. The value is copied into each slot — no implicit zero-filling ever occurs without it.
+
+**Literal default type:** when a `{v, v, ...}` literal appears without a type annotation, the compiler infers `array<T>`. To obtain a different collection type from the same literal syntax, an explicit type annotation is required — see `lang.md` §5.4.
 
 ### Operators
 
 | Operation | Meaning |
 | --------- | ------- |
-| `xs[i]` | Element access |
-| `xs[i] = v` | Element assignment when mutable |
-| `for (x in xs)` | Iteration |
+| `arr[i]` | Element access — **panics** if index is out of bounds |
+| `arr[i] = v` | Element assignment when mutable — **panics** if out of bounds |
+| `for (x in arr)` | Iterate over all elements |
 
-### Core Methods
+### Methods
 
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
-| `build()` | `list<T>` | Finalizes builder chain |
-| `add(value: T)` | `list<T>` | Appends element |
-| `insert(index: int, value: T)` | `list<T>` | Inserts at position |
-| `get(index: int)` | `T` | Explicit element access |
-| `remove(index: int)` | `T` | Removes and returns element |
-| `indexOf(value: T)` | `int ?` | Returns index or partial result |
-| `size()` | `int` | Number of elements |
-| `isEmpty()` | `bool` | True when no elements exist |
+| `add(value: T)` | `void` | Appends element — **panics** if at capacity |
+| `get(index: int)` | `T` | Explicit element access — **panics** if out of bounds |
+| `size()` | `int` | Current number of elements |
+| `capacity()` | `int` | Fixed maximum number of elements |
+| `isEmpty()` | `bool` | True when no elements have been added |
+| `isFull()` | `bool` | True when `size() == capacity()` |
+| `toList()` | `list<T>` | New array-backed list containing all current elements |
+| `toSet()` | `set<T>` | New hash set containing all current elements (deduplicates) |
 
-### Modifiers and Variations
+Accessing a nonexistent index and adding beyond capacity are both **panics** — they represent violated invariants, not recoverable failures. See `exceptions.md`.
 
-The core list model also supports variation and behavior selection through the builder chain:
+### Iteration
 
-* `array`
-* `linked`
-* `immutable`
-* `copyOnWrite`
-* `concurrent`
+`array<T>` implements `Iterable<T>`. The `for/in` loop works with arrays naturally, with no import or conversion required:
+
+```bestie
+val scores : array<int>[] = {91, 84, 77}
+
+for (s in scores) {
+    print(s.toStr())
+}
+```
+
+### Class Kind and Performance
+
+`array<T>` has **value-class semantics**: no object header, no vtable, no identity, no inheritance.
+It is a compiler-known built-in, not a user-declared class, but it follows the same rules as a `value class`:
+
+* Elements are stored **contiguously in memory** — identical layout to a C array
+* Element access at index `i` lowers to a single multiply-add-load sequence — one instruction, no indirection
+* No bounds-check overhead on the happy path beyond the panic branch (which the CPU branch predictor learns immediately)
+* No allocator metadata, no reference counting, no GC involvement
+
+This is what is meant by "C-speed": `array<T>` access is not a method call with overhead — it is pointer arithmetic.
+
+For classification purposes in the type system, `array<T>` behaves as a `value class`:
+
+| Property | `array<T>` |
+| -------- | ---------- |
+| Object header | ❌ none |
+| Vtable | ❌ none |
+| Identity | ❌ none |
+| Heap allocation | only when size requires it |
+| Inheritance | ❌ not inheritable |
+| Virtual dispatch | ❌ not applicable |
+
+Compare to `list<T>` in `std-lib`, which is a `class` (heap-allocated, identity, owned backing buffer).
+
+---
+
+### Multi-Dimensional Arrays
+
+Multi-dimensional arrays are expressed by nesting the size brackets.
+`array<int>[rows][cols]` is shorthand for `array<array<int>[cols]>[rows]`.
+
+When all dimensions are compile-time constants, the compiler lays the entire structure out as a **single flat contiguous block** (row-major order) — no pointer-to-pointer indirection, identical to a C 2D array:
+
+```bestie
+val grid  : array<int>[3][3]                           // 3×3, 9 contiguous ints
+val mat   : array<float64>[][] = {{1.0, 2.0}, {3.0, 4.0}}  // inferred from 2D literal
+val cube  : array<int>[4][4][4]                        // 4×4×4, 64 contiguous ints
+```
+
+Element access uses chained brackets, each level panicking independently on out-of-bounds:
+
+```bestie
+grid[1][2] = 42         // row 1, col 2 — single memory location, no indirection
+val v = mat[0][1]       // 2.0
+```
+
+Rules:
+
+* When all inner dimensions are fixed, the compiler guarantees flat row-major layout
+* `array<T>[][cols]` is legal when the outer size is inferred from a literal
+* Jagged arrays (variable-length rows) require `array<array<T>[]>` with explicit row sizes
+
+---
+
+### Immutability
+
+`array<T>` does **not** use the `.immutable` builder modifier — it has no builder chain.
+Two dedicated forms handle immutability instead:
+
+**`const`** — compile-time literal arrays. Stored in `.rodata`. Zero runtime cost. Only valid with a literal right-hand side:
+
+```bestie
+const DAYS : array<str>[] = {"Mon", "Tue", "Wed", "Thu", "Fri"}
+```
+
+**`@immutable val`** — runtime arrays frozen after construction. The compiler rejects any mutation attempt as a compile-time error. Zero runtime overhead (no flag, no wrapper):
+
+```bestie
+@immutable val primes : array<int>[] = {2, 3, 5, 7, 11}
+primes[0] = 1    // ❌ compile-time error: element mutation on @immutable binding
+primes.add(13)   // ❌ compile-time error: add on @immutable binding
+```
+
+Full matrix:
+
+| Declaration | Rebind? | Mutate elements? | Storage |
+| ----------- | ------- | ---------------- | ------- |
+| `var arr : array<int>[5]` | ✅ | ✅ | stack / heap |
+| `val arr : array<int>[] = {1,2,3}` | ❌ | ✅ | stack / heap |
+| `@immutable val arr : array<int>[] = {1,2,3}` | ❌ | ❌ | stack / heap |
+| `const arr : array<int>[] = {1,2,3}` | ❌ | ❌ | `.rodata` |
+
+`@immutable val` makes the array safe to share across threads with no locks — the compiler's guarantee that nothing mutates it is sufficient.
+
+---
+
+### Shared Interface with `list<T>`
+
+`array<T>` shares its indexing syntax and common method names with `list<T>` in `std-lib`, so switching between them requires no interface relearning:
+
+```bestie
+arr[0]   // array element access
+ls[0]    // list element access — same syntax
+
+arr.size()  // 3
+ls.size()   // 3 — identical method
+```
+
+The difference is that `array<T>` is **static**: its capacity is fixed at construction and never grows. This makes memory layout predictable and eliminates any risk of silent reallocation.
 
 Example:
 
 ```bestie
-val xs = list<int>.array.immutable.build()
-var ys = list<str>.linked.build()
+val scores : array<int>[3]
 
-ys.add("a")
-ys.insert(0, "z")
+scores.add(91)
+scores.add(84)
+scores.add(77)
+// scores.add(60)  — panic: capacity exceeded
+
+val first = scores[0]
+val n     = scores.size()
+
+for (s in scores) {
+    print(s.toStr())
+}
 ```
-
-All deeper list memory semantics are defined in `memory.md`.
 
 ---
 
@@ -510,8 +632,9 @@ Bestie's core type surface is intentionally compact:
 
 * Primitive numeric values behave like zero-cost value classes
 * `bool`, `char`, and `str` expose explicit core operations only
-* `tuple`, `list<T>`, and `range<T>` are first-class built-in value forms
+* `tuple`, `array<T>`, and `range<T>` are first-class built-in value forms
 * Conversions are explicit
 * `ptr<T>` remains isolated in `memory.md`
+* `list<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`
 
 This keeps the language small enough to reason about, while still making expressions like `5.toStr()`, `"x".isEmpty()`, and `(0..10).contains(4)` feel natural and consistent.

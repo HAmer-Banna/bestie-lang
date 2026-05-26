@@ -122,6 +122,38 @@ Because annotations are compile-time only, these frameworks achieve:
 
 ---
 
+## Third-Party Annotation Conventions
+
+The plugin system enables third-party libraries to establish their own annotation conventions. One well-known pattern is **default initialization**, analogous to Java's Lombok project.
+
+### `@Initialize` (Plugin Convention)
+
+A plugin may provide `@Initialize` to automatically generate zero or default field values for a class, so that every field without an explicit default receives the natural zero for its type:
+
+| Type | Generated default |
+| ---- | ----------------- |
+| `int`, `int8`, … | `0` |
+| `float32`, `float64` | `0.0` |
+| `bool` | `false` |
+| `str` | `""` |
+| `option<T>` | `option.None` |
+| Collection types | empty collection |
+
+```bestie
+// Provided by a third-party plugin — not built into the core language
+@Initialize
+class Config {
+    maxConnections: int     // plugin generates: = 0
+    timeout: float64        // plugin generates: = 0.0
+    host: str               // plugin generates: = ""
+    debug: bool             // plugin generates: = false
+}
+```
+
+Without the plugin active, `@Initialize` is an unknown annotation and the compiler still enforces explicit initialization of every field. This keeps the core strict while letting projects opt in to ergonomic defaults through their toolchain.
+
+---
+
 ## Design Rationale
 
 Bestie annotations are designed to be:
