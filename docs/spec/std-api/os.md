@@ -23,6 +23,7 @@ The API is designed to:
 * Time and clocks (OS-level)
 * Resource limits
 * OS capabilities and metadata
+* Entropy and cryptographically secure randomness
 
 ---
 
@@ -191,7 +192,67 @@ Includes:
 
 ---
 
-## 10. OOP vs Functions (Explicit Policy)
+## 10. Entropy and Secure Randomness
+
+The operating system is the **only** source of true entropy. Pseudo-random number
+generation lives in [`std-lib.random`](../std-lib/random.md); this section provides the
+raw, cryptographically secure material that PRNGs may be seeded from and that
+security-sensitive code must use directly.
+
+### 10.1 Entropy Queries
+
+Stateless functions backed by the OS CSPRNG (e.g. `getrandom`, `BCryptGenRandom`):
+
+```bestie
+fun entropy64(): uint64 ! EntropyError
+fun secureBytes(out: list<byte>): void ! EntropyError
+```
+
+Rules:
+
+* Output is **cryptographically secure** — suitable for keys, tokens, and nonces
+* Each call draws fresh entropy; there is no internal cached state
+* `secureBytes` fills the provided buffer in place (no allocation)
+* Blocking vs non-blocking behavior is platform-defined but never silently degraded
+
+### 10.2 Error Model
+
+Entropy access is **fallible** because the OS source may be unavailable
+(early boot, sandboxed environment, exhausted handle):
+
+```bestie
+errors EntropyError {
+    Unavailable,    // no OS entropy source accessible
+    WouldBlock      // non-blocking source not yet seeded
+}
+```
+
+```bestie
+val seed = entropy64() catch |err| { ... }
+```
+
+### 10.3 Relationship to `std-lib.random`
+
+* `std-api.os` — true entropy, **fallible**, OS-backed, secure
+* `std-lib.random` — deterministic PRNG, reproducible, fast, **insecure**
+
+The intended bridge: draw a one-time seed here, then run a fast deterministic
+generator from `std-lib.random`.
+
+```bestie
+import std.api.os
+import std.lib.random
+
+val seed = Seed.of(os.entropy64() catch |err| { ... })
+val rng  = Pcg32.fromSeed(seed)
+```
+
+Security-sensitive randomness must use `secureBytes` directly and never a
+`std-lib.random` generator.
+
+---
+
+## 11. OOP vs Functions (Explicit Policy)
 
 * **Classes** represent long-lived OS entities (Process, ResourceLimit)
 * **Functions** represent queries or actions
@@ -200,7 +261,7 @@ This rule is intentional and enforced to prevent API fragmentation.
 
 ---
 
-## 11. Error Model
+## 12. Error Model
 
 All errors are:
 
@@ -212,7 +273,7 @@ No hidden retries. No silent fallbacks.
 
 ---
 
-## 12. Stability and Evolution
+## 13. Stability and Evolution
 
 * APIs are additive within a major version
 * Platform-specific extensions are namespaced
@@ -220,7 +281,7 @@ No hidden retries. No silent fallbacks.
 
 ---
 
-## 13. Summary
+## 14. Summary
 
 `std-api.os` is:
 
