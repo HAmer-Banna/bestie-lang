@@ -71,11 +71,11 @@ Reasons:
 * Std-lib collections already provide structured storage
 * Mathematical matrices are domain-specific, not language primitives
 
-As a result, flat numeric storage should use **core array-backed list forms** such as `list<T>.array` and sized array forms such as `list<T>[n]` or `list<T>[n][m]`.
+As a result, flat numeric storage should use **`list<T>`** (array-backed by default) for dynamic sequences, or the core **`array<T>[n]`** type for fixed-capacity storage.
 
 ```bestie
-val flat : list<int>.array = list<int>.array.build()
-val grid : list<int>[3][3]
+val flat : list<int> = list<int>.build()
+val grid : array<int>[9]   // e.g. 3×3 grid stored row-major
 ```
 
 These representations:

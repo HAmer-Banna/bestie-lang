@@ -131,6 +131,12 @@ Properties:
 
 File-level `val` must be annotated with `@immutable`.
 
+> **Two axes of `val` — binding vs. field.** The `val` keyword is used in two distinct positions, and they mean different things:
+> * **`val` binding** (`val x = ...`) — the *binding* cannot be rebound. It says nothing about whether the storage it designates is writable; that depends on the type. Notably, taking `.address()` of a `val T` binding yields a **mutable** `ptr<T>`, because the binding designates writable storage (see `core/memory.md` §8.3 and §10.1.2).
+> * **`val` field** (`val name: str` in a class / `data class` body) — the *field* itself cannot be mutated after construction. Field-level immutability is defined in `core/oop.md` (field declarations and accessors) and summarized per type in `core/immutability.md`.
+>
+> In short: a `val` binding means "this name cannot be rebound"; a `val` field means "this field cannot be mutated." The keyword is the same; the axis is different.
+
 > For a complete per-type breakdown of what `val`, `@immutable val`, `.immutable`, and `const` each prevent, see `core/immutability.md`.
 
 ---
@@ -324,6 +330,7 @@ Core `array<T>` supports:
 * `array<T>[n]` — sized declaration, capacity `n`, initially empty
 * `array<T>[] = {v1, v2, ...}` — capacity and size inferred from a literal
 * Indexing via `arr[i]` — panics on out-of-bounds access
+* Direct index assignment via `arr[i] = value` — panics on out-of-bounds access
 * Core methods: `add`, `get`, `size`, `capacity`, `isEmpty`, `isFull`
 * Capacity is fixed at construction — adding past capacity is a panic
 
@@ -341,7 +348,12 @@ Example:
 val arr : array<int>[5]
 arr.add(1)
 arr.add(2)
-val first = arr[0]
+
+// Direct bracket syntax works for both reads and writes —
+// equivalent to calling arr.get(i) and arr.set(i, value)
+arr[0] = 10          // assign directly by index
+val x = arr[2]       // read directly by index
+val first = arr.get(0)   // method form also valid
 ```
 
 ---

@@ -505,11 +505,16 @@ value.address()
 
 Return type depends on mutability:
 
-| Value kind                 | Result         |
-| -------------------------- | -------------- |
-| Mutable value              | `ptr<T>`       |
-| Immutable or `const` value | `ptr<const T>` |
-| Runtime resource           | `ptr<const T>` |
+| Binding / value kind | Result         |
+| -------------------- | -------------- |
+| `val T` binding      | `ptr<T>`       |
+| `const T` binding    | `ptr<const T>` |
+| Borrowed `ref T`     | `ptr<const T>` |
+| Runtime resource     | `ptr<const T>` |
+
+A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Borrowed references and runtime handles are likewise read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
+
+> **`val` here is the binding axis, not the field axis.** The pointer's const-ness derives from the **binding** form (`val`/`var`/`const`/`ref`), i.e. whether the *name* designates writable or read-only storage. This is distinct from field-level `val` immutability: a `val` *field* inside a class cannot be mutated after construction. Field-level `val` governs write permission **through the resulting pointer on a per-field basis** (see §10.1.3) — it does not change whether `.address()` returns `ptr<T>` or `ptr<const T>`. For the two axes of the `val` keyword, see `core/lang.md` §4.2.
 
 ---
 
@@ -690,33 +695,42 @@ For fields whose type is a value type (`value class`, `data class`, `enum`, prim
 
 **Rule 2 — Binding mutability determines const-ness for mutable types:**
 
+The const-ness of the returned pointer reflects whether the target may be mutated. A `val T` binding yields `ptr<T>` — the address of writable storage. A `const T` binding yields `ptr<const T>` — a pointer to const, through which the target cannot be mutated. `var T` and `own T` likewise yield `ptr<T>`; a borrowed `ref T` yields `ptr<const T>`.
+
+> **Binding axis vs. field axis.** Rule 2 reads the **binding** form (`val`/`var`/`const`/`ref`) — the `val` here means "the binding cannot be rebound," not "the field cannot be mutated." It governs the *pointer's* const-ness only. Field-level `val` is a separate concept: it controls which fields may be written *through* the resulting pointer, per field, and is applied in §10.1.3. A non-const `ptr<T>` can still refuse a write to a `val` field.
+
 | Binding | `.address()` returns |
 | ------- | -------------------- |
-| `val T` | `ptr<const T>` |
+| `val T` | `ptr<T>` — address of writable storage |
 | `var T` | `ptr<T>` |
+| `const T` | `ptr<const T>` — pointer to const; the target cannot be mutated through it |
 | `own T` (heap-allocated class) | `ptr<T>` — owner has full access |
 | `ref T` (borrowed reference) | `ptr<const T>` — a borrow cannot produce a mutable pointer; mutation through borrowed address would bypass the borrow rules |
 
 ```bestie
-// class — mutable binding → mutable pointer
+// class — val binding → mutable pointer
 val own user = User.new()
 val p1 = user.address()          // ptr<User>
 
-// class — immutable binding → const pointer
+// class — val binding → mutable pointer
 val u2: User = someUser
-val p2 = u2.address()            // ptr<const User>
+val p2 = u2.address()            // ptr<User>
+
+// class — const binding → const pointer
+const u3: User = someUser
+val p3 = u3.address()            // ptr<const User>  — const target cannot be mutated through it
 
 // data class — always const regardless of binding
 var dt: DateTime = DateTime.new(...)
-val p3 = dt.address()            // ptr<const DateTime>  — var binding but data class is immutable
+val p4 = dt.address()            // ptr<const DateTime>  — var binding but data class is immutable
 
 // value class — var binding → mutable pointer
 var pt: Point = Point.new(1, 2)
-val p4 = pt.address()            // ptr<Point>
+val p5 = pt.address()            // ptr<Point>
 
 // ref — always const pointer
 fun inspect(r: ref User) {
-    val p5 = r.address()         // ptr<const User>
+    val p6 = r.address()         // ptr<const User>
 }
 ```
 
