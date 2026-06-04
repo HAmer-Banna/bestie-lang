@@ -205,6 +205,8 @@ Reference and indirection semantics exist **only** via explicit constructs:
 
 There is no implicit reference behavior. No class kind is automatically reference-counted or garbage-collected.
 
+**`ptr<T>` is itself a value type** — a single machine word holding an address. It is copied by assignment, carries no ownership obligation, and is therefore a valid pointee and a valid element anywhere a value is allowed: as a field, as a collection element (`array<ptr<T>>` — see §11.4), or as the target of another pointer (`ptr<ptr<T>>` — see §8.6). Copying a `ptr<T>` duplicates the address, not the pointee; this aliasing is allowed precisely because raw pointers live in the explicit unsafe domain.
+
 ---
 
 ### 4.3 `enum` with `own` Payload — Move-Only Semantics
@@ -552,6 +554,126 @@ p.offset(2).val
 
 ---
 
+### 8.6 Pointer of Pointers and Const Propagation
+
+A `ptr<T>` can point to any `T`, including another pointer. `ptr<ptr<T>>` is **not a special construct** — it is `ptr<U>` with `U = ptr<T>`. Nesting is arbitrary (`ptr<ptr<ptr<T>>>`), because a `ptr<T>` is itself a value (one machine word, no ownership — §4.2) and is therefore a valid pointee.
+
+**Const-ness is independent at each level.** Each `const` qualifier applies to exactly one level of indirection:
+
+| Type | Inner pointer slot | Final `T` |
+| ---- | ------------------ | --------- |
+| `ptr<ptr<T>>` | writable | writable |
+| `ptr<ptr<const T>>` | writable | read-only |
+| `ptr<const ptr<T>>` | read-only | writable |
+| `ptr<const ptr<const T>>` | read-only | read-only |
+
+**Dereferencing is explicit at every level** — Bestie never chases multiple hops implicitly:
+
+```bestie
+val p:  ptr<int>      = x.address()
+val pp: ptr<ptr<int>> = p.address()
+
+val inner: ptr<int> = pp.val         // one hop  → the stored pointer
+val value: int      = pp.val.val     // two hops → the int
+
+pp.val.val = 42     // write through to the int   — requires the int level non-const
+pp.val     = q      // rebind the inner pointer    — requires the outer level non-const
+```
+
+**`.address()` needs no new rule** — the §10.1.2 binding rules apply with `T = ptr<...>`:
+
+```bestie
+val p: ptr<int>   = ...
+val pp = p.address()     // ptr<ptr<int>>          (val binding → writable slot)
+
+const c: ptr<int> = ...
+val cc = c.address()     // ptr<const ptr<int>>    (const binding → read-only slot)
+```
+
+**Pointer arithmetic** on a `ptr<ptr<T>>` strides by one machine word (`sizeof(ptr<T>)`), since the elements are pointers.
+
+**`option` and the niche (§18.6):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `option<ptr<ptr<T>>>` has **no niche** and uses an explicit tag, exactly like `option<ptr<T>>`.
+
+---
+
+### 8.7 Pointer Equality, Comparison, and the Zero Address
+
+**Equality.** `ptr<T>` supports `==` and `!=`, comparing **raw addresses**. Two pointers are equal iff they hold the same address; pointee contents and provenance are not considered.
+
+```bestie
+val same = (p == q)      // true iff p and q hold the same address
+```
+
+**Ordering.** `<`, `<=`, `>`, `>=` are available and compare addresses numerically. Ordering pointers that derive from different allocations is permitted (it is the unsafe domain) but its meaning is the programmer's responsibility — only ordering within a single allocation or array is well-defined.
+
+**The zero address.** Bestie has no `null` (see `fp.md` §4). Safe Bestie code never produces a zero-address `ptr<T>`: every pointer from `.address()` targets live storage and is non-zero. A zero address can enter a program only across an explicit boundary — `foreign` code or `@trusted` operations. For testing at that boundary:
+
+```bestie
+fun isZero(): bool      // true if the pointer holds the zero address
+```
+
+To model "a pointer that may be absent" in **safe** code, use `option<ptr<T>>` — the FFI layer maps a C `NULL` to `option.Not_Present` (see `foreign.md` §7). Reach for `isZero()` only inside `foreign` / `@trusted` code that handles raw addresses directly.
+
+---
+
+### 8.8 Pointer Casting and Alignment
+
+Reinterpreting a pointer as a different pointee type is an **unsafe reinterpretation**, written explicitly:
+
+```bestie
+val pb: ptr<byte>   = p.cast<byte>()     // view the raw bytes of the pointee
+val pu: ptr<uint32> = pb.cast<uint32>()  // reinterpret those bytes as a uint32
+```
+
+Rules:
+
+* `cast<U>()` changes only the pointee type — the address value is unchanged. It performs **no conversion** of the pointed-to bytes (unlike numeric `as` conversion in `types.md` §2.1).
+* Casting to `ptr<byte>` is always permitted (every type is byte-addressable). `byte`-level access is the canonical way to inspect raw storage.
+* Casting **to a stricter alignment** than the address satisfies is undefined on access; alignment is the programmer's responsibility. The required alignment of `T` is compile-time known, and `p.isAligned<U>(): bool` tests an address before a stricter cast.
+* **Removing `const`** (`ptr<const T>` → `ptr<T>`) is a const violation and is permitted **only under `@trusted`**. Adding `const` is always allowed.
+* A reinterpret cast between unrelated pointee types is not, by itself, a compile-time error — it is the explicit unsafe boundary — but statically provable misuse (e.g., access beyond a known size) is still rejected per §8.5.
+
+---
+
+### 8.9 Function Pointers
+
+A high-level callable value (`fn(...) -> ...` / `(...) -> ...`) uses the thin/fat representation defined in `fp.md` §6.2. A **raw function pointer** is the low-level address of executable code, used mainly for FFI:
+
+```bestie
+ptr<fn(int) -> int>      // raw code address of a function taking int, returning int
+```
+
+Rules:
+
+* `.address()` on a **named function or a non-capturing lambda** yields a raw `ptr<fn(P) -> R>` — a single code pointer (the thin representation).
+* A **capturing lambda is fat** (code + context); it has no single code address, so taking a raw function pointer to it is a **compile-time error**. Pass the callable value itself, or refactor to a non-capturing form.
+* Calling **through** a raw `ptr<fn(...)>` is unsafe: there is no context word, no capture, and no lifetime guarantee. It exists for C interop — C function pointers map to this form (see `foreign.md`).
+* A raw function pointer's pointee is always `const` — code is not writable through it.
+
+---
+
+### 8.10 Interior Pointers (Pointer to a Field)
+
+`.address()` may be taken on a field to obtain a pointer **into** an object's storage:
+
+```bestie
+class Server { var port: int; val name: str }
+
+val own s = Server.new(port: 8080, name: "prod")
+val pp: ptr<int> = s.port.address()      // interior pointer at the port field's offset
+pp.val = 9090                             // ✅ port is var
+```
+
+Rules:
+
+* The result points at the field's storage slot, at its compile-time-known offset within the object.
+* Const-ness follows the same two-axis rule as any other address: the **binding** axis sets the pointer's base const-ness (§10.1.2) and the **field**'s own `val`/`var` governs write-through (§10.1.3). A pointer to a `val` field rejects writes even when the pointer is non-const; a pointer derived from a `const` or `ref` binding is `ptr<const _>`.
+* An interior pointer is valid only while the enclosing object is alive and not moved. If the object is freed or moved, the interior pointer dangles — programmer responsibility, identical to the ephemeral-address rule for value types (§10.1.2, §10.1.5).
+* Interior pointers into a `value class` or other stack/inline value are ephemeral and must not be returned, stored, or sent across threads (§10.1.5).
+* Pointer arithmetic from an interior pointer can walk adjacent fields; the compiler accepts compile-time-provable in-bounds offsets and rejects provable out-of-bounds (§8.5). Everything else is the programmer's responsibility.
+
+---
+
 ## 9. Runtime Resources
 
 Runtime resources (files, sockets, etc.) are addressable:
@@ -879,6 +1001,37 @@ Rules:
 * Immutable collections may be shared across threads
 * No mutation APIs
 * Compile-time enforced
+
+---
+
+### 11.4 Containers of Pointers
+
+Any collection may hold raw pointers as elements — `array<ptr<T>>`, `list<ptr<T>>`, `map<K, ptr<V>>`, and so on — because `ptr<T>` is a value-type element (one word — §4.2). Nesting (`array<ptr<array<int>>>`) and const element forms (`array<ptr<const T>>`) are equally valid.
+
+**A pointer-element container owns nothing it points through.** `ptr<T>` carries no ownership, so the container is responsible only for its own backing buffer. This is the decisive difference from owning and borrowing element kinds:
+
+| Element type | What the container owns | `freeDeep()` | Copy semantics |
+| ------------ | ----------------------- | ------------ | -------------- |
+| `list<own T>` | the elements | frees buffer **and every element** | move-only (no copy) |
+| `list<ref T>` | nothing (borrows) | frees buffer only | borrow |
+| `list<ptr<T>>` | nothing (raw addresses) | frees buffer only — **pointees are never freed** | shallow copy (aliasing) allowed |
+
+Consequences, all in the explicit unsafe domain:
+
+* **Freeing pointees is manual.** `freeDeep()` on a `list<ptr<T>>` behaves like `free()` with respect to the pointees — it reclaims the backing buffer, not the pointed-to memory. To free the targets, iterate and release each explicitly **before** freeing the container.
+* **Copying aliases.** `val b = a` on a `list<ptr<T>>` is a shallow copy: `a` and `b` hold the **same addresses**. This is permitted (unlike `list<own T>`, which is move-only — §11.2) and is intentional — it matches C-style pointer arrays. The programmer must not free through one alias while the other is still in use.
+
+```bestie
+val arr: array<ptr<Node>> = ...
+
+val n0: ptr<Node> = arr[0]      // a copy of the stored address
+arr[0].val.value = 9            // write through to the pointee (ptr non-const)
+arr[0] = other                  // replace the stored pointer (container mutable)
+```
+
+**Concurrency.** A container of `ptr<T>` shared across threads is programmer-owned: the compiler provides no data-race protection on raw pointers (§14), unlike `own` / `ref` element containers. The `concurrent` variant guards only the container's own structure; the pointees remain unguarded.
+
+**Value- / data-class elements that hold pointers** follow the field rules of §10.1.1: a `list<C>` whose `data class C` has a `ptr<const T>` field is fine; a mutable `ptr<T>` field inside a `data class` is rejected.
 
 ---
 
@@ -1252,6 +1405,8 @@ Bestie’s memory and ownership model is:
 `ref` answers **who borrows**
 `ptr<T>` answers **where in memory**
 `from` answers **where a returned ref originates**
+
+`ptr<T>` composes freely — it **nests** (`ptr<ptr<T>>`, with per-level const), lives **in containers** (`array<ptr<T>>`, which own nothing they point through), and **casts** (`cast<U>()`, `@trusted` to drop const) — always as raw, unowned, explicit indirection. Pointer-of-pointers, pointer elements, pointer casts, function pointers, and interior pointers are all the same single primitive used compositionally, never new machinery.
 
 Memory is not managed *for* the developer.
 Memory is managed **with** the developer — explicitly, safely, and predictably.
