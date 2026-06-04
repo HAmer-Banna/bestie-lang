@@ -166,9 +166,10 @@ data class User {
 Rules:
 
 * Field names must match
-* Missing fields are errors
-* Extra fields are errors unless explicitly allowed
+* Missing fields are errors — **unless** the field declares a default, which makes it optional on deserialize (see §11.9 for schema evolution)
+* Extra fields are errors unless explicitly allowed (opt-in per call, §11.9)
 * Generic container targets such as `map<str, str>` or `list<Row>` are valid only when explicitly requested by the caller
+* Construction always runs the target type's constructor, so type invariants are enforced (see §11.7)
 
 ---
 
@@ -242,7 +243,109 @@ errors ParseError {
 
 ---
 
-## 11. Intentional Non-Features
+## 11. Serialization and the Memory Model
+
+Serialization captures a **value snapshot** of an object graph; deserialization rebuilds an **owned, independent** graph from that snapshot. Because Bestie's memory model is explicit about ownership and indirection, serialization behavior is defined precisely per field kind — there is no reflection and no guessing.
+
+### 11.1 Field Behavior by Ownership Kind
+
+| Field kind | Serialized? | Deserialized as |
+| ---------- | ----------- | --------------- |
+| value (`primitive`, `value class`, `data class`, `tuple`, `enum`) | ✅ by value | the same value |
+| `own T` | ✅ — the owned content is part of the graph | a **newly allocated** owned `T` (caller owns it) |
+| `ref T` | ❌ **not serialized** (transient) | not restored — must be re-attached by the programmer |
+| `ptr<T>` | ❌ **not serialized** (transient) | not restored — a raw address has no portable meaning |
+
+Rationale:
+
+* A `ref` is a borrow with no independent existence — on deserialization there is no owner to borrow from, so it cannot be reconstructed automatically.
+* A `ptr<T>` is a raw machine address; it is meaningless in another process, another run, or after relocation. It is transient by definition.
+
+### 11.2 Auto-Derivation and Custom Codecs
+
+* A type is **auto-serializable** (compiler-derivable `Serializer<T>` / `Parser<T>`) when every serialized field is itself serializable — i.e. value fields and `own` fields of serializable types. `data class`es are the common case and derive trivially.
+* `ref` and `ptr<T>` fields are **skipped**. If a type cannot be validly reconstructed without them, the compiler cannot derive a `Parser` for it — the programmer must supply a **custom `Parser<T>`** (§9) that re-establishes those links after the owned fields are built.
+* There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`util.md` §8). Capability is always a real method, never an empty tag.
+
+### 11.3 Containers
+
+A container serializes element-by-element, following the element kind from §11.1:
+
+| Container | Serialization |
+| --------- | ------------- |
+| `list<value T>` / `list<own T>` | every element serialized; deserializes to an **owning** container the caller owns |
+| `list<ref T>` | elements are borrows → **not serializable** (a custom codec must decide how to resolve them) |
+| `list<ptr<T>>` | raw addresses → **not serializable** |
+
+A deserialized collection always **owns** its elements and its buffer — there is no way to deserialize into a borrowing collection.
+
+### 11.4 Immutability
+
+Immutable data (`data class`, `str`, `const` values) serializes and deserializes cleanly — it is pure value data. Deserialization produces fresh immutable values; no special handling is required, and the result is safe to share across threads under the usual rules.
+
+### 11.5 Relationship to `copy` / `deepCopy`
+
+A serialize → deserialize round-trip is closely related to `deepCopy` (`util.md` §8):
+
+* Both produce a **fully owned, independent** graph of the value-and-`own` portion.
+* Both **do not follow `ptr<T>`** — raw pointers are outside the managed graph.
+* The difference: `deepCopy` preserves `ref` aliasing (the copy borrows the same targets), whereas serialization **drops** `ref` entirely (there is nothing to borrow after a round-trip).
+
+### 11.6 Cycles
+
+A pure ownership graph is acyclic: every `own` value has exactly one owner, so owned structure forms a tree (or DAG of values). Cycles can exist only through `ref` / `ptr<T>` — and those are never serialized. Therefore **auto-derived serialization cannot encounter an ownership cycle**, and no cycle-detection machinery is needed. Graphs that are cyclic by intent must use a custom codec that encodes identities explicitly.
+
+### 11.7 Deserialization Safety
+
+Deserialization in Bestie treats input as **untrusted data, never as instructions**. This is the core of how Bestie avoids the deserialization vulnerabilities (gadget chains, remote code execution, forged invariants) that plague reflective serialization systems.
+
+**No code execution, no arbitrary instantiation.**
+
+* `parse<T>(input)` constructs **only `T`** (and the value/`own` types statically reachable from `T`). The payload never names a type to instantiate — the target type is fixed at the call site and known at compile time.
+* Deserialization runs **no user-selected code paths** and invokes **no magic lifecycle hooks**. There is no `readObject`-style entry point that untrusted bytes can steer. The only code that runs is the target type's own constructor and the (statically chosen) `Parser<T>`.
+* No reflection, no dynamic class loading, no polymorphic "instantiate whatever the stream says" behavior.
+
+**Invariants are always enforced — construction goes through the constructor.**
+
+* A deserialized object is built by calling the type's **normal constructor / factory** with the parsed fields. Deserialization **cannot bypass construction** to populate fields directly.
+* Therefore every invariant the constructor enforces holds for deserialized objects exactly as for in-program ones. Untrusted input cannot forge an object that no constructor would produce (no negative balances, no broken size/capacity relationships, etc.).
+* If a constructor rejects the parsed values (precondition fails), deserialization fails with a typed `ParseError` (`InvalidType` / a validation variant) — it never yields a half-built or invalid object.
+* `data class`es are pure data with a total constructor, so they deserialize directly. Types with **non-trivial invariants** must expose a constructor/factory that validates, or provide a custom `Parser<T>` (§9) that calls it; the compiler will not derive a `Parser` that skips validation.
+
+> Contrast with `deepCopy` (`util.md` §8.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
+
+### 11.8 Excluding Fields (`@transient`)
+
+`ref` and `ptr<T>` fields are excluded automatically (§11.1). A **value or `own` field** can be excluded explicitly with `@transient` — the Bestie answer to "don't put this in the payload" (secrets, caches, derived data):
+
+```bestie
+data class Session {
+    userId: int
+    @transient token: str      // never serialized
+    @transient cache: Digest    // derived; rebuilt, not stored
+}
+```
+
+Rules:
+
+* A `@transient` field is **omitted on serialize** and **not read on deserialize**.
+* Because deserialization goes through the constructor (§11.7), a `@transient` field must be supplied by the constructor — typically via a default or a derived value. A type whose constructor *requires* a transient field with no default cannot be auto-derived and needs a custom `Parser<T>`.
+* Exclusion is **opt-out per field and visible at the declaration site** — there is no way to accidentally serialize a field you marked transient, and no hidden global "skip" list.
+
+### 11.9 Versioning and Schema Evolution
+
+Bestie has **no `serialVersionUID` and no implicit version stamp**. Compatibility is structural and explicit, governed by the §7 mapping rules plus these additions:
+
+* **Strict by default.** Missing required fields and unknown extra fields are errors (§7). This makes incompatibility loud rather than silent.
+* **Backward-compatible reads via defaults.** A field with a declared default is **optional on deserialize** — older payloads that lack it parse successfully and the default is applied (through the constructor, §11.7). This is the supported way to add a field without breaking old data.
+* **Tolerating unknown fields is opt-in.** A caller may pass an explicit "ignore unknown fields" option to a codec to accept forward-compatible payloads; it is never the default.
+* **Renames/removals are breaking** and must be handled by a custom `Parser<T>` (e.g. reading an old field name and mapping it). There is no automatic field aliasing.
+
+This keeps schema evolution explicit and reviewable: a field becomes optional only when it has a default, and lenient parsing is always a visible decision at the call site.
+
+---
+
+## 12. Intentional Non-Features
 
 This library intentionally avoids:
 
@@ -257,7 +360,7 @@ Correctness is preferred over convenience.
 
 ---
 
-## 12. Summary
+## 13. Summary
 
 `std-lib.format` is:
 

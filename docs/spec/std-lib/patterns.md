@@ -187,6 +187,15 @@ protocol Proxy<T> {
 * Resource management
 * Boundary enforcement
 
+### Interaction with `copy` / `deepCopy`
+
+A proxy is duplicated like any other object — by its **stored fields**, never by invoking `get()` (see `util.md` §8.7). Duplication therefore preserves a lazy proxy's unresolved state and follows the proxy's field qualifiers:
+
+* If the proxy holds its target as an `own` field, `deepCopy` duplicates the target and `copy` is forbidden (it would duplicate ownership).
+* If the proxy holds its target as `ref` or `ptr<T>` (the common case, since `get()` returns `ref T`), both `copy` and `deepCopy` produce a proxy that **aliases the same target**. The target's lifetime remains the programmer's responsibility — it must outlive every proxy that borrows it.
+
+A proxy must not hide ownership transfer through duplication: copying a proxy never silently moves or frees the proxied object.
+
 ---
 
 ## 6. Singleton

@@ -37,8 +37,21 @@ sb.append("Hello")
 sb.append(" ")
 sb.append("World")
 
-val s = sb.toString()
+val s = sb.toStr()
 ```
+
+`toStr()` (not `toString()`) is used deliberately — it matches the universal `toStr()` conversion convention used by every core type (`core/types.md` §2.1). There is exactly one spelling for "produce a `str`."
+
+### Relationship to `std-lib.strings`
+
+`StringBuilder` and `std-lib.strings` are complementary and do **not** overlap:
+
+| Concern | Owner |
+| ------- | ----- |
+| Mutable, allocation-efficient **construction** (append in a loop) | `StringBuilder` (this section) |
+| Immutable **queries / transforms** on an existing `str` (parse, substring, split, trim, case, search) | `std-lib.strings` |
+
+`StringBuilder` operates on a mutable buffer and exposes `append` / `toStr`; `std-lib.strings` operates on immutable `str` values and returns new `str`s. They share no method names and never compete for the same operation — build with `StringBuilder`, then query/transform the resulting `str` with `std-lib.strings`.
 
 ---
 
@@ -294,6 +307,104 @@ val c = a + b    // compile-time lowered to a.add(b)
 
 ---
 
+## 8. Copyable and DeepCopyable
+
+Bestie distinguishes three separate operations. Conflating them is the source of most copy-related bugs in other languages, so they are kept explicit:
+
+| Operation | Meaning |
+| --------- | ------- |
+| `val b = a` (binding) | Governed by the **type**: a **copy** for value types; for owning/reference types an explicit `move` or borrow is required (bare binding of an owning value is a compile error). **Never a hidden deep copy or implicit move.** |
+| `copy(a)` | An explicit **shallow** independent duplicate |
+| `deepCopy(a)` | An explicit **deep** duplicate of the entire owned subgraph |
+
+### 8.1 Protocols
+
+```bestie
+protocol Copyable<T> {
+    fun copy(): T          // shallow independent duplicate
+}
+
+protocol DeepCopyable<T> {
+    fun deepCopy(): T      // deep independent duplicate of the owned subgraph
+}
+```
+
+Free functions dispatch to these protocols (or to a compiler-derived default):
+
+```bestie
+fun copy<T>(value: T): T        // requires T : Copyable
+fun deepCopy<T>(value: T): T    // requires T : DeepCopyable
+```
+
+**There is no separate `Cloneable` protocol, and there are no marker protocols in Bestie.** `Copyable` / `DeepCopyable` *are* Bestie's "clone" mechanism, and they are **method-bearing** contracts (`copy()` / `deepCopy()`) — not Java-style empty markers that rely on a magic `Object.clone()`. A type opts in by satisfying a real method (explicitly or by compiler derivation, §8.2); capability is expressed by the method that performs the work, never by a contentless tag. This keeps duplication explicit, statically resolved, and free of reflective or runtime cloning machinery.
+
+### 8.2 Compiler Derivation
+
+Like `Equable`, copy behavior is **compiler-derivable**, with no runtime reflection:
+
+* **Value types** (`primitives`, `value class`, `data class`, `tuple`, `enum`) are trivially `Copyable` — a structural copy. For these, `copy` and `deepCopy` are identical because there is no owned subgraph.
+* A **`class` with no `own` fields** auto-derives `Copyable`: a new heap object with fields copied shallowly. Any `ref` or `ptr<T>` fields are copied as-is (the duplicate **aliases** the same borrowed/raw targets).
+* `DeepCopyable` auto-derives only when **every `own` field is itself `DeepCopyable`** — each owned field is recursively duplicated into a fresh allocation, producing a fully independent owning graph.
+* A type may **`impl` either protocol manually** to override the default (e.g. to copy a cache lazily, or to deep-copy across a `ptr` boundary it knows the size of).
+
+### 8.3 Shallow Copy and Ownership
+
+A shallow `copy()` of a type that owns memory would duplicate the owning pointer — two owners, one allocation, an inevitable double free. Therefore:
+
+* **`copy()` is forbidden on a type with `own` fields** — it is a compile-time error. Use `deepCopy()`, which clones the owned subgraph so each result owns its own copy.
+* `copy()` **is** allowed when the only non-value fields are `ref` or `ptr<T>`, because those carry no ownership — the duplicate simply shares the same targets (explicit aliasing).
+
+```bestie
+class Cache {            // owns a buffer
+    val own data: Buffer
+}
+
+val c2 = copy(c)         // ❌ compile error: Cache has an own field — use deepCopy
+val c3 = deepCopy(c)     // ✅ new Cache owning a fresh copy of data
+```
+
+### 8.4 Raw Pointers Are Never Followed
+
+Copying a `ptr<T>` duplicates the **address**, not the pointee — for both `copy` and `deepCopy`. A raw pointer carries no ownership or size information, so it is outside the managed graph by design:
+
+```bestie
+val p2 = copy(p)        // same address as p (aliasing)
+val p3 = deepCopy(p)    // also the same address — deepCopy does not chase raw pointers
+```
+
+To duplicate what a `ptr<T>` points at, the programmer must do it explicitly (they alone know the size and lifetime).
+
+### 8.5 Containers
+
+| Element type | `copy()` | `deepCopy()` |
+| ------------ | -------- | ------------ |
+| `list<value T>` | new container, elements copied (independent) | identical to `copy()` |
+| `list<own T>` | ❌ forbidden — would duplicate ownership | new container, **each element deep-copied** |
+| `list<ref T>` | new container, **same borrows** (aliased) | identical (borrows aren't owned) |
+| `list<ptr<T>>` | new container, **same addresses** (aliased) | identical (raw pointers not followed) |
+
+This is consistent with §8.3–8.4: ownership is duplicated only by `deepCopy`, never silently.
+
+### 8.6 Immutable Values
+
+For an immutable value type such as `str`, `val b = a`, `copy(a)`, and `deepCopy(a)` are **observably identical** — each yields an independent value, and whether the backing storage is shared is an invisible implementation detail (safe precisely because the value cannot mutate). The copy/deep-copy distinction only becomes observable for **mutable** or **owning** types.
+
+### 8.7 Copy Operates on Fields, Never Accessors
+
+`copy()` and `deepCopy()` duplicate **stored fields directly**. They never invoke user methods — no `get()`, no resolver, no lazy-initialization trigger. This guarantees:
+
+* **Laziness is preserved.** Copying an object that has not yet computed a cached or lazily-initialized field copies the *uncomputed* state; it does not force materialization.
+* **No surprise side effects.** Duplication cannot run arbitrary user code through accessor methods.
+
+This matters for indirection patterns such as `Proxy<T>` (`patterns.md` §5): copying a proxy copies its stored indirection state per the field rules above — it does **not** call `get()` and does **not** resolve the proxied target. Whether the target is duplicated depends solely on how the proxy holds it:
+
+* proxy holds the target as an `own` field → `deepCopy` duplicates the target; `copy` is forbidden
+* proxy holds it as `ref` / `ptr<T>` → both `copy` and `deepCopy` alias the same target (the target's lifetime remains the programmer's responsibility)
+
+A type that genuinely needs copy to resolve or transform a field must `impl Copyable` / `DeepCopyable` **manually** and do so explicitly.
+
+---
+
 ## Summary
 
 The utility package provides:
@@ -305,5 +416,6 @@ The utility package provides:
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)
 * Operator overloading (`Addable`, `Subtractable`, `Multipliable`, `Divisible`, `Modulable`, `Negatable`, `Indexable`, `IndexAssignable`)
+* Explicit duplication (`Copyable` / `copy`, `DeepCopyable` / `deepCopy`)
 
 These utilities establish the rhythm of Bestie’s standard library: **explicit, orthogonal, and compiler-verifiable**.

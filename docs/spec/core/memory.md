@@ -674,6 +674,30 @@ Rules:
 
 ---
 
+### 8.11 Pointer Operations — Complete Reference
+
+Every operation available on a `ptr<T>` value, in one place. This is the authoritative surface; changes to pointer behavior are made here.
+
+| Operation | Result | Section | Notes |
+| --------- | ------ | ------- | ----- |
+| `p.val` | `T` | §8.4 | Dereference (read). No implicit deref. On `ptr<const T>`, read-only. |
+| `p.val = x` | — | §8.4 | Dereference (write). Forbidden on `ptr<const T>` and on `val` fields (§10.1.3). |
+| `p.address()` | `ptr<ptr<T>>` | §8.6 | Address of the pointer's own storage slot. Const-ness per binding (§10.1.2). |
+| `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic; strides by `sizeof(T)`. Provable OOB is a compile error. |
+| `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
+| `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
+| `p.isZero()` | `bool` | §8.7 | True if the address is the zero address (FFI / `@trusted` boundary). |
+| `a == b`, `a != b` | `bool` | §8.7 | Address equality. Provenance not considered. |
+| `a < b`, `<=`, `>`, `>=` | `bool` | §8.7 | Address ordering; well-defined only within one allocation. |
+
+Const and provenance rules:
+
+* `cast<U>()` that **removes `const`** (`ptr<const T>` → `ptr<T>`) requires `@trusted`; adding `const` is always allowed.
+* No operation in this table allocates, frees, or transfers ownership — `ptr<T>` is pure indirection (§4.2). Freeing is always an explicit, separate call by whatever owns the memory.
+* `copy(p)` / `deepCopy(p)` both duplicate the **address only** — raw pointers are not followed (see `std-lib/util.md`).
+
+---
+
 ## 9. Runtime Resources
 
 Runtime resources (files, sockets, etc.) are addressable:
@@ -977,16 +1001,40 @@ list<own User> users
 
 ### 11.2 Copying Collections
 
-* Value collections → deep copy
-* Reference collections → reference copy
-* Ownership collections → move only
+A collection **always owns its backing buffer**, regardless of element type. Two consequences follow from the core ownership rules (§5.1 — ownership transfer must be explicit) and the no-hidden-allocation pillar:
 
-Illegal:
+* Bare assignment `val b = a` of an existing collection is **never** a silent copy (that would be a hidden O(n) allocation) **nor** a silent move (moves must be explicit).
+* Duplicating or transferring a collection is therefore always **explicit** — `move`, `copy()`, or `deepCopy()`.
+
+| Operation on a collection `a` | Result |
+| ----------------------------- | ------ |
+| `val b = a` | ❌ compile-time error — choose `move`, `copy`, or `deepCopy` |
+| `val b = move a` | ownership transferred; `a` becomes invalid; no allocation |
+| `copy(a)` | new container; behavior per element kind (below) |
+| `deepCopy(a)` | new container; owned elements recursively duplicated |
+
+What `copy()` / `deepCopy()` do, per element kind:
+
+| Element kind | `copy(a)` | `deepCopy(a)` |
+| ------------ | --------- | ------------- |
+| value elements (`list<int>`) | new buffer, elements copied | identical to `copy` |
+| reference / borrow (`list<ref T>`) | new buffer, **same borrows** (aliased) | same |
+| ownership (`list<own T>`) | ❌ forbidden (would duplicate ownership) | new buffer, **each element deep-copied** |
+| raw pointers (`list<ptr<T>>`) | new buffer, **same addresses** (aliased) | same (raw pointers not followed) |
 
 ```bestie
-val a: list<own User>
-val b = a   // compile-time error
+val a: list<int> = {1, 2, 3}
+
+val b = a            // ❌ compile-time error — collection owns its buffer
+val b = move a       // ✅ transfer; a is now invalid
+val c = copy(a)      // ✅ explicit independent duplicate (allocation is visible)
+
+val o: list<own User> = ...
+val q = deepCopy(o)  // ✅ new container; each User deep-copied
+val r = copy(o)      // ❌ forbidden — would duplicate ownership of elements
 ```
+
+Duplication semantics are defined in full in `std-lib/util.md` §8. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
 
 ---
 

@@ -281,6 +281,7 @@ Copying a `str` never changes the visible semantics of the value.
 | `byteSize()` | `int` | UTF-8 byte length |
 | `char(index: int)` | `char` | Unicode scalar at codepoint index |
 | `chars()` | iterator over `char` | Iterates over Unicode scalars |
+| `bytes()` | iterator over `byte` | Iterates over raw UTF-8 bytes |
 
 Rules:
 
@@ -314,6 +315,19 @@ val tail = s[-2..]    // slice<byte> over the last two bytes
 `str` is immutable, so a `slice<byte>` over a `str` is always a **read-only** view and never risks the source mutating underneath it (see §6).
 
 > A slice taken at an arbitrary byte boundary may split a multi-byte UTF-8 scalar. Core slicing does not validate this — it is raw byte access by definition. A codepoint-aware, validity-checked substring that returns a `str` is a **std-lib** concern, alongside searching, splitting, normalization, and case conversion.
+
+#### String parsing and text operations (std-lib)
+
+Core `str` deliberately omits **parsing** (`str → int`, etc.) and **higher-level text operations** (`substring`, `split`, `trim`, case conversion, search). These are provided as **extension functions** in `std-lib/strings.md`, so they read as methods (`s.toInt()`, `s.substring(0, 3)`) without enlarging the core type:
+
+```bestie
+import bestie.lib.strings
+
+val n   = s.toInt() catch |e| { 0 }   // fallible parse — returns int ! ParseError
+val sub = s.substring(0, 3)           // codepoint-aware, returns an owned str
+```
+
+Parsing is fallible (it returns `T ! ParseError`), which is exactly why it lives outside core alongside the other text utilities, rather than next to the total, infallible numeric `toStr()`.
 
 ---
 
