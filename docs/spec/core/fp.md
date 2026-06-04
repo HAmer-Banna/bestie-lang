@@ -189,7 +189,7 @@ Rules:
 
 ---
 
-#### 3.3 Calling Partial Functions
+### 3.3 Calling Partial Functions
 
 The result of a partial function is an `option<T>`. It must be explicitly handled. There is no truthiness check — Bestie has no null and no implicit presence test.
 
@@ -297,7 +297,7 @@ No code path in a Bestie program — core, stdlib, third-party, or FFI wrapper �
 
 Bestie allows functions to return **multiple values** using **tuples**.
 
-### 4.1 Tuple Return Types
+### 5.1 Tuple Return Types
 
 ```bestie
 fun divMod(x: int, y: int): (int, int) {
@@ -314,7 +314,7 @@ Rules:
 
 ---
 
-### 4.2 Tuple Return Shortcut
+### 5.2 Tuple Return Shortcut
 
 ```bestie
 fun stats(x: int): (int, int, int) {
@@ -336,7 +336,7 @@ Rules:
 
 ---
 
-### 4.3 Tuple Destructuring (Capture Shortcut)
+### 5.3 Tuple Destructuring (Capture Shortcut)
 
 ```bestie
 val a, b = divMod(10, 3)
@@ -358,7 +358,7 @@ Rules:
 
 ---
 
-### 4.4 Ignoring Values with `_`
+### 5.4 Ignoring Values with `_`
 
 ```bestie
 val quotient, _ = divMod(10, 3)
@@ -374,19 +374,52 @@ Rules:
 
 ## 6. Function Types
 
-Function types are **explicit and structural**.
+Function types are **explicit and structural**. They are written with a single arrow `->` from the parameter list to the return type:
 
 ```bestie
-fn(int) -> int
+(int) -> int
 ```
 
 Usage:
 
 ```bestie
-val f: fn(int) -> int = square
+val f: (int) -> int = square
 ```
 
-### 6.1 Lowering Model
+### 6.1 The Optional `fn` Prefix
+
+The keyword `fn` may **optionally** prefix a function type. Both forms are exactly equivalent — `fn` adds no semantics, only emphasis:
+
+```bestie
+val f: (int) -> int    = square    // bare form
+val g: fn(int) -> int  = square    // fn-prefixed form — identical type
+```
+
+There is no ambiguity to resolve here, so the prefix is never *required*:
+
+* A **function type** uses the single arrow `->` (`(int) -> int`).
+* A **lambda** (a value/expression) uses the fat arrow `=>` (`(x: int) => x * 2`).
+* A **tuple type** has no arrow at all (`(int, str)`).
+
+The arrows alone fully disambiguate the three. The `fn` prefix exists purely so a reader (or a `grep`) can spot a function type at a glance.
+
+**Style guideline:**
+
+* Prefer the **bare** form `(T) -> R` in simple signatures — it is lighter and reads cleanly.
+* Reach for the **`fn`-prefixed** form in dense or nested signatures, where a leading `fn` makes a higher-order parameter or a returned function easier to pick out:
+
+```bestie
+// nested / higher-order — fn aids readability
+fun compose(f: fn(int) -> int, g: fn(int) -> int): fn(int) -> int =
+    (x: int) => f(g(x))
+
+// simple — bare form is enough
+fun apply(f: (int) -> int, x: int): int = f(x)
+```
+
+Both spellings are accepted everywhere a function type is valid: parameters, return types, `val`/`var` bindings, and generic arguments. The examples throughout this document use the `fn` form for explicitness; they are equivalent to dropping the prefix.
+
+### 6.2 Lowering Model
 
 Every callable value has a concrete compile-time lowering. There are two representations:
 
@@ -465,7 +498,7 @@ The capture struct is stack-allocated at the lambda or `bind()` creation site. I
 
 Lambdas are anonymous functions with **explicit and restricted semantics**.
 
-### 6.1 Lambda Syntax
+### 7.1 Lambda Syntax
 
 ```bestie
 val f = (x: int): int => x * 2
@@ -480,7 +513,7 @@ Properties:
 
 ---
 
-### 6.2 Non-Closure Rule (Core Guarantee)
+### 7.2 Non-Closure Rule (Core Guarantee)
 
 **Lambdas in Bestie are not closures by default.**
 
@@ -509,7 +542,7 @@ Guarantees:
 
 ---
 
-### 6.3 Explicit Immutable Capture
+### 7.3 Explicit Immutable Capture
 
 ```bestie
 val factor: int = 3
@@ -526,7 +559,7 @@ Rules:
 
 ---
 
-### 6.4 Explicit Mutable Capture
+### 7.4 Explicit Mutable Capture
 
 Mutable captures are allowed via `[var x]`. The lambda receives a mutable copy that persists between calls.
 
@@ -555,7 +588,7 @@ Rules:
 
 ---
 
-### 6.5 Lambda Allocation Model
+### 7.5 Lambda Allocation Model
 
 * Lambdas do not heap-allocate — compile-time lowered to inline code or light callable values
 * Immutable captures — part of a zero-size or fixed-size compile-time-known callable context
@@ -629,7 +662,7 @@ Rules:
 
 ## 10. Method References
 
-### 9.1 Unbound Method References
+### 10.1 Unbound Method References
 
 ```bestie
 val f: fn(User) -> str = User::getName
@@ -649,7 +682,7 @@ Rules:
 
 ---
 
-### 9.2 Bound Method References
+### 10.2 Bound Method References
 
 A bound method reference binds an instance to a method, producing a zero-argument light callable.
 The behavior depends on the type of the bound object.
@@ -721,7 +754,7 @@ Rules summary:
 
 Extension functions add behavior **without modifying types** and **without runtime cost**.
 
-### 10.1 Declaration
+### 11.1 Declaration
 
 ```bestie
 fun str.isEmpty(): bool {
@@ -738,7 +771,7 @@ val empty = s.isEmpty()
 
 ---
 
-### 10.2 Compilation Model
+### 11.2 Compilation Model
 
 * Statically resolved
 * Compiled as plain functions
@@ -752,7 +785,7 @@ No virtual dispatch, no vtables, no runtime lookup.
 
 ---
 
-### 10.3 `this` Semantics
+### 11.3 `this` Semantics
 
 * `this` is the receiver parameter
 * Immutable unless the type allows mutation
@@ -760,7 +793,7 @@ No virtual dispatch, no vtables, no runtime lookup.
 
 ---
 
-### 10.4 Extensions vs Members
+### 11.4 Extensions vs Members
 
 Rules:
 
@@ -772,7 +805,7 @@ Name collisions are illegal.
 
 ---
 
-### 10.5 Extensions and Protocols
+### 11.5 Extensions and Protocols
 
 * Do not use `impl` to satisfy protocols
 * Do not participate in protocol dispatch
@@ -780,7 +813,7 @@ Name collisions are illegal.
 
 ---
 
-### 10.6 Generic Extensions
+### 11.6 Generic Extensions
 
 ```bestie
 fun <T> list<T>.head(): T ? {
@@ -816,12 +849,12 @@ No implicit currying or composition exists.
 
 ## 13. Currying and Partial Application
 
-### 12.1 No Implicit Currying
+### 13.1 No Implicit Currying
 
 Automatic currying is not supported.
 Capturing-based currying is illegal.
 
-### 12.2 Explicit Partial Application
+### 13.2 Explicit Partial Application
 
 `bind` performs partial application — it fixes one or more arguments of a function, producing a new function with fewer parameters.
 
