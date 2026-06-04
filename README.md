@@ -3,6 +3,9 @@
 **Control of C. Elegance of Kotlin.**
 **From kernel to cloud with one language**
 
+> Officially **`bestielang`**, **Bestie** for short — the same convention as *Golang* / *Go*.
+> Use `bestielang` when searching, tagging, or naming the project; use **Bestie** when you talk about it.
+
 ---
 
 ## 🌊 Vision
@@ -18,6 +21,26 @@ Bestie’s mission:
 > and bring the clarity and expressiveness of modern OOP to systems developers.**
 
 Bestie is built from first principles — not constrained by C/C++ legacy and not driven by academic ideology.
+
+---
+
+## 💡 Why Bestie (Origin)
+
+Bestie started from a recurring frustration: every other week there's another tutorial on *"how to do OOP in Go / Rust / Zig."*
+
+People clearly want **clean object-oriented design *and* systems-level performance** at the same time. That combination is exactly what C++ promised — minus the elegance. So the question became simple:
+
+> Why not a fast, native, OOP-first language that is actually pleasant to read?
+> *("Have you seen lambdas in C++?")*
+
+Bestie is that answer: the **ambition of C++** — real classes, lambdas, protocols, zero-cost abstractions, no garbage collector — rebuilt with the **discipline and ergonomics of a modern language**. Deterministic, predictable, and readable.
+
+**The one-liner:** *Bestie is Kotlin-like syntax, designed for systems programming from day one — not bolted on afterward.*
+
+- Kotlin developers recognize the syntax immediately.
+- Systems developers get the part that matters: native code, no GC, deterministic cost, kernel-to-cloud.
+
+Bestie chases the goals of C++ without inheriting its baggage — no undefined behavior in safe code, no hidden cost, no ceremony.
 
 ---
 
