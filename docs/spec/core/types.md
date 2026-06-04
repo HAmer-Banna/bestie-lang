@@ -269,6 +269,8 @@ Copying a `str` never changes the visible semantics of the value.
 * Equality and inequality: `==`, `!=`
 * Lexicographic comparison: `<`, `<=`, `>`, `>=`
 * Byte indexing: `s[i] -> byte`
+* Negative byte indexing: `s[-i] -> byte` — `s[-1]` is the last byte
+* Byte slicing: `s[lo..hi] -> slice<byte>` — a borrowed, zero-copy view; see §6
 
 ### Methods
 
@@ -283,6 +285,7 @@ Copying a `str` never changes the visible semantics of the value.
 Rules:
 
 * `s[i]` is raw byte access, not character access
+* `s[-i]` is end-relative byte access — `s[-1]` is the last byte; sugar for `s[s.byteSize() - i]`
 * `s.char(i)` is the explicit Unicode-aware path
 * Bestie intentionally does not overload a single ambiguous `length()` meaning in core
 
@@ -292,11 +295,25 @@ Example:
 val s: str = "Bestie"
 
 val firstByte: byte = s[0]
+val lastByte:  byte = s[-1]
 val firstChar: char = s.char(0)
 val empty: bool = s.isEmpty()
 ```
 
-Searching, splitting, normalization, case conversion, and rich text processing belong in `std-lib`.
+#### Slicing a `str`
+
+Because `str` indexing is **byte-level**, slicing is byte-level too: `s[lo..hi]` returns a `slice<byte>` view (not a new `str`), with no copy. The bound forms match `array<T>` and `range<T>`:
+
+```bestie
+val s : str = "Bestie"
+
+val head = s[0..3]    // slice<byte> over the bytes of "Bes"
+val tail = s[-2..]    // slice<byte> over the last two bytes
+```
+
+`str` is immutable, so a `slice<byte>` over a `str` is always a **read-only** view and never risks the source mutating underneath it (see §6).
+
+> A slice taken at an arbitrary byte boundary may split a multi-byte UTF-8 scalar. Core slicing does not validate this — it is raw byte access by definition. A codepoint-aware, validity-checked substring that returns a `str` is a **std-lib** concern, alongside searching, splitting, normalization, and case conversion.
 
 ---
 
@@ -373,8 +390,47 @@ val arr3 : array<int>[5] = array<int>[5].fill(0)  // capacity 5, size 5 — all 
 | Operation | Meaning |
 | --------- | ------- |
 | `arr[i]` | Element access — **panics** if index is out of bounds |
+| `arr[-i]` | Access from the end — `arr[-1]` is the last element. Sugar for `arr[arr.size() - i]` |
 | `arr[i] = v` | Element assignment when mutable — **panics** if out of bounds |
+| `arr[-i] = v` | End-relative assignment when mutable — **panics** if out of bounds |
+| `arr[lo..hi]` | Slice — a borrowed `slice<T>` view over `[lo, hi)`; **no copy**. See §6 |
 | `for (x in arr)` | Iterate over all elements |
+
+### Negative Indexing
+
+A negative index counts from the end. `arr[-1]` is the last element, `arr[-2]` the second-to-last, and so on. It is pure syntax — `arr[-i]` lowers to `arr[arr.size() - i]`:
+
+```bestie
+val xs : array<int>[] = {10, 20, 30, 40, 50}
+
+val last     = xs[-1]    // 50
+val penult   = xs[-2]    // 40
+xs[-1] = 99              // xs → {10, 20, 30, 40, 99}
+```
+
+Rules:
+
+* `arr[-i]` is the **same operation** as `arr[size - i]` — one subtraction, then the normal access. There is no extra cost beyond positive indexing, and it is folded at compile time when `size` and the index are both statically known.
+* Out-of-range negative indices **panic**, identical to positive out-of-range access (`arr[-6]` on a 5-element array panics).
+* `0` and `-0` are the same index (the first element).
+
+### Slicing
+
+`arr[lo..hi]` produces a **`slice<T>`** — a borrowed, zero-copy view over a contiguous run of the array. It allocates nothing. The bound syntax matches `range<T>` (§7):
+
+```bestie
+val xs : array<int>[] = {10, 20, 30, 40, 50}
+
+val a = xs[1..4]     // view over {20, 30, 40}   (half-open)
+val b = xs[1..=3]    // view over {20, 30, 40}   (inclusive end)
+val c = xs[2..]      // view over {30, 40, 50}
+val d = xs[..2]      // view over {10, 20}
+val e = xs[..]       // view over the whole array
+val f = xs[-2..]     // view over the last two: {40, 50}
+val g = xs[..-1]     // everything but the last: {10, 20, 30, 40}
+```
+
+A slice is governed by borrow rules — see §6 for the full semantics. Out-of-range bounds panic; `lo > hi` panics.
 
 ### Methods
 
@@ -524,7 +580,86 @@ for (s in scores) {
 
 ---
 
-## 6. `range<T>`
+## 6. `slice<T>`
+
+`slice<T>` is a built-in **borrowed view** over a contiguous run of elements. It is the result of slicing an `array<T>` (or, in `std-lib`, an array-backed `list<T>`), and a `slice<byte>` is the result of slicing a `str`.
+
+A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is the contiguous-memory application of Bestie's `ref` borrow: a slice *borrows* its source.
+
+```bestie
+val xs : array<int>[] = {10, 20, 30, 40, 50}
+val mid : slice<int> = xs[1..4]   // borrows xs[1], xs[2], xs[3] — no copy
+```
+
+### Bound Forms
+
+Slice bounds reuse the `range<T>` syntax (§7), so there is one consistent convention across the language:
+
+| Form | Meaning |
+| ---- | ------- |
+| `xs[lo..hi]` | Half-open — indices `lo` up to but excluding `hi` |
+| `xs[lo..=hi]` | Inclusive — indices `lo` through `hi` |
+| `xs[lo..]` | From `lo` to the end |
+| `xs[..hi]` | From the start up to `hi` (exclusive) |
+| `xs[..]` | The whole source |
+| `xs[-k..]` | Last `k` elements |
+| `xs[..-k]` | Everything except the last `k` |
+
+Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. When bounds and size are compile-time known, the check is resolved at compile time.
+
+### Operators
+
+| Operation | Meaning |
+| --------- | ------- |
+| `s[i]` | Element access into the slice — **panics** if out of bounds |
+| `s[-i]` | End-relative access — `s[-1]` is the slice's last element |
+| `s[lo..hi]` | Re-slice — a narrower `slice<T>` view (still no copy) |
+| `s[i] = v` | Write-through assignment — **only** on a mutable slice (`slice<var T>`) |
+| `for (x in s)` | Iterate over the slice's elements |
+
+### Methods
+
+| Method | Returns | Notes |
+| ------ | ------- | ----- |
+| `size()` | `int` | Number of elements in the view |
+| `isEmpty()` | `bool` | True when `size() == 0` |
+| `toArray()` | `array<T>` | New owned array (O(n) copy — explicit) |
+| `toList()` | `list<T>` | New owned list (O(n) copy — explicit) |
+
+A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing, and re-slicing all behave exactly as they do on `array<T>`. Element access is a single contiguous load — pointer arithmetic, no indirection.
+
+### Borrow Rules
+
+A `slice<T>` borrows its source, so it follows the same `ref` rules defined in `memory.md`:
+
+* It **cannot outlive its source** and **cannot be stored in a struct field**. It may be passed down into calls and returned only by borrowing a parameter (the same escape rules as `ref`).
+* While a `slice<T>` is alive, the source **cannot be mutated in a way that would move or free its storage** — for example, a `list<T>` cannot grow/reallocate while a slice borrows it. The compiler rejects such use, which is what prevents a dangling view.
+
+### Read vs Mutable Slices
+
+| Form | Meaning |
+| ---- | ------- |
+| `slice<T>` | Read-only view — elements may be read, not written |
+| `slice<var T>` | Mutable view — `s[i] = v` writes through to the backing storage |
+
+A `slice<var T>` is an exclusive borrow: while it is alive, no other access to the overlapped region is permitted, mirroring `ref var` semantics. A read `slice<T>` may coexist with other read borrows.
+
+### Immutable Sources
+
+Slicing immutable storage is always safe and never requires a copy:
+
+* A slice over a `str`, a `const` array, or an `@immutable val` array is inherently read-only.
+* Because the source cannot mutate in place, the "no mutation while borrowed" rule is satisfied for free — the only remaining constraint is lifetime (the slice must not outlive the source).
+
+### Class Kind and Performance
+
+`slice<T>` has **value-class semantics** — no object header, no vtable, no identity, no heap. It is a fat pointer (base + length) passed in registers. This is what keeps slicing zero-cost: taking a slice is two register writes, and indexing through it is the same single load as indexing the underlying array.
+
+> What slicing does **not** do: it never copies, never allocates, and never owns. To obtain an owned, escapable copy, call `.toArray()` or `.toList()` explicitly. Only contiguous sources produce a `slice<T>`; non-contiguous collections are covered in `std-lib/collections.md`.
+
+---
+
+## 7. `range<T>`
 
 `range<T>` is a built-in contiguous range value.
 
@@ -573,11 +708,11 @@ val ok = r.contains(42)
 
 ---
 
-## 7. Derived Core Type Forms
+## 8. Derived Core Type Forms
 
 Bestie also has two important **type forms** built on top of the core type system.
 
-### 7.1 Newtypes
+### 8.1 Newtypes
 
 `type X as Y` creates a distinct type with the same representation as `Y`.
 
@@ -601,7 +736,7 @@ val d: Meters = 12.5 as Meters
 val s: str = d.toStr()
 ```
 
-### 7.2 Range-Constrained Types
+### 8.2 Range-Constrained Types
 
 `type X as Y in range` creates a distinct type with an enforced invariant.
 
@@ -626,15 +761,17 @@ val text = s.toStr()
 
 ---
 
-## 8. Summary
+## 9. Summary
 
 Bestie's core type surface is intentionally compact:
 
 * Primitive numeric values behave like zero-cost value classes
 * `bool`, `char`, and `str` expose explicit core operations only
-* `tuple`, `array<T>`, and `range<T>` are first-class built-in value forms
+* `tuple`, `array<T>`, `slice<T>`, and `range<T>` are first-class built-in value forms
+* Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
+* `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()` / `.toList()`)
 * Conversions are explicit
 * `ptr<T>` remains isolated in `memory.md`
 * `list<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`
 
-This keeps the language small enough to reason about, while still making expressions like `5.toStr()`, `"x".isEmpty()`, and `(0..10).contains(4)` feel natural and consistent.
+This keeps the language small enough to reason about, while still making expressions like `5.toStr()`, `"x".isEmpty()`, `xs[-1]`, `xs[1..4]`, and `(0..10).contains(4)` feel natural and consistent.

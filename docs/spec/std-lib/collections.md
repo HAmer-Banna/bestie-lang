@@ -127,10 +127,14 @@ It grows automatically as elements are added and shares an indexing interface wi
 | Operation | Meaning |
 | --------- | ------- |
 | `ls[i]` | Element access — **panics** if index is out of bounds |
+| `ls[-i]` | Access from the end — `ls[-1]` is the last element. See §8a |
 | `ls[i] = v` | Element assignment when mutable — **panics** if out of bounds |
+| `ls[lo..hi]` | Slice — borrowed `slice<T>` view (array-backed only, no copy). See §8a |
 | `for (x in ls)` | Iterate over all elements |
 
 Out-of-bounds access is always a **panic** — a violated invariant with no recovery path.
+
+Indexing, negative indexing, and slicing share one convention with core `array<T>` / `slice<T>`; the full rules and per-collection support table are in §8a.
 
 ### 2a.2 Methods
 
@@ -425,6 +429,84 @@ for (v in prices.values()) { print(v.toStr()) }
 
 ---
 
+## 8a. Indexing, Negative Indexing, and Slicing
+
+Collections reuse the **same indexing and slicing surface** defined for `array<T>` and `slice<T>` in `core/types.md` (§5–§6). There is one convention across the language — `array<T>` and array-backed `list<T>` behave identically — but a collection only exposes what its representation can do **without hidden cost**.
+
+### 8a.1 What each collection supports
+
+| Collection | `c[i]` positional | `c[-i]` from end | `c[lo..hi]` slice |
+| ---------- | ----------------- | ---------------- | ----------------- |
+| `list<T>` (array-backed) | ✅ O(1) | ✅ O(1) | ✅ → `slice<T>` view (no copy) |
+| `list<T>.linked` | ✅ O(n) | ✅ O(n) | ❌ no view — see §8a.5 |
+| `deque<T>` | ends O(1); middle representation-dependent | ✅ `deq[-1]` O(1) | ❌ no view — see §8a.5 |
+| `array<T>` (core) | ✅ O(1) | ✅ O(1) | ✅ → `slice<T>` view |
+| `set<T>` | ❌ not positional | ❌ | ❌ |
+| `map<K,V>` | `m[key]` is **key** access, not positional | ❌ | ❌ |
+
+### 8a.2 Negative indexing
+
+`c[-i]` counts from the end and is sugar for `c[c.size() - i]` — `c[-1]` is the last element. Its cost is exactly the cost of positional access on that representation (O(1) for array-backed `list`/`deque` ends, O(n) for `list.linked`, same as `c[i]`). Out-of-range negative indices **panic**, identical to positive access.
+
+```bestie
+val ls : list<int> = {10, 20, 30, 40}
+ls[-1]    // 40
+ls[-2]    // 30
+```
+
+### 8a.3 `deque[-1]` and the end accessors
+
+For a `deque<T>`, end indexing is defined in terms of the existing peek methods — same element, different empty-behavior:
+
+```bestie
+val dq : deque<int> = deque<int>.queue.of(10, 20, 30)
+
+dq[-1]            // 30  — equivalent element to dq.peekLast()
+dq[0]             // 10  — equivalent element to dq.peekFirst()
+```
+
+| Expression | Returns | On empty deque |
+| ---------- | ------- | -------------- |
+| `dq[-1]` | `T` | **panics** (like all `[]` access) |
+| `dq.peekLast()` | `T ?` | `option.Not_Present` |
+| `dq[0]` | `T` | **panics** |
+| `dq.peekFirst()` | `T ?` | `option.Not_Present` |
+
+So `dq[-1]` and `dq.peekLast()` read the **same element**; they differ only at the boundary. Use `dq[-1]` when a present element is an invariant (you *expect* it to be there) and use `dq.peekLast()` when emptiness is an expected, recoverable case.
+
+### 8a.4 Slicing collections
+
+Slicing follows the core `slice<T>` rules (`core/types.md` §6) and only applies to **contiguous** storage:
+
+```bestie
+val ls : list<int> = {10, 20, 30, 40, 50}
+
+val view : slice<int> = ls[1..4]   // borrowed view over {20, 30, 40} — no copy
+val tail               = ls[-2..]  // {40, 50}
+val copy : list<int>   = ls[1..4].toList()   // explicit O(n) owned copy
+```
+
+* Array-backed `list<T>` yields a `slice<T>` borrowing the list's buffer. While that slice is alive the list **cannot grow/reallocate** (borrow rule) — the compiler enforces this, preventing a dangling view.
+* A mutable list sliced as `slice<var T>` allows `view[i] = v` to write through to the list.
+
+### 8a.5 Edge cases — when you must use methods, not `[]`
+
+The `[lo..hi]` view and positional `[]` are not available everywhere. In these cases you use accessor/conversion methods instead:
+
+1. **Empty-safe access.** `c[i]`, `c[-1]`, and `get(index)` **panic** out of bounds. When absence is expected, use the option-returning accessors: `deque.peekFirst()` / `deque.peekLast()` return `T ?`, `list.indexOf(value)` returns `int ?`, and `map.get(key)` returns the value option. These never panic.
+
+2. **`set<T>` has no positional index.** A set has no stable position, so `xs[2]` does not exist. Use `contains(value)`, or iterate with `for/in`. There is no slicing.
+
+3. **`map<K,V>` indexing is key access, not positional.** `m[k]` looks up the value for key `k`. For a `map<int, V>`, `m[-1]` is a lookup for the key `-1` — **not** "the last entry." Positional and end-relative indexing therefore do not apply to maps; use `keys()` / `values()` / `entries()` views (and, for ordered variants, the first/last-entry accessors covered with the sequenced design) to reach a position.
+
+4. **Unordered (hash) variants have no "first/last/from-end."** `set<T>` (hash) and `map<K,V>` (hash) have no defined order, so end-relative or positional access is meaningless. Use an ordered variant (`linked` / `tree`) when order matters.
+
+5. **Non-contiguous storage cannot produce a slice view.** `list<T>.linked`, `deque<T>`, `set<T>`, and `map<K,V>` are not contiguous, so `c[lo..hi]` would have to copy O(n). Bestie does **not** hide that cost behind slice syntax — slicing is unavailable on them. To get a sub-range, copy explicitly (`.toList()` then slice the result) or traverse it as a sequence. (A zero-copy lazy traversal layer is being designed separately.)
+
+6. **Searching by value, not position.** To find *where* a value is, use `list.indexOf(value): int ?` — `[]` is for when you already know the index.
+
+---
+
 ## 9. Conversions
 
 Conversions between collections are **explicit method calls**.
@@ -506,6 +588,7 @@ Bestie collections are:
 * Free of hidden allocation behavior
 * Explicitly immutable via `immutable` or `const`
 * Universally iterable — every collection and `array<T>` work with `for/in` without conversion
+* Uniformly indexed — `[i]`, `[-i]`, and `[lo..hi]` follow the same convention as core `array<T>`/`slice<T>`, exposed only where the representation supports it without hidden cost (§8a)
 
 `list<T>` is the go-to dynamic collection. Its array-backed default is efficient and familiar. Switch to `list<T>.linked` when the access pattern calls for it.
 
