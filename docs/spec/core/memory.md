@@ -24,7 +24,7 @@ The memory model exists to satisfy the following constraints:
 1. **Native performance**
 2. **Deterministic layout and lifetime**
 3. **No garbage collection**
-4. **No hidden unsafe behavior**
+4. **No hidden or implicit memory behavior**
 5. **Minimal cognitive overhead**
 6. **Uniform rules for all domains**
 
@@ -34,7 +34,7 @@ Bestie rejects designs where:
 * Allocation is implicit
 * Different subsystems use different memory rules
 
-Unsafe operations are allowed, but only through explicit syntax (`ptr<T>`, FFI, manual free) that is visible at the call site.
+Low-level operations — raw pointers, FFI, manual `free` — are **first-class** and always explicit at the call site. They are a normal, expected part of writing Bestie, not a quarantined mode you step into. The compiler verifies everything it can prove and steps back precisely where you tell it to; what it can't prove, you uphold yourself. This is the same deal a systems engineer already lives by, made visible and searchable.
 
 ---
 
@@ -200,12 +200,12 @@ Reference types require explicit ownership qualification (`own` or `ref`) on bin
 Reference and indirection semantics exist **only** via explicit constructs:
 
 * `ref T` — a borrowed, scoped, non-owning reference
-* `ptr<T>` — a raw address, unsafe, no lifetime or ownership guarantees
+* `ptr<T>` — a raw address: no lifetime or ownership guarantees, correctness upheld by the programmer
 * `own` qualifier — explicit declaration of ownership responsibility
 
 There is no implicit reference behavior. No class kind is automatically reference-counted or garbage-collected.
 
-**`ptr<T>` is itself a value type** — a single machine word holding an address. It is copied by assignment, carries no ownership obligation, and is therefore a valid pointee and a valid element anywhere a value is allowed: as a field, as a collection element (`array<ptr<T>>` — see §11.4), or as the target of another pointer (`ptr<ptr<T>>` — see §8.6). Copying a `ptr<T>` duplicates the address, not the pointee; this aliasing is allowed precisely because raw pointers live in the explicit unsafe domain.
+**`ptr<T>` is itself a value type** — a single machine word holding an address. It is copied by assignment, carries no ownership obligation, and is therefore a valid pointee and a valid element anywhere a value is allowed: as a field, as a collection element (`array<ptr<T>>` — see §11.4), or as the target of another pointer (`ptr<ptr<T>>` — see §8.6). Copying a `ptr<T>` duplicates the address, not the pointee; this aliasing is allowed precisely because raw pointers are explicit, unowned, low-level indirection.
 
 ---
 
@@ -284,7 +284,7 @@ The compiler tracks that obligation flow-sensitively until it is discharged exac
 If an ownership obligation reaches the end of its valid lifetime without being discharged, the compiler reports a **leak error**.
 If the same obligation is discharged more than once, the compiler reports a **double-free error**.
 
-This guarantee applies to code that stays within `own/ref` semantics. Explicit unsafe escapes through `ptr`, FFI, or trusted low-level constructs remain programmer responsibility.
+This guarantee applies to code that stays within `own/ref` semantics. Explicit low-level paths through `ptr`, FFI, or `@trusted` constructs are the programmer's responsibility — the compiler steps back exactly where you ask it to, and nowhere else.
 
 ---
 
@@ -482,7 +482,7 @@ Rules:
 * No ownership semantics
 * No lifetime guarantees
 * No implicit dereferencing
-* Explicitly unsafe by design
+* Explicitly raw and low-level by design — guarantees are the programmer's to uphold
 
 ---
 
@@ -604,7 +604,7 @@ val cc = c.address()     // ptr<const ptr<int>>    (const binding → read-only 
 val same = (p == q)      // true iff p and q hold the same address
 ```
 
-**Ordering.** `<`, `<=`, `>`, `>=` are available and compare addresses numerically. Ordering pointers that derive from different allocations is permitted (it is the unsafe domain) but its meaning is the programmer's responsibility — only ordering within a single allocation or array is well-defined.
+**Ordering.** `<`, `<=`, `>`, `>=` are available and compare addresses numerically. Ordering pointers that derive from different allocations is permitted (this is the raw, low-level layer) but its meaning is the programmer's responsibility — only ordering within a single allocation or array is well-defined.
 
 **The zero address.** Bestie has no `null` (see `fp.md` §4). Safe Bestie code never produces a zero-address `ptr<T>`: every pointer from `.address()` targets live storage and is non-zero. A zero address can enter a program only across an explicit boundary — `foreign` code or `@trusted` operations. For testing at that boundary:
 
@@ -618,7 +618,7 @@ To model "a pointer that may be absent" in **safe** code, use `option<ptr<T>>` �
 
 ### 8.8 Pointer Casting and Alignment
 
-Reinterpreting a pointer as a different pointee type is an **unsafe reinterpretation**, written explicitly:
+Reinterpreting a pointer as a different pointee type is a **raw reinterpretation**, written explicitly:
 
 ```bestie
 val pb: ptr<byte>   = p.cast<byte>()     // view the raw bytes of the pointee
@@ -631,7 +631,7 @@ Rules:
 * Casting to `ptr<byte>` is always permitted (every type is byte-addressable). `byte`-level access is the canonical way to inspect raw storage.
 * Casting **to a stricter alignment** than the address satisfies is undefined on access; alignment is the programmer's responsibility. The required alignment of `T` is compile-time known, and `p.isAligned<U>(): bool` tests an address before a stricter cast.
 * **Removing `const`** (`ptr<const T>` → `ptr<T>`) is a const violation and is permitted **only under `@trusted`**. Adding `const` is always allowed.
-* A reinterpret cast between unrelated pointee types is not, by itself, a compile-time error — it is the explicit unsafe boundary — but statically provable misuse (e.g., access beyond a known size) is still rejected per §8.5.
+* A reinterpret cast between unrelated pointee types is not, by itself, a compile-time error — it is the explicit low-level boundary — but statically provable misuse (e.g., access beyond a known size) is still rejected per §8.5.
 
 ---
 
@@ -647,7 +647,7 @@ Rules:
 
 * `.address()` on a **named function or a non-capturing lambda** yields a raw `ptr<fn(P) -> R>` — a single code pointer (the thin representation).
 * A **capturing lambda is fat** (code + context); it has no single code address, so taking a raw function pointer to it is a **compile-time error**. Pass the callable value itself, or refactor to a non-capturing form.
-* Calling **through** a raw `ptr<fn(...)>` is unsafe: there is no context word, no capture, and no lifetime guarantee. It exists for C interop — C function pointers map to this form (see `foreign.md`).
+* Calling **through** a raw `ptr<fn(...)>` is unchecked: there is no context word, no capture, and no lifetime guarantee. It exists for C interop — C function pointers map to this form (see `foreign.md`).
 * A raw function pointer's pointee is always `const` — code is not writable through it.
 
 ---
@@ -787,13 +787,13 @@ For value-type fields with no `own` or `ref` qualifier, the compiler always appl
 
 | Class kind | `own` fields | `ref` field qualifier | `ptr<T>` fields |
 | ---------- | ------------ | --------------------- | --------------- |
-| `value class` | ❌ Copy would duplicate ownership | ❌ Breaks copy-safety and lifetime independence | ✅ Allowed (unsafe) |
-| `data class` | ❌ All fields are `val`; deep immutability | ❌ External ref breaks deep immutability | ✅ `ptr<const T>` only (unsafe) |
+| `value class` | ❌ Copy would duplicate ownership | ❌ Breaks copy-safety and lifetime independence | ✅ Allowed (raw `ptr`) |
+| `data class` | ❌ All fields are `val`; deep immutability | ❌ External ref breaks deep immutability | ✅ `ptr<const T>` only (raw `ptr`) |
 | `enum` (tag-only) | ❌ No payload | ❌ No payload | ❌ No payload |
-| `enum` (payload) | ✅ Makes enum move-only (§4.3) | ❌ Value-type semantics | ✅ Allowed (unsafe) |
-| `class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
-| `open class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
-| `abstract class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (unsafe) |
+| `enum` (payload) | ✅ Makes enum move-only (§4.3) | ❌ Value-type semantics | ✅ Allowed (raw `ptr`) |
+| `class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (raw `ptr`) |
+| `open class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (raw `ptr`) |
+| `abstract class` | ✅ | ✅ Non-owning field; not freed | ✅ Allowed (raw `ptr`) |
 
 `ptr<T>` fields are always in the programmer's responsibility domain — the compiler enforces no ownership semantics on raw pointers. The class that holds a `ptr<T>` field is responsible for freeing the pointed-to memory through explicit `release()`, `free()`, or similar calls.
 
@@ -923,7 +923,7 @@ val p: ptr<DateTime> = dt.address()    // ptr<DateTime>, not ptr<const DateTime>
 p.val.date = Date.new(...)             // ❌ compile-time error — date is val in data class
 ```
 
-**`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is unsafe code) but is programmer-exclusive responsibility.
+**`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is raw, low-level code) but is the programmer's exclusive responsibility.
 
 ---
 
@@ -1064,7 +1064,7 @@ Any collection may hold raw pointers as elements — `array<ptr<T>>`, `list<ptr<
 | `list<ref T>` | nothing (borrows) | frees buffer only | borrow |
 | `list<ptr<T>>` | nothing (raw addresses) | frees buffer only — **pointees are never freed** | shallow copy (aliasing) allowed |
 
-Consequences, all in the explicit unsafe domain:
+Consequences, all in the explicit low-level domain:
 
 * **Freeing pointees is manual.** `freeDeep()` on a `list<ptr<T>>` behaves like `free()` with respect to the pointees — it reclaims the backing buffer, not the pointed-to memory. To free the targets, iterate and release each explicitly **before** freeing the container.
 * **Copying aliases.** `val b = a` on a `list<ptr<T>>` is a shallow copy: `a` and `b` hold the **same addresses**. This is permitted (unlike `list<own T>`, which is move-only — §11.2) and is intentional — it matches C-style pointer arrays. The programmer must not free through one alias while the other is still in use.
@@ -1269,9 +1269,9 @@ These rules ensure:
 
 ---
 
-## 15. Explicit Unsafe Boundary
+## 15. The Explicit Low-Level Boundary
 
-Bestie exposes low-level operations directly instead of hiding them.
+Bestie exposes low-level operations directly instead of hiding them. This boundary marks where compiler-proven guarantees hand off to programmer-upheld invariants — it is **not** a danger zone, and it is **not** a place you should feel you don't belong.
 
 This boundary includes:
 
@@ -1281,10 +1281,12 @@ This boundary includes:
 
 Contract:
 
-* Unsafe power is explicit in source code
+* Low-level power is explicit in source code
 * Ownership is never inferred from pointers
 * The compiler rejects statically provable misuse
-* Non-provable misuse remains the programmer’s explicit responsibility
+* Non-provable invariants remain the programmer's explicit responsibility
+
+There is deliberately **no `unsafe { }` block**. Wrapping these operations in a block named "unsafe" would tell the engineer they are doing something illegitimate — but on Bestie, direct memory work is a first-class part of the language, used the same way by systems and backend code alike. The boundary is made visible through the operations themselves (`ptr<T>`, `.address()`, `@trusted`, manual `free`) and through `@trusted`, which is searchable and reviewable. You mark intent, not guilt.
 
 ---
 
@@ -1316,7 +1318,7 @@ Explicitly rejected designs:
 * Garbage collection
 * Implicit reference counting
 * Arena sublanguages
-* Unsafe blocks
+* `unsafe { }` blocks — low-level work is first-class, not a quarantined mode (see §15)
 * Borrow inference complexity
 * Runtime lifetime tracking
 * Lifetime parameters in type fields
@@ -1447,7 +1449,7 @@ Bestie’s memory and ownership model is:
 * Ownership-driven, not GC-driven
 * Pointer-friendly, not pointer-hiding
 * Deterministic, not runtime-driven
-* Safe by default with explicit unsafe boundaries
+* Safe by default, with first-class explicit low-level control — no `unsafe` block, no second-class corner
 
 `own` answers **who frees**
 `ref` answers **who borrows**

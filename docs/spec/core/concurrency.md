@@ -7,7 +7,7 @@ Core concurrency in Bestie is:
 * Low-level
 * Deterministic
 * Explicit
-* Safe-by-default for `own/ref` paths, with explicit unsafe boundaries via `ptr`
+* Safe-by-default for `own/ref` paths, with first-class explicit low-level control via `ptr`
 
 **Parallelism is a core feature**, available directly through `threadOs` without reaching into any API layer.
 

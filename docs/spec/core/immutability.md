@@ -219,7 +219,7 @@ See `std-lib/collections.md` §4.4 for full examples.
 
 ## 8. `ptr<T>` — The Exception
 
-`ptr<T>` lives in the `@trusted` unsafe zone and does not follow the normal immutability model.
+`ptr<T>` is Bestie's raw, low-level pointer (`@trusted` territory) and does not follow the normal immutability model.
 
 * `val p: ptr<T>` — the pointer cannot be rebound, but writing through it (`p[0] = v`) is still permitted
 * `@immutable val p: ptr<T>` — prevents rebinding, but does **not** prevent writes through the pointer. Pointer writes bypass the language-level immutability model
@@ -265,7 +265,7 @@ val o : option<list<int>> = option.Present({1, 2, 3})
 | `map<K,V>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ✅ literal only |
 | `deque<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
 | `heap<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
-| `ptr<T>` | unsafe built-in | ❌ | ❌ | ❌ | ⚠️ binding only | ❌ |
+| `ptr<T>` | raw low-level built-in | ❌ | ❌ | ❌ | ⚠️ binding only | ❌ |
 | `option<T>` | wrapper (enum-like) | variant: ✅ / contents: depends | depends on T | ❌ | ✅ freezes both layers | ❌ |
 | `result<T,E>` | wrapper (enum-like) | variant: ✅ / contents: depends | depends on T, E | ❌ | ✅ freezes both layers | ❌ |
 

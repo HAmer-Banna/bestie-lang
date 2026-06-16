@@ -7,6 +7,8 @@ Bestie is a native, compiled programming language designed from first principles
 Bestie is not built around a single paradigm.
 Object-oriented programming, functional programming, and low-level control are treated as **explicit tools**, not ideologies.
 
+Systems and backend engineers share **one language and one memory model** — there is no "safe subset" and no walled-off `unsafe` mode. Raw pointers, manual memory, and FFI are first-class citizens, expressed through explicit, searchable constructs (`ptr<T>`, `@trusted`, manual `free`) rather than a block that implies you've left the language. Both audiences are meant to feel at home in the same core.
+
 Bestie prioritizes:
 
 * Compile-time resolution
@@ -1209,7 +1211,7 @@ Manual, deterministic memory model:
 * `own`
 * `ref`
 * `ptr<T>`
-* Explicit unsafe boundaries for low-level operations (`ptr`, FFI, manual free)
+* First-class explicit low-level operations (`ptr`, FFI, manual free) — no `unsafe` block, just visible intent
 
 See `memory.md`.
 

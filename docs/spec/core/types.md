@@ -68,7 +68,7 @@ Rules:
 * Widening conversions are total
 * Narrowing conversions are checked
 * A checked narrowing conversion uses `try` when runtime validation is required
-* `@trusted` may suppress runtime checks, with the same responsibility model as other unsafe escape hatches
+* `@trusted` may suppress runtime checks, with the same responsibility model as other `@trusted`/`ptr` low-level operations — correctness is the programmer's to uphold
 
 Example:
 

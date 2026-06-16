@@ -265,12 +265,12 @@ There is no null literal. There is no nullable type. There is no way to write nu
 
 ### 4.2 `ptr<T>` — Raw Pointer
 
-`ptr<T>` is Bestie's escape hatch for unsafe memory operations. It can physically hold any bit pattern, including the zero address. However:
+`ptr<T>` is Bestie's raw, low-level pointer for direct memory operations. It can physically hold any bit pattern, including the zero address. However:
 
 * The zero address in a `ptr<T>` is not called "null" — it is an **invalid address**
-* Safe Bestie code never produces a zero-address `ptr<T>`
+* `own`/`ref` code never produces a zero-address `ptr<T>`
 * The compiler's niche optimization uses the zero address bit pattern internally — this is invisible to the programmer
-* Any `ptr<T>` that might hold the zero address comes from `foreign` code or `@trusted` unsafe operations — both are explicit in source
+* Any `ptr<T>` that might hold the zero address comes from `foreign` code or `@trusted` operations — both are explicit in source
 
 ---
 
