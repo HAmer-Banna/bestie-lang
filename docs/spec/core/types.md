@@ -290,6 +290,8 @@ Rules:
 * `s.char(i)` is the explicit Unicode-aware path
 * Bestie intentionally does not overload a single ambiguous `length()` meaning in core
 
+> **Why `s[i]` returns `byte` and not `char`.** `str` is stored as UTF-8, which is **variable-width** (a codepoint is 1–4 bytes). Byte access at a byte offset is therefore **O(1)** — a single memory read with no decoding. Indexing by *codepoint* (`s[i] -> char`) cannot be O(1) on a UTF-8 buffer: finding the i-th scalar requires decoding from the start, which is **O(n)**. Bestie refuses to hide that cost behind `[]`. Making `s[i]` return `char` would force either O(n) subscripting (a hidden cost) or a fixed-width 32-bit internal representation (4× memory and no zero-copy interop with byte buffers, I/O, and FFI). So `[]` stays the fast byte path, and codepoint access is explicit via `s.char(i)` / `s.chars()`. (A `char` is still only a Unicode scalar, not a grapheme cluster, so no integer subscript yields a user-perceived "character" anyway — that belongs in `std-lib/strings.md`.)
+
 Example:
 
 ```bestie

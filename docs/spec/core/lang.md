@@ -395,6 +395,8 @@ Includes:
 `s[i]` is direct memory access — fast, no validation. Use it when you are working with bytes.
 `s.char(i)` is the human-readable path — validates and decodes. Use it when you care about characters.
 
+`s[i]` returns `byte` (not `char`) because UTF-8 is variable-width: byte indexing is O(1), whereas codepoint indexing would be O(n) on a UTF-8 buffer. Bestie keeps `[]` as the O(1) byte path rather than hiding a decode behind it. See `core/types.md` §3 for the full rationale.
+
 No hidden cost. The fast path stays fast. The correct path is explicit.
 
 Properties:
