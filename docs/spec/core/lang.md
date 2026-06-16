@@ -248,6 +248,94 @@ Rules:
 
 ---
 
+### 4.8 Blocks, Scopes, and Shadowing
+
+Bestie uses **lexical (static) scoping**. Every name is resolved at compile time against the textually enclosing scopes — never at runtime.
+
+#### 4.8.1 Blocks
+
+A block is a brace-delimited group of statements `{ ... }`. Every block introduces a **new nested scope**.
+
+```bestie
+fun example(): void {
+    val a = 1
+    {
+        val b = a + 1     // inner block can see `a`
+        print(b)
+    }
+    // `b` is not visible here — its scope ended with the inner block
+}
+```
+
+Properties:
+
+* A block scope begins at `{` and ends at the matching `}`
+* Bindings declared in a block are destroyed (and `defer`s run, see section 23) when the block exits
+* Inner scopes can read names from enclosing scopes; enclosing scopes cannot see names declared in inner scopes
+* The bodies of `if`, `switch`, loops, and function literals are blocks and follow the same rules
+
+#### 4.8.2 Scope Kinds
+
+| Scope | Introduced by | Notes |
+| ----- | ------------- | ----- |
+| Module / file | top of a file | `var` is forbidden here; file-level `val` requires `@immutable` |
+| Type body | `class` / `data class` / `protocol` / `enum` | members and `const`s live in the type namespace |
+| Function | `fun` parameter list + body | parameters live in the function's top scope |
+| Block | `{ ... }` | including `if`/`switch`/loop bodies and function-literal bodies |
+
+Name resolution proceeds **innermost-out**: the compiler searches the current scope first, then each enclosing scope, stopping at the first match.
+
+#### 4.8.3 Shadowing
+
+A binding may **shadow** a binding of the same name from an **enclosing** scope. The inner name hides the outer one for the remainder of the inner scope; the outer binding is untouched and becomes visible again once the inner scope ends.
+
+```bestie
+val x = 10
+
+fun f(): void {
+    print(x)          // 10 — the outer `x`
+    val x = 20        // shadows the outer `x` within this function body
+    print(x)          // 20
+    {
+        val x = 30    // shadows again in this block
+        print(x)      // 30
+    }
+    print(x)          // 20 — inner block ended
+}
+```
+
+Rules:
+
+* Shadowing is allowed **only across nested scopes**. The inner declaration must live in a strictly more nested scope than the binding it shadows.
+* **Redeclaring a name in the same scope is a compile-time error** — there is no same-scope shadowing or rebinding via re-declaration. (Mutating an existing `var` with `=` is assignment, not shadowing.)
+* A local binding may shadow a function parameter (the body block is nested relative to the parameter scope); two parameters may **not** share a name.
+* Shadowing never changes the type or mutability of the outer binding — each binding is independent.
+* Shadowing is purely lexical and resolved at compile time. It involves no dispatch and no runtime cost.
+
+The compiler may emit a **lint warning** for shadowing that is likely unintentional, but shadowing across scopes is legal.
+
+#### 4.8.4 Shadowing vs. Overriding
+
+Shadowing and overriding are unrelated mechanisms and must not be confused:
+
+| | Shadowing | Overriding |
+| --- | --------- | ---------- |
+| Applies to | local bindings / variables | `@virtual` methods in a class hierarchy |
+| Mechanism | a name in an inner scope hides one in an outer scope | a subclass replaces a base method's implementation |
+| Resolution | lexical, **compile time** | dynamic dispatch, **runtime** (vtable or sealed tag) |
+| Requires | nothing — just a nested declaration | `@virtual` on the base, `@override` on the subclass |
+| Cost | zero | one dynamic dispatch |
+
+Crucially, Bestie has **no member hiding**. A subclass cannot silently redeclare a base field or non-`@virtual` method to shadow it:
+
+* Redeclaring an inherited **field** is a compile-time error.
+* Redeclaring a non-`@virtual` **method** is a compile-time error — there is no static "method hiding" as in some languages.
+* The only legal way for a subclass to provide a new implementation of an inherited method is to **override** a `@virtual` method with `@override`.
+
+This keeps method resolution unambiguous: a call either dispatches statically to a single definition or dynamically to a `@virtual` override. See `core/oop.md` §6 (Inheritance & Override Rules) for the full override semantics.
+
+---
+
 ## 5. Types
 
 ### 5.1 Primitive Types

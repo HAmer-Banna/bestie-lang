@@ -475,6 +475,8 @@ Rules:
 * A closed `class` cannot be extended
 * A closed `class` may extend an `open` or `abstract` base
 
+Overriding is distinct from lexical shadowing: it replaces a `@virtual` method's implementation and is resolved by dynamic dispatch, whereas shadowing only hides a binding in a nested scope at compile time. Bestie has **no member hiding** — a subclass may not redeclare an inherited field or non-`@virtual` method. See `core/lang.md` §4.8.4 for the shadowing-vs-overriding distinction.
+
 ### 6.1 Default Implementation Resolution
 
 Priority order (highest to lowest):
