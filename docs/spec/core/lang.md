@@ -352,6 +352,7 @@ Primitive value types map directly to machine types:
 | `int`                             | Pointer-sized | Signed. Equivalent to C `intptr_t`. Use for indices, sizes, offsets. |
 | `uint`                            | Pointer-sized | Unsigned. Equivalent to C `uintptr_t` / `size_t`. |
 | `float32`, `float64`              | 32 / 64-bit   | IEEE 754                                 |
+| `float`                           | Target-default | The platform's natural IEEE-754 float (`float64` on all current mainstream targets). Use when you want "a float" without committing to a width. |
 | `bool`                            | 1-bit logical | `true` / `false`                         |
 | `char`                            | 32-bit        | Unicode scalar value (valid codepoint)   |
 
@@ -362,6 +363,12 @@ Primitive value types map directly to machine types:
 `int` and `uint` are not ambiguous — their width is the pointer width of the target platform. They exist specifically for indices, sizes, counts, and pointer arithmetic. Using `int32` or `int64` is correct when the bit width matters independently of the platform.
 
 Mixing `int` with fixed-width types (`int32`, `int64`, etc.) requires an explicit cast. No silent narrowing or widening.
+
+**`float` — target-default by design:**
+
+Like `int` and `uint`, `float` is resolved at compile time to the platform's natural floating-point type — `float64` on every current mainstream target. It is the backend-friendly default for general-purpose math when you do not want to commit to a width; reach for `float32` or `float64` explicitly when the bit width matters (storage layout, SIMD, wire formats, GPU interop).
+
+Mixing `float` with fixed-width float types (`float32`, `float64`) requires an explicit cast. No silent narrowing or widening.
 
 **`byte` and `uint8`:**
 
