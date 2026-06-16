@@ -1,8 +1,8 @@
-# std-api.http — HTTP API
+# bestie.api.http — HTTP API
 
-This document defines the **Bestie Standard HTTP API (`std-api.http`)**.
+This document defines the **Bestie Standard HTTP API (`bestie.api.http`)**.
 
-`std-api.http` provides a **correct, explicit, and minimal HTTP protocol implementation** built on top of `std-api.network`.
+`bestie.api.http` provides a **correct, explicit, and minimal HTTP protocol implementation** built on top of `bestie.api.network`.
 
 It is **not** a web framework.
 
@@ -45,7 +45,7 @@ These belong in **std-framework** or external libraries.
 ## 3. Namespacing
 
 ```text
-std.api.http
+bestie.api.http
 ```
 
 ---
@@ -156,7 +156,7 @@ TLS is **not** part of this API.
 
 Possible locations:
 
-* `std-api.tls`
+* `bestie.api.tls`
 * External libraries
 
 This keeps HTTP logic clean and testable.
@@ -173,7 +173,7 @@ This keeps HTTP logic clean and testable.
 
 ## 10. Relationship to Frameworks
 
-`std-api.http` provides **raw HTTP mechanics**.
+`bestie.api.http` provides **raw HTTP mechanics**.
 
 Examples built on top:
 
@@ -186,7 +186,7 @@ Examples built on top:
 
 ## 11. Summary
 
-`std-api.http` is:
+`bestie.api.http` is:
 
 * Protocol-correct
 * Explicit

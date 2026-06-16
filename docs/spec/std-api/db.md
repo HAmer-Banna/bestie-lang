@@ -1,8 +1,8 @@
-# std-api.db — Database API
+# bestie.api.db — Database API
 
-This document defines the **Bestie Standard Database API (`std-api.db`)**.
+This document defines the **Bestie Standard Database API (`bestie.api.db`)**.
 
-`std-api.db` provides **low-level, explicit access to relational and key-value stores**.
+`bestie.api.db` provides **low-level, explicit access to relational and key-value stores**.
 
 ---
 
@@ -41,7 +41,7 @@ This document defines the **Bestie Standard Database API (`std-api.db`)**.
 ## 3. Namespacing
 
 ```text
-std.api.db
+bestie.api.db
 ```
 
 ---
@@ -128,7 +128,7 @@ class PreparedStatement {
 
 ## 9. Summary
 
-`std-api.db` provides:
+`bestie.api.db` provides:
 
 * Low-level DB access
 * Explicit connections and transactions

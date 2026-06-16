@@ -963,7 +963,7 @@ fun main(args: list<str>) {
 }
 ```
 
-Both forms are valid. `args` contains the raw command-line arguments as strings. Structured argument parsing lives in `std-api.cli`.
+Both forms are valid. `args` contains the raw command-line arguments as strings. Structured argument parsing lives in `bestie.api.cli`.
 
 ### 11.2 Rules
 
@@ -1073,7 +1073,20 @@ This provides comprehension-style behavior without stream abstractions.
 
 ## 15. Operators
 
-Logical, bitwise, identity, and compile-time introspection operators supported.
+Bestie supports a balanced mix of symbolic and word-based operators.
+
+### Logical and Bitwise
+
+* `&&`, `||`, `!`, `and`, `or`, `not`
+* `&`, `|`, `^`, `~`, `<<`, `>>`
+
+The symbolic logical operators (`&&`, `||`, `!`) and their word-based equivalents (`and`, `or`, `not`) are interchangeable spellings of the same operators — pick whichever reads best.
+
+### Introspection and Identity
+
+* `is` — identity comparison
+* `typeOf(x)` — compile-time type query
+* `sizeOf(T)` — compile-time size query
 
 No hidden operator behavior.
 

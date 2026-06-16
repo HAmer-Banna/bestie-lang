@@ -1,8 +1,8 @@
 # Operating System API
 
-This document defines the **Bestie Standard OS API (`std-api.os`)**.
+This document defines the **Bestie Standard OS API (`bestie.api.os`)**.
 
-`std-api.os` provides **explicit, minimal, and structured access** to operating system services.
+`bestie.api.os` provides **explicit, minimal, and structured access** to operating system services.
 It is **not** a framework, **not** a runtime, and **not** a replacement for the core language.
 
 The API is designed to:
@@ -15,7 +15,7 @@ The API is designed to:
 
 ## 1. Scope and Non-Goals
 
-### 1.1 What `std-api.os` Provides
+### 1.1 What `bestie.api.os` Provides
 
 * Process management
 * Environment variables
@@ -27,12 +27,12 @@ The API is designed to:
 
 ---
 
-### 1.2 What `std-api.os` Does *Not* Provide
+### 1.2 What `bestie.api.os` Does *Not* Provide
 
-* File I/O (see `std-api.io`)
-* Memory management or MMIO (see `std-api.memory`)
-* Networking (see `std-api.network`)
-* CLI parsing (see `std-api.cli`)
+* File I/O (see `bestie.api.io`)
+* Memory management or MMIO (see `bestie.api.memory`)
+* Networking (see `bestie.api.network`)
+* CLI parsing (see `bestie.api.cli`)
 * Concurrency primitives (core language / ext-concurrency)
 * Framework-level abstractions
 
@@ -54,7 +54,7 @@ The API is designed to:
 All OS APIs live under:
 
 ```text
-std.api.os
+bestie.api.os
 ```
 
 No re-exports. No wildcards.
@@ -195,7 +195,7 @@ Includes:
 ## 10. Entropy and Secure Randomness
 
 The operating system is the **only** source of true entropy. Pseudo-random number
-generation lives in [`std-lib.random`](../std-lib/random.md); this section provides the
+generation lives in [`bestie.lib.random`](../std-lib/random.md); this section provides the
 raw, cryptographically secure material that PRNGs may be seeded from and that
 security-sensitive code must use directly.
 
@@ -231,24 +231,24 @@ errors EntropyError {
 val seed = entropy64() catch |err| { ... }
 ```
 
-### 10.3 Relationship to `std-lib.random`
+### 10.3 Relationship to `bestie.lib.random`
 
-* `std-api.os` — true entropy, **fallible**, OS-backed, secure
-* `std-lib.random` — deterministic PRNG, reproducible, fast, **insecure**
+* `bestie.api.os` — true entropy, **fallible**, OS-backed, secure
+* `bestie.lib.random` — deterministic PRNG, reproducible, fast, **insecure**
 
 The intended bridge: draw a one-time seed here, then run a fast deterministic
-generator from `std-lib.random`.
+generator from `bestie.lib.random`.
 
 ```bestie
-import std.api.os
-import std.lib.random
+import bestie.api.os
+import bestie.lib.random
 
 val seed = Seed.of(os.entropy64() catch |err| { ... })
 val rng  = Pcg32.fromSeed(seed)
 ```
 
 Security-sensitive randomness must use `secureBytes` directly and never a
-`std-lib.random` generator.
+`bestie.lib.random` generator.
 
 ---
 
@@ -283,7 +283,7 @@ No hidden retries. No silent fallbacks.
 
 ## 14. Summary
 
-`std-api.os` is:
+`bestie.api.os` is:
 
 * Minimal
 * Explicit

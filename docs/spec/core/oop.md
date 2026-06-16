@@ -551,9 +551,36 @@ For construction rules specific to inner classes — including how the outer `in
 
 ## 10. Properties (Fields with Accessors)
 
-* Compile to explicit getter/setter methods
-* No implicit backing fields
+Properties expose accessor-backed values that look like fields at the call site but compile to explicit getter/setter methods. There is no implicit backing field — the accessors are the property.
+
+**Syntax:**
+
+```bestie
+val name: str => { get }
+var age: int => { get; set }
+```
+
+* `val` properties expose a `get` accessor only (read-only).
+* `var` properties expose both `get` and `set` accessors (read/write).
+
+**Rules:**
+
+* Properties compile to methods — there is no backing field magic
+* No implicit backing fields are generated
 * Ownership rules apply
+
+**Ownership example:**
+
+```bestie
+val own address: Address => { get }
+```
+
+**Allowed contexts:**
+
+* Allowed in classes and singleton classes
+* Allowed in inner classes
+* Forbidden in protocols
+* Discouraged in `data`/`value` classes (prefer direct fields)
 
 ---
 

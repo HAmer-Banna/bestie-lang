@@ -157,8 +157,8 @@ debug.assertNoLeaks()
 
 ## 5. Relationship to Other Layers
 
-* `std-lib.allocators` provides strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`)
-* `std-api.memory` provides platform and hardware memory APIs (MMIO, regions, volatile operations)
+* `bestie.lib.allocators` provides strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`)
+* `bestie.api.memory` provides platform and hardware memory APIs (MMIO, regions, volatile operations)
 * Core language remains unchanged: ownership and explicit unsafe boundaries still define correctness
 
 ---

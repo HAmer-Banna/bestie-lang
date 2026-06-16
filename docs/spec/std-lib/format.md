@@ -1,8 +1,8 @@
-# std-lib.format — Structured Data Formats
+# bestie.lib.format — Structured Data Formats
 
-This document defines **Bestie Standard Formatting Library (`std-lib.format`)**.
+This document defines **Bestie Standard Formatting Library (`bestie.lib.format`)**.
 
-`std-lib.format` provides **parsing and serialization** for common structured data formats used for:
+`bestie.lib.format` provides **parsing and serialization** for common structured data formats used for:
 
 * Configuration
 * Interchange
@@ -77,7 +77,7 @@ protocol Serializer<T> {
 
 All formats use `impl` with these protocols.
 
-The **unified part** of `std-lib.format` is the codec interface:
+The **unified part** of `bestie.lib.format` is the codec interface:
 
 * `parse<T>(input)`
 * `serialize(value)`
@@ -362,7 +362,7 @@ Correctness is preferred over convenience.
 
 ## 13. Summary
 
-`std-lib.format` is:
+`bestie.lib.format` is:
 
 * Uniform
 * Predictable

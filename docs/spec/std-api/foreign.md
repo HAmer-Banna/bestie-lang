@@ -7,7 +7,7 @@ It allows Bestie programs to interoperate with **existing native codebases** (C,
 
 ## 1. Design Goals
 
-`std-api.foreign` exists to:
+`bestie.api.foreign` exists to:
 
 * Interoperate with existing systems and libraries
 * Enable gradual migration to Bestie
@@ -216,14 +216,14 @@ Bestie does not reinterpret foreign errors.
 Platform-specific bindings must live under:
 
 ```text
-std.api.foreign.<platform>
+bestie.api.foreign.<platform>
 ```
 
 Examples:
 
 ```text
-std.api.foreign.posix
-std.api.foreign.win32
+bestie.api.foreign.posix
+bestie.api.foreign.win32
 ```
 
 They must not alter core semantics.
@@ -235,9 +235,9 @@ They must not alter core semantics.
 | API               | Responsibility            |
 | ----------------- | ------------------------- |
 | Core language     | Safety, ownership, ptr<T> |
-| `std-api.memory`  | MMIO, memory regions      |
-| `std-api.os`      | OS abstractions           |
-| `std-api.foreign` | ABI interoperability      |
+| `bestie.api.memory`  | MMIO, memory regions      |
+| `bestie.api.os`      | OS abstractions           |
+| `bestie.api.foreign` | ABI interoperability      |
 
 ---
 
@@ -256,7 +256,7 @@ Unsafe power is available — **only explicitly and locally**.
 
 ## 13. Summary
 
-`std-api.foreign` is:
+`bestie.api.foreign` is:
 
 * Explicit
 * Minimal

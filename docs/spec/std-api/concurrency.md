@@ -1,4 +1,4 @@
-# Extended Concurrency API (`std-api.ext.concurrency`)
+# Extended Concurrency API (`bestie.api.ext.concurrency`)
 
 This document defines the **Extended Concurrency API** for Bestie.
 
@@ -256,12 +256,12 @@ Advanced models such as:
 Belong to:
 
 ```
-std-framework.*
+bestie.framework.*
 or
 external frameworks
 ```
 
-They are **not part of std-api.ext.concurrency**.
+They are **not part of bestie.api.ext.concurrency**.
 
 ---
 
@@ -278,7 +278,7 @@ Rules:
 
 ## 10. Summary
 
-`std-api.ext.concurrency` provides:
+`bestie.api.ext.concurrency` provides:
 
 * Atomics for low-level control
 * Locks for unavoidable shared mutation

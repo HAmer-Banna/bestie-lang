@@ -200,7 +200,7 @@ Floating-point values support:
 | `isInfinite()` | `bool` | Positive or negative infinity |
 | `isFinite()` | `bool` | True when neither NaN nor infinity |
 
-Higher-level math such as `sqrt`, `pow`, trigonometry, and linear algebra remains in `std-lib.math`.
+Higher-level math such as `sqrt`, `pow`, trigonometry, and linear algebra remains in `bestie.lib.math`.
 
 ---
 

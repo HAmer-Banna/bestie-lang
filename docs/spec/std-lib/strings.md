@@ -1,10 +1,10 @@
-# std-lib.strings — String Parsing and Text Operations
+# bestie.lib.strings — String Parsing and Text Operations
 
-This document defines the **Bestie Standard String Library (`std-lib.strings`)**.
+This document defines the **Bestie Standard String Library (`bestie.lib.strings`)**.
 
 Core `str` (see `core/types.md` §3) is intentionally minimal — it exposes only raw byte access, codepoint access, length, and iteration. Everything higher-level — **parsing**, **substrings**, **search**, **splitting**, **trimming**, and **case conversion** — lives here.
 
-`std-lib.strings` is delivered entirely as **extension functions** on `str` (and a few on `list<str>`). This means:
+`bestie.lib.strings` is delivered entirely as **extension functions** on `str` (and a few on `list<str>`). This means:
 
 * Core stays small; `str` gains no new fields or built-in methods.
 * The operations still read as methods (`s.toInt()`, `s.trim()`) because extension functions are called with method syntax (`fp.md` §11).
@@ -172,7 +172,7 @@ fun str.charCount(): int                    // number of Unicode scalars (O(n))
 | Concern | Where |
 | ------- | ----- |
 | Raw byte access, codepoint access, iteration, byte slicing | core `str` (`core/types.md` §3, §6) |
-| Parsing, substring, search, split, trim, case, transforms | `std-lib.strings` (this document) |
+| Parsing, substring, search, split, trim, case, transforms | `bestie.lib.strings` (this document) |
 | Efficient repeated concatenation | `StringBuilder` (`std-lib/util.md` §1) |
 
 For building strings in a loop, prefer `StringBuilder` over repeated `+` or `join` to avoid intermediate allocations:
@@ -216,7 +216,7 @@ Non-parsing operations do not fail: out-of-range substring indices **panic** (in
 
 ## 12. Summary
 
-`std-lib.strings` is:
+`bestie.lib.strings` is:
 
 * **Extension-based** — keeps core `str` minimal while offering method-style ergonomics
 * **Immutable** — every result is a new `str`

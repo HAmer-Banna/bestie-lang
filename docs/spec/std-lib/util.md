@@ -42,16 +42,16 @@ val s = sb.toStr()
 
 `toStr()` (not `toString()`) is used deliberately — it matches the universal `toStr()` conversion convention used by every core type (`core/types.md` §2.1). There is exactly one spelling for "produce a `str`."
 
-### Relationship to `std-lib.strings`
+### Relationship to `bestie.lib.strings`
 
-`StringBuilder` and `std-lib.strings` are complementary and do **not** overlap:
+`StringBuilder` and `bestie.lib.strings` are complementary and do **not** overlap:
 
 | Concern | Owner |
 | ------- | ----- |
 | Mutable, allocation-efficient **construction** (append in a loop) | `StringBuilder` (this section) |
-| Immutable **queries / transforms** on an existing `str` (parse, substring, split, trim, case, search) | `std-lib.strings` |
+| Immutable **queries / transforms** on an existing `str` (parse, substring, split, trim, case, search) | `bestie.lib.strings` |
 
-`StringBuilder` operates on a mutable buffer and exposes `append` / `toStr`; `std-lib.strings` operates on immutable `str` values and returns new `str`s. They share no method names and never compete for the same operation — build with `StringBuilder`, then query/transform the resulting `str` with `std-lib.strings`.
+`StringBuilder` operates on a mutable buffer and exposes `append` / `toStr`; `bestie.lib.strings` operates on immutable `str` values and returns new `str`s. They share no method names and never compete for the same operation — build with `StringBuilder`, then query/transform the resulting `str` with `bestie.lib.strings`.
 
 ---
 

@@ -1,8 +1,8 @@
-# std-api.cli — Command-Line Interface API
+# bestie.api.cli — Command-Line Interface API
 
-This document defines the **Bestie Standard CLI API (`std-api.cli`)**.
+This document defines the **Bestie Standard CLI API (`bestie.api.cli`)**.
 
-`std-api.cli` provides explicit tools for:
+`bestie.api.cli` provides explicit tools for:
 
 * Parsing arguments
 * Handling commands and subcommands
@@ -44,7 +44,7 @@ This document defines the **Bestie Standard CLI API (`std-api.cli`)**.
 ## 3. Namespacing
 
 ```text
-std.api.cli
+bestie.api.cli
 ```
 
 ---
@@ -130,7 +130,7 @@ fun println(msg: str): void
 
 ## 9. Summary
 
-`std-api.cli` is:
+`bestie.api.cli` is:
 
 * Explicit
 * Minimal

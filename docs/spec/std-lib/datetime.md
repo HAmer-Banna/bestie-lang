@@ -1,12 +1,12 @@
-# std-lib.datetime — Date, Time, and Time Zones
+# bestie.lib.datetime — Date, Time, and Time Zones
 
-This document defines **Bestie Standard Date & Time Library (`std-lib.datetime`)**.
+This document defines **Bestie Standard Date & Time Library (`bestie.lib.datetime`)**.
 
 Datetime belongs to **std-lib**, not `std-api`, because:
 
 * Time is a logical concept, not an OS primitive
 * The API is portable and deterministic
-* OS clocks are accessed via `std-api.os`
+* OS clocks are accessed via `bestie.api.os`
 
 ---
 
@@ -158,7 +158,7 @@ Rules:
 
 * No implicit local zone
 * UTC must be explicit: `TimeZone.utc()`
-* Platform-specific zones (with DST rules) are loaded via `std-api.os` and wrapped in a `TimeZone`
+* Platform-specific zones (with DST rules) are loaded via `bestie.api.os` and wrapped in a `TimeZone`
 * Structural equality: two `TimeZone` values with the same `id` and `offset` are equal
 * `id` is a `str` (value type — no `own`/`ref` qualifier needed)
 * `offset` is a `Duration` (value class — embedded inline)
@@ -273,13 +273,13 @@ This library intentionally avoids:
 * Overloaded constructors
 * Magical "now" calls
 
-System time comes from `std-api.os`.
+System time comes from `bestie.api.os`.
 
 ---
 
 ## 10. Summary
 
-`std-lib.datetime` is:
+`bestie.lib.datetime` is:
 
 * Explicit
 * Predictable

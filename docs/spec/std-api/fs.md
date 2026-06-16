@@ -1,45 +1,45 @@
-# Standard API — File System (`std-api.fs`)
+# Standard API — File System (`bestie.api.fs`)
 
 This document defines the **File System API layer** for Bestie.
 
-`std-api.fs` provides **explicit, structured, and portable access** to files, directories,
-and file metadata. It builds directly on [`std-api.io`](io.md) for reading and writing,
-and on [`std-api.os`](os.md) for process- and platform-level concerns.
+`bestie.api.fs` provides **explicit, structured, and portable access** to files, directories,
+and file metadata. It builds directly on [`bestie.api.io`](io.md) for reading and writing,
+and on [`bestie.api.os`](os.md) for process- and platform-level concerns.
 
-`std-api.fs` is **not** a virtual file system, **not** a watcher framework, and **not** a
+`bestie.api.fs` is **not** a virtual file system, **not** a watcher framework, and **not** a
 path-manipulation DSL. It exposes the file system as the OS presents it, without hiding cost.
 
 ---
 
 ## 1. Scope and Intent
 
-### 1.1 What `std-api.fs` Provides
+### 1.1 What `bestie.api.fs` Provides
 
-* Opening files as `std-api.io` streams
+* Opening files as `bestie.api.io` streams
 * Path representation and inspection
 * File and directory metadata (`stat`)
 * Directory creation, listing, and removal
 * File operations: rename, copy, remove, link
 * Explicit permission and timestamp queries
 
-### 1.2 What `std-api.fs` Does *Not* Provide
+### 1.2 What `bestie.api.fs` Does *Not* Provide
 
-* Stream primitives (→ `std-api.io`)
-* Process / environment access (→ `std-api.os`)
-* Networking or remote file systems (→ `std-api.network`)
+* Stream primitives (→ `bestie.api.io`)
+* Process / environment access (→ `bestie.api.os`)
+* Networking or remote file systems (→ `bestie.api.network`)
 * Serialization formats — JSON, CSV, etc.
 * File watching / inotify-style events
 * Implicit recursive globbing as a query language
 
-Each concern has its own API layer. `std-api.fs` is the bridge between paths on disk and
-the streams defined in `std-api.io`.
+Each concern has its own API layer. `bestie.api.fs` is the bridge between paths on disk and
+the streams defined in `bestie.api.io`.
 
 ---
 
 ## 2. Design Principles
 
 1. **Explicit resource ownership** — open handles must be closed; lifetimes are visible.
-2. **No hidden buffering** — buffering comes from `std-api.io`, opt-in.
+2. **No hidden buffering** — buffering comes from `bestie.api.io`, opt-in.
 3. **No global state** — no current-working-directory mutation hidden in calls.
 4. **Blocking by default** — concurrency comes from threads, not async magic.
 5. **No exceptions** — every fallible operation returns a typed error.
@@ -53,13 +53,13 @@ the streams defined in `std-api.io`.
 All file system APIs live under:
 
 ```text
-std.api.fs
+bestie.api.fs
 ```
 
 No re-exports. No wildcards.
 
 ```bestie
-import std.api.fs
+import bestie.api.fs
 ```
 
 ---
@@ -126,7 +126,7 @@ Rules:
 
 ## 6. Opening Files
 
-Files are opened into `std-api.io` streams. `std-api.fs` provides the openers; `std-api.io`
+Files are opened into `bestie.api.io` streams. `bestie.api.fs` provides the openers; `bestie.api.io`
 provides the read/write surface.
 
 ```bestie
@@ -142,7 +142,7 @@ enum OpenMode {
 }
 ```
 
-Example (ownership and explicit close, consistent with `std-api.io`):
+Example (ownership and explicit close, consistent with `bestie.api.io`):
 
 ```bestie
 own stream = openRead(Path.of("/etc/config")) catch |err| { ... }
@@ -154,16 +154,16 @@ process(data)
 
 Rules:
 
-* Openers return `std-api.io` streams — `std-api.fs` adds no new read/write methods
+* Openers return `bestie.api.io` streams — `bestie.api.fs` adds no new read/write methods
 * Handles are owned (`own`) and must be closed explicitly
-* No implicit buffering — wrap in `BufferedInputStream` from `std-api.io` if desired
+* No implicit buffering — wrap in `BufferedInputStream` from `bestie.api.io` if desired
 
 ---
 
 ## 7. The `File` Handle
 
 For operations that go beyond plain streaming (querying live metadata, syncing, truncating),
-`std-api.fs` exposes an explicit handle.
+`bestie.api.fs` exposes an explicit handle.
 
 ```bestie
 class File {
@@ -195,7 +195,7 @@ data class Metadata {
     val kind: FileType
     val size: int64           // bytes
     val permissions: Permissions
-    val modified: Instant     // std-lib.datetime value type
+    val modified: Instant     // bestie.lib.datetime value type
     val created: Instant
 }
 ```
@@ -221,7 +221,7 @@ Rules:
 
 * `Metadata` is an immutable **snapshot** taken at the time of the call
 * `exists` returns a plain `bool`; only genuine I/O failures are errors
-* Timestamps reuse `Instant` from [`std-lib.datetime`](../std-lib/datetime.md) — no bespoke time type
+* Timestamps reuse `Instant` from [`bestie.lib.datetime`](../std-lib/datetime.md) — no bespoke time type
 
 ### 8.2 `Permissions`
 
@@ -312,7 +312,7 @@ Rules:
 ## 11. Error Model
 
 All fallible operations return a **typed error** via the core error union (`!`), consistent
-with `std-api.io` and `std-api.os`.
+with `bestie.api.io` and `bestie.api.os`.
 
 ```bestie
 errors FsError {
@@ -324,7 +324,7 @@ errors FsError {
     NotEmpty,
     CrossDevice,        // e.g. rename across volumes
     Unsupported,        // operation not available on this platform
-    Io                  // underlying std-api.io failure
+    Io                  // underlying bestie.api.io failure
 }
 ```
 
@@ -333,14 +333,14 @@ Rules:
 * No exceptions
 * No hidden retries or silent fallbacks
 * Absence (`exists` == false) is **not** an error; only failed operations are
-* `FsError.Io` wraps lower-level `std-api.io` errors without losing the typed boundary
+* `FsError.Io` wraps lower-level `bestie.api.io` errors without losing the typed boundary
 
 ---
 
 ## 12. Integration with Concurrency
 
-`std-api.fs` introduces **no** async keywords. Blocking calls run on whatever thread invokes
-them; concurrency is achieved with the core concurrency model (matching `std-api.io`):
+`bestie.api.fs` introduces **no** async keywords. Blocking calls run on whatever thread invokes
+them; concurrency is achieved with the core concurrency model (matching `bestie.api.io`):
 
 ```bestie
 threadLight.start {
@@ -357,19 +357,19 @@ threadLight.start {
 
 ## 13. Relationship to Other APIs
 
-* `std-api.fs` **builds on** `std-api.io` — it opens streams, it does not redefine them
-* `std-api.fs` **uses** `std-api.os` for platform metadata and `std-lib.datetime` for timestamps
-* `std-api.network` and `std-api.http` are independent peers, not built on `fs`
+* `bestie.api.fs` **builds on** `bestie.api.io` — it opens streams, it does not redefine them
+* `bestie.api.fs` **uses** `bestie.api.os` for platform metadata and `bestie.lib.datetime` for timestamps
+* `bestie.api.network` and `bestie.api.http` are independent peers, not built on `fs`
 
-This preserves the clean layering described in `std-api.io`.
+This preserves the clean layering described in `bestie.api.io`.
 
 ---
 
-## 14. What `std-api.fs` Explicitly Excludes
+## 14. What `bestie.api.fs` Explicitly Excludes
 
 * File watching / change notifications
 * Glob / pattern-matching query language
-* Memory-mapped files (→ `std-api.memory`)
+* Memory-mapped files (→ `bestie.api.memory`)
 * Temp-file lifecycle frameworks
 * Implicit current-working-directory state
 * Serialization or encoding of file contents
@@ -386,11 +386,11 @@ This preserves the clean layering described in `std-api.io`.
 
 ## 16. Summary
 
-`std-api.fs` is:
+`bestie.api.fs` is:
 
 * Explicit — handles are owned and closed; paths are values
 * Portable — one surface, honest about platform limits
-* Composable — opens into `std-api.io` streams rather than reinventing I/O
+* Composable — opens into `bestie.api.io` streams rather than reinventing I/O
 * Predictable — typed errors, no exceptions, no hidden state
 
 `File` and `DirIterator` are the only classes — the types that own live OS handles. `Path`,

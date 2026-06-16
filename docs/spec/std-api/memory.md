@@ -1,6 +1,6 @@
-# std-api.memory — Memory & MMIO API
+# bestie.api.memory — Memory & MMIO API
 
-This document defines the **Bestie Standard Memory API (`std-api.memory`)**.
+This document defines the **Bestie Standard Memory API (`bestie.api.memory`)**.
 
 This API enables:
 
@@ -19,7 +19,7 @@ Without compromising:
 ## 1. Core Principle
 
 > **The core language provides `ptr<T>` as a mechanism.
-> `std-api.memory` defines the policy and semantics.**
+> `bestie.api.memory` defines the policy and semantics.**
 
 No hardware semantics exist in the core language.
 
@@ -109,8 +109,8 @@ These guarantees **do not apply** to raw `ptr<T>` usage.
 
 On bare metal platforms:
 
-* `std-api.memory` may be provided by the platform
-* `std-api.os` may be absent
+* `bestie.api.memory` may be provided by the platform
+* `bestie.api.os` may be absent
 * MMIO is the primary hardware interaction mechanism
 
 This allows:
@@ -142,8 +142,8 @@ Platform-specific memory APIs:
 Example:
 
 ```text
-std.api.memory.arm
-std.api.memory.x86
+bestie.api.memory.arm
+bestie.api.memory.x86
 ```
 
 ---
@@ -153,9 +153,9 @@ std.api.memory.x86
 | API              | Responsibility         |
 | ---------------- | ---------------------- |
 | Core language    | `ptr<T>`, ownership    |
-| `std-api.memory` | MMIO, memory semantics |
-| `std-api.os`     | Process & OS resources |
-| `std-api.io`     | Streams & files        |
+| `bestie.api.memory` | MMIO, memory semantics |
+| `bestie.api.os`     | Process & OS resources |
+| `bestie.api.io`     | Streams & files        |
 
 ---
 
@@ -174,7 +174,7 @@ Power is available — **only when explicitly requested**.
 
 ## 11. Summary
 
-`std-api.memory` enables:
+`bestie.api.memory` enables:
 
 * Low-level control
 * Bare metal programming

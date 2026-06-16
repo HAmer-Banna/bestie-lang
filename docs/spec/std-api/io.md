@@ -1,8 +1,8 @@
-# Standard API — I/O (`std-api.io`)
+# Standard API — I/O (`bestie.api.io`)
 
 This document defines the **I/O API layer** for Bestie.
 
-`std-api.io` provides **structured, explicit, and composable I/O abstractions** built on top of the Bestie core language.
+`bestie.api.io` provides **structured, explicit, and composable I/O abstractions** built on top of the Bestie core language.
 
 It intentionally **does not replace** the minimal console I/O that exists in the core language.
 
@@ -10,7 +10,7 @@ It intentionally **does not replace** the minimal console I/O that exists in the
 
 ## 1. Scope and Intent
 
-The purpose of `std-api.io` is to provide:
+The purpose of `bestie.api.io` is to provide:
 
 * Stream-based I/O
 * Buffered I/O
@@ -63,13 +63,13 @@ This is **intentional** and sufficient for:
 * Serverless handlers
 * Debugging
 
-Anything beyond this belongs to `std-api.io`.
+Anything beyond this belongs to `bestie.api.io`.
 
 ---
 
-## 3. Design Principles of `std-api.io`
+## 3. Design Principles of `bestie.api.io`
 
-`std-api.io` follows these rules:
+`bestie.api.io` follows these rules:
 
 1. **Explicit resource ownership**
 2. **No hidden buffering**
@@ -194,7 +194,7 @@ process(stream)
 
 ## 8. Integration with Concurrency
 
-`std-api.io` does **not** introduce async keywords.
+`bestie.api.io` does **not** introduce async keywords.
 
 Concurrency is achieved via:
 
@@ -237,13 +237,13 @@ Rules:
 
 ---
 
-## 10. What `std-api.io` Explicitly Excludes
+## 10. What `bestie.api.io` Explicitly Excludes
 
-`std-api.io` does **not** include:
+`bestie.api.io` does **not** include:
 
-* File system operations (→ `std-api.fs`)
-* Networking (→ `std-api.network`)
-* HTTP (→ `std-api.http`)
+* File system operations (→ `bestie.api.fs`)
+* Networking (→ `bestie.api.network`)
+* HTTP (→ `bestie.api.http`)
 * Compression formats
 * Serialization formats (JSON, CSV, etc.)
 * Async/await
@@ -255,9 +255,9 @@ Each concern has its own API layer.
 
 ## 11. Relationship to Other APIs
 
-* `std-api.fs` builds on `std-api.io`
-* `std-api.network` builds on `std-api.io`
-* `std-api.http` builds on `std-api.network`
+* `bestie.api.fs` builds on `bestie.api.io`
+* `bestie.api.network` builds on `bestie.api.io`
+* `bestie.api.http` builds on `bestie.api.network`
 * Higher-level frameworks build on all of the above
 
 This ensures **clean layering and testability**.
@@ -277,7 +277,7 @@ Rules:
 ## 13. Summary
 
 * Core language provides **minimal console I/O**
-* `std-api.io` provides **structured stream-based I/O**
+* `bestie.api.io` provides **structured stream-based I/O**
 * No overlap, no duplication
 * Explicit, safe, composable, and predictable
 
@@ -285,5 +285,5 @@ This clean separation keeps the core sealed and the ecosystem extensible.
 
 ---
 
-**Next step**: `std-api.os.md`
+**Next step**: `bestie.api.os.md`
 (Process management, environment variables, signals, clocks)

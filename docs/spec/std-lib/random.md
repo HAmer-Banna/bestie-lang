@@ -1,12 +1,12 @@
-# std-lib.random — Pseudo-Random Number Generation
+# bestie.lib.random — Pseudo-Random Number Generation
 
-This document defines the **Bestie Standard Random Library (`std-lib.random`)**.
+This document defines the **Bestie Standard Random Library (`bestie.lib.random`)**.
 
 Random belongs to **std-lib**, not `std-api`, because:
 
 * Pseudo-randomness is a deterministic, portable algorithm — not an OS primitive
 * A seeded generator produces identical sequences on every platform
-* **Cryptographically secure** and **OS entropy** sources are explicitly *not* part of this module — they live in `std-api.os`
+* **Cryptographically secure** and **OS entropy** sources are explicitly *not* part of this module — they live in `bestie.api.os`
 
 Bestie randomness is:
 
@@ -22,7 +22,7 @@ Bestie randomness is:
 1. **No global RNG.** There is no implicit `random()` free function backed by hidden state. A program that wants randomness must hold a generator.
 2. **Seeds are explicit.** Reproducibility is the default; entropy must be requested deliberately.
 3. **Deterministic PRNG only.** This module never silently reaches for OS entropy.
-4. **Separation of concerns.** Insecure-but-fast PRNG here; secure randomness in `std-api.os`.
+4. **Separation of concerns.** Insecure-but-fast PRNG here; secure randomness in `bestie.api.os`.
 5. **Distributions are functions over a generator.** The generator produces raw bits; distributions interpret them.
 
 ---
@@ -32,13 +32,13 @@ Bestie randomness is:
 All random APIs live under:
 
 ```text
-std.lib.random
+bestie.lib.random
 ```
 
 No re-exports. No wildcards. No global instance.
 
 ```bestie
-import std.lib.random
+import bestie.lib.random
 ```
 
 ---
@@ -106,7 +106,7 @@ Factory constructors (free functions):
 fun Seed.of(value: uint64): Seed
 ```
 
-> Entropy-derived seeds come from `std-api.os` (see §9). This module never reads entropy on its own.
+> Entropy-derived seeds come from `bestie.api.os` (see §9). This module never reads entropy on its own.
 
 ---
 
@@ -228,29 +228,29 @@ This module is almost entirely **non-fallible** by design:
 * Empty inputs to `choice` return a typed `| Empty` result, not an error
 * There are no I/O paths, so there is nothing to fail at runtime
 
-There is therefore no `errors` block in `std-lib.random`. Fallibility belongs at the entropy boundary in `std-api.os`.
+There is therefore no `errors` block in `bestie.lib.random`. Fallibility belongs at the entropy boundary in `bestie.api.os`.
 
 ---
 
 ## 9. Relationship to Secure Randomness
 
-`std-lib.random` is **not** suitable for cryptography, tokens, passwords, or anything security-sensitive. Its generators are fast and predictable by design — an attacker who observes enough output can reconstruct the state.
+`bestie.lib.random` is **not** suitable for cryptography, tokens, passwords, or anything security-sensitive. Its generators are fast and predictable by design — an attacker who observes enough output can reconstruct the state.
 
-Secure randomness and OS entropy live in `std-api.os`:
+Secure randomness and OS entropy live in `bestie.api.os`:
 
 ```bestie
-import std.api.os
-import std.lib.random
+import bestie.api.os
+import bestie.lib.random
 
 // Seed a deterministic PRNG from a one-time entropy draw.
-val seed = Seed.of(os.entropy64())          // os.entropy64 lives in std-api.os
+val seed = Seed.of(os.entropy64())          // os.entropy64 lives in bestie.api.os
 val rng  = Pcg32.fromSeed(seed)
 ```
 
 The boundary is intentional:
 
-* `std-lib.random` — deterministic, reproducible, fast, **insecure**
-* `std-api.os` — entropy and cryptographically secure bytes, **fallible**, OS-backed
+* `bestie.lib.random` — deterministic, reproducible, fast, **insecure**
+* `bestie.api.os` — entropy and cryptographically secure bytes, **fallible**, OS-backed
 
 ---
 
@@ -274,7 +274,7 @@ This library intentionally excludes:
 
 * A global/default RNG instance
 * An implicit `random()` free function with no generator
-* Automatic entropy seeding (must be requested via `std-api.os`)
+* Automatic entropy seeding (must be requested via `bestie.api.os`)
 * Cryptographically secure generators
 * Locale- or time-dependent behavior
 * Implicit stream forking on copy (use `copy()` explicitly)
@@ -283,7 +283,7 @@ This library intentionally excludes:
 
 ## 12. Summary
 
-`std-lib.random` is:
+`bestie.lib.random` is:
 
 * Explicit — generators are always passed by hand
 * Deterministic — seeds fully define sequences

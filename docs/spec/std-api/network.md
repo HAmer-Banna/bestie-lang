@@ -1,8 +1,8 @@
-# std-api.network — Networking API
+# bestie.api.network — Networking API
 
-This document defines the **Bestie Standard Networking API (`std-api.network`)**.
+This document defines the **Bestie Standard Networking API (`bestie.api.network`)**.
 
-`std-api.network` provides **raw, explicit, protocol-agnostic networking primitives**.
+`bestie.api.network` provides **raw, explicit, protocol-agnostic networking primitives**.
 It is designed for:
 
 * Network services
@@ -33,7 +33,7 @@ This API deliberately avoids:
 
 ### 1.2 What This API Does *Not* Provide
 
-* HTTP (see `std-api.http`)
+* HTTP (see `bestie.api.http`)
 * TLS (separate API or external)
 * Async runtimes
 * Event loops
@@ -56,7 +56,7 @@ This API deliberately avoids:
 ## 3. Namespacing
 
 ```text
-std.api.network
+bestie.api.network
 ```
 
 ---
@@ -173,7 +173,7 @@ Rules:
 
 ## 8. Concurrency Model
 
-`std-api.network`:
+`bestie.api.network`:
 
 * Does not spawn threads
 * Does not manage fibers
@@ -202,8 +202,8 @@ All operations return:
 Platform-specific features must live under:
 
 ```text
-std.api.network.linux
-std.api.network.bsd
+bestie.api.network.linux
+bestie.api.network.bsd
 ```
 
 They must not alter core semantics.
@@ -212,7 +212,7 @@ They must not alter core semantics.
 
 ## 11. Summary
 
-`std-api.network` is:
+`bestie.api.network` is:
 
 * Raw
 * Explicit
