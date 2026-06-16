@@ -938,6 +938,39 @@ Ensures:
 FP reduces accidental complexity.
 It does not replace OOP.
 
+### 16.1 Lambdas Are the Only Anonymous Construct
+
+Bestie has **anonymous functions** (lambdas, section 7) but **no anonymous classes**. There is no inline `impl Protocol { ... }` object expression and no on-the-fly subclass.
+
+Rationale:
+
+* Lambdas already cover the common case — supplying behavior inline — with explicit, zero-cost, non-closure semantics.
+* Anonymous classes introduce unnamed types, implicit captures, and fragile-base-class hazards that conflict with Bestie's explicit, named, compile-time model.
+
+When you need an object that implements a protocol, declare a **named class**. For locality, that class can be file-private or an inner class (see `core/oop.md` §8) — it is still named, still statically dispatched, and still has a compile-time-known layout.
+
+### 16.2 SAM Conversion (Lambda → Single-Method Protocol)
+
+A lambda may be supplied wherever a **single-abstract-method (SAM) protocol** is expected. A protocol is SAM when it has **exactly one abstract method** (default methods do not count).
+
+```bestie
+protocol Comparator {
+    fun compare(a: int, b: int): int
+}
+
+fun sortWith(values: list<int>, cmp: Comparator): list<int> { ... }
+
+// A lambda is accepted directly — no named class required.
+val sorted = sortWith(values, (a: int, b: int) => a - b)
+```
+
+Rules:
+
+* The lambda's parameter and return types must match the SAM method's signature **exactly**.
+* The conversion is performed at **compile time**; it synthesizes an implementer with the same allocation and capture semantics as the lambda (no heap, explicit `[...]` captures only).
+* Dispatch follows normal protocol rules — static by default.
+* Protocols with **two or more** abstract methods are **not** SAM-convertible; implement them with a named class.
+
 ---
 
 ## 17. Immutability in FP
@@ -952,7 +985,7 @@ Guidelines:
 * Favor transformation over mutation
 
 ```bestie
-val users2 = std.functional.map(users, u => u.withName("Alice"))
+val users2 = bestie.lib.functional.map(users, u => u.withName("Alice"))
 ```
 
 Enforced by:
@@ -971,6 +1004,7 @@ Enforced by:
 * Hidden effect systems
 * Reflection-based dispatch
 * Closure-heavy abstractions
+* Anonymous classes (lambdas + named classes cover the same ground explicitly — see section 16)
 
 ---
 

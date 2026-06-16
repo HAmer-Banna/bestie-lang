@@ -406,6 +406,17 @@ class Child ext Base impl A {
 
 ---
 
+### 4.3 Implementing Protocols (No Anonymous Classes)
+
+Bestie has **no anonymous classes** — there is no inline `impl Protocol { ... }` object expression and no on-the-fly subclass. Every implementer is a **named** type.
+
+* **Multi-method protocols** are implemented by a named class. For locality near the use site, that class may be file-private or an inner class (section 8); it remains named, statically dispatched, and compile-time laid out.
+* **Single-abstract-method (SAM) protocols** may instead receive a **lambda** directly — the compiler synthesizes the implementer at compile time. See `core/fp.md` §16.2 for the exact SAM conversion rules.
+
+This keeps every behavior contract backed by either a named type or a lambda value, with no unnamed runtime types. The anonymous construct in Bestie is the **lambda**, not the class.
+
+---
+
 ## 5. Casting Rules (Classes & Protocols)
 
 Casting in Bestie is **explicit, directional, and binding-aware**.
@@ -987,6 +998,7 @@ User responsibility:
 * Reflection-based dispatch
 * Fragile base classes
 * Language-level singleton types
+* Anonymous classes / inline object expressions (use a named class or a lambda — see section 4.3)
 
 ---
 
