@@ -120,6 +120,8 @@ Because annotations are compile-time only, these frameworks achieve:
 * Strong static guarantees
 * Predictable performance characteristics
 
+When a framework genuinely needs to introspect types, it uses `bestie.framework.reflection`, which is **compile-time first** and only materializes runtime metadata for types explicitly marked `@Reflectable` (see `std-framework/reflection.md`).
+
 ---
 
 ## Third-Party Annotation Conventions

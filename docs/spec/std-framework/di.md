@@ -102,6 +102,8 @@ Both styles can be mixed: annotated types are auto-registered when the container
 - Circular dependencies are rejected unless explicitly broken by provider indirection.
 - Scope violations (e.g. `@Singleton` depending directly on `@Scoped`) are validated.
 
+When introspection is unavoidable (e.g. inspecting dynamically loaded components), `di` relies on the compile-time-first model in `bestie.framework.reflection` rather than ad-hoc runtime type discovery (see `std-framework/reflection.md`).
+
 ## Non-Goals
 
 - No reflection-based auto-wiring by default

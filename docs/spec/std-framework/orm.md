@@ -40,7 +40,7 @@ import bestie.framework.orm.Id
 
 ## Annotation-Driven Mapping
 
-Entity mapping is declared through annotations. The compiler validates schema metadata and generates serialization/deserialization code at compile time — no runtime reflection.
+Entity mapping is declared through annotations. The compiler validates schema metadata and generates serialization/deserialization code at compile time using compile-time reflection (`bestie.framework.reflection`, see `std-framework/reflection.md`) — no runtime reflection.
 
 ### Entity Annotations
 
