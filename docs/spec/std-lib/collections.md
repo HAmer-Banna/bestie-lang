@@ -304,6 +304,23 @@ val a : set<int> = {1,2,3}
 val b : map<str,int> = {"a": 1, "b": 2}
 ```
 
+> **A literal does not imply immutability.** A bare `{...}` literal produces a **mutable** collection — exactly like a core `array<T>` literal. The literal only supplies the initial elements; it does not freeze them. This is identical to `array<T>`:
+>
+> ```bestie
+> val xs : array<int>[] = {1, 2, 3}   // binding frozen, elements mutable
+> val ys : list<int>    = {1, 2, 3}   // binding frozen, elements mutable
+> xs[0] = 9   // ✅ allowed
+> ys.add(4)   // ✅ allowed — list grows
+> ```
+>
+> Immutability is always **opt-in** and explicit, with the same mechanisms across arrays and collections:
+> * `val` — freezes the binding only; contents stay mutable
+> * `.immutable` — functional immutability (mutations return a new collection); collections only
+> * `@immutable val` — hard freeze; any mutation is a compile-time error
+> * `const` — compile-time constant in read-only memory (requires a literal)
+>
+> See `core/immutability.md` §5 (arrays) and §7 (collections) for the full per-type model.
+
 ### 5.1 Literal Rules
 
 * `set` literals reject duplicates when duplicates are compile-time provable
@@ -319,7 +336,7 @@ val y : map<str,int> = {"a": 1, "a": 2} // ❌ compile-time error
 
 ### 5.2 `const` Collections
 
-A collection may be declared `const` **only if** it is created via a literal.
+A collection may be declared `const` **only if** it is created via a literal. The reverse does **not** hold: using a literal does not by itself make a collection `const` or immutable — `const` must be written explicitly, exactly as for `array<T>` (`const arr : array<int>[] = {1,2,3}`).
 
 ```bestie
 const xs : set<int> = {1,2,3}
