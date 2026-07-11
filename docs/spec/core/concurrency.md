@@ -232,7 +232,61 @@ This keeps the core minimal and the result-passing pattern explicit.
 
 ---
 
-## 8. What Core Does Not Include
+## 8. Thread-Local Storage
+
+`threadlocal` is a **storage modifier** — not a class, not a wrapper, not a container. It lives with the concurrency model because it is meaningful only in the presence of threads (`threadOs` / `threadLight`).
+
+A `threadlocal` declaration gives each OS thread its **own independent copy** of the variable. Access is direct, with no `.get()`, `.set()`, or any other wrapper indirection.
+
+```bestie
+threadlocal val requestId: str = ""
+threadlocal var callDepth: int = 0
+```
+
+### 8.1 Usage
+
+Access and mutation are identical to any other variable:
+
+```bestie
+threadlocal var counter: int = 0
+
+fun tick() {
+    counter += 1
+}
+```
+
+There is no ceremony. `counter` is a variable. The compiler routes reads and writes to the calling thread's copy.
+
+### 8.2 Semantics
+
+* Each `threadOs` thread gets its **own independent copy**, initialized from the declared initializer
+* `threadLight` fibers share the copy of the OS thread they run on
+* Initialization is **per-thread at first access** (lazy, but compile-time lowered to a TLS slot — no heap allocation)
+* The initializer expression must be a **compile-time constant** or a pure function of compile-time constants
+* Copies are independent — writes in one thread are invisible to others
+
+### 8.3 Scope
+
+`threadlocal` is allowed at:
+
+* **Module level** (top-level declaration)
+* **Function level** (static local — initialized once per thread, not once per call)
+
+`threadlocal` inside a regular expression or block (non-static context) is a **compile-time error**.
+
+### 8.4 Rules
+
+* `threadlocal val` — immutable per-thread binding (the value is constant for that thread's lifetime)
+* `threadlocal var` — mutable per-thread binding
+* The initializer must be compile-time constant
+* No sharing across threads — compiler enforces this for `own` values
+* `ptr` into a `threadlocal` from another thread is legal but programmer-responsibility (same as all `ptr` use)
+* No runtime overhead beyond the platform TLS mechanism (hardware register + offset on x86_64/arm64)
+* No `@threadlocal` annotation, no `ThreadLocal<T>` class — `threadlocal` is a first-class storage modifier
+
+---
+
+## 9. What Core Does Not Include
 
 Core provides the two execution primitives. Everything else is **std-api**, built on top:
 
@@ -248,7 +302,7 @@ These are **API-level patterns** — not language features.
 
 ---
 
-## 8. Summary
+## 10. Summary
 
 | Need | Use |
 | ---- | --- |

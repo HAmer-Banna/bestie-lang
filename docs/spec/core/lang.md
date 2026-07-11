@@ -1129,6 +1129,8 @@ val x = switch (v) {
 }
 ```
 
+`switch` decides at **runtime**. When the value being matched is a compile-time constant (e.g. `target.os`), prefer `when` (§25) — it resolves the choice at compile time and eliminates the unused branches instead of emitting them. The compiler warns when a `switch` branches only on compile-time constants.
+
 ---
 
 ## 13. Loops
@@ -1497,51 +1499,87 @@ case option.Present(var user) => { user.name = "updated"; save(user) }
 
 ---
 
-## 25. Conditional Compilation
+## 25. Compile-Time Conditionals (`when`)
 
-Bestie uses `when` blocks for conditional compilation. `when` is evaluated entirely at **compile time** — the rejected branch is completely eliminated from the binary. There is no runtime branching.
+`when` is Bestie's **compile-time conditional** — a branch resolved entirely by the compiler. The condition must be a compile-time-evaluable expression; the losing branch is **erased before code generation** and never appears in the binary. There is no runtime branching.
 
 ```bestie
 when (target.os == "linux") {
     val path = "/etc/config"
-}
-when (target.os == "windows") {
+} else when (target.os == "windows") {
     val path = "C:\\config"
 }
 ```
 
+Conditional compilation (selecting code per platform or build) is the most familiar use, but `when` is **not limited to it** — it is the general "decide this at compile time" construct (see §25.3 for the full range of uses).
+
+### 25.1 Why Bestie Has Both `switch` and `when`
+
+Bestie treats **systems programming as its first audience**, and systems code lives or dies by what it can resolve *before* the program runs. So Bestie promotes the compile-time branch to a first-class control construct alongside the runtime one. They are not two ways to do the same thing — they operate at different times and obey different rules:
+
+* **`switch` (and `if`) — runtime, data-directed.** Branch on a value the program computes while running. Every arm is compiled, type-checked, and present in the binary. This is ordinary program logic.
+* **`when` — compile-time, configuration-directed.** Branch on facts fixed before execution (target, build mode, flags, `const` values, `sizeOf`/`typeOf`). The losing arm is erased — not compiled, not type-checked, not in the binary.
+
+The decisive difference — and the reason one keyword cannot cover both — is that **a `when` branch may contain code that does not even compile on the other target** (a Windows-only call inside a Linux build, an intrinsic that exists only on `arm64`). A runtime `switch` can never do this: it must compile every arm. Merging the two into one keyword would force an implicit rule ("if the condition happens to be constant, silently switch to erase-and-don't-type-check semantics"), which is exactly the kind of hidden behavior Bestie rejects. Two names, two clearly separated semantics.
+
+> **Note for Java and Kotlin users.** The keywords do not map the way you expect:
+> * **Java** has `switch` (runtime) and no `when` — Bestie's `switch` behaves as you'd expect; `when` is new.
+> * **Kotlin** uses `when` as its *runtime* multi-way branch. **Bestie's `when` is the opposite — it is compile-time.** Bestie's *runtime* multi-way branch is `switch` (§12, §24). Kotlin does conditional compilation through build tooling, not a language keyword, so it is not a precedent for a compile-time `when`.
+>
+> In Bestie: **`switch`/`if` = runtime, `when` = compile-time.** Always.
+
 ---
 
-### 25.1 The `target` Object
+### 25.2 Compile-Time Conditions
 
-`target` is a compile-time constant object with the following fields:
+`when` conditions branch on any **compile-time-evaluable expression**, including:
 
-| Field           | Type     | Example values                          |
-| --------------- | -------- | --------------------------------------- |
-| `target.os`     | `str`    | `"linux"`, `"windows"`, `"macos"`, `"freebsd"` |
-| `target.arch`   | `str`    | `"x86_64"`, `"arm64"`, `"riscv64"`     |
-| `target.bits`   | `int`    | `32`, `64`                              |
-| `target.endian` | `str`    | `"little"`, `"big"`                     |
-
-All fields are resolved at compile time to string or integer constants.
-
----
-
-### 25.2 Custom Flags
-
-Custom flags are declared in the build configuration and accessed via `target.flag`:
+* the `target` object — `target.os`, `target.arch`, `target.bits`, `target.endian`
+* the `build` object — `build.mode`, `build.debug`
+* custom build flags — `target.flag("NAME")`
+* any `const` value or `@pure` call over constants (§2)
+* compile-time type queries — `sizeOf(T)`, `typeOf(x)` (§15)
 
 ```bestie
 when (target.flag("ENABLE_SIMD")) {
-    // SIMD path
+    // SIMD path — compiled only when the flag is set
+}
+
+when (build.debug) {
+    logInvariants()      // present only in debug builds
 }
 ```
 
-Flags not declared are `false` by default — no runtime check, no linker symbol.
+A runtime expression as the condition is a **compile-time error**. See `core/constants.md` for the authoritative list of predefined constants.
 
 ---
 
-### 25.3 `when` as Expression
+### 25.3 Beyond Platform Selection — Where `when` Earns Its Keyword
+
+`when` is a general compile-time tool, not just an OS switch. It is used to:
+
+* **select platform/target code** — OS, architecture, word size, endianness
+* **gate build-mode code** — debug-only assertions, logging, and instrumentation that vanish from release binaries at zero cost
+* **toggle features** — build flags with no runtime check and no linker symbol
+* **specialize generics with zero cost** — choose an implementation from a compile-time property of a type parameter, with no runtime branch:
+
+```bestie
+fun store<T>(x: T) {
+    when (sizeOf(T) <= 16) {
+        inlineSmall(x)      // small values: pass/keep by value
+    } else {
+        boxLarge(x)         // large values: heap-back
+    }
+}
+```
+
+* **validate configuration at compile time** — combine with `const` to reject impossible build configurations before a binary is ever produced.
+
+This breadth — spanning platform, build, features, and generic specialization — is why `when` is a core keyword rather than a niche directive: it is the single, uniform way to express *any* decision the compiler can settle, and every such decision it settles is a runtime branch that never has to exist.
+
+---
+
+### 25.4 `when` as Expression
 
 `when` can be used as an expression when both branches produce the same type:
 
@@ -1549,11 +1587,11 @@ Flags not declared are `false` by default — no runtime check, no linker symbol
 val pageSize: int = when (target.os == "windows") { 4096 } else { 8192 }
 ```
 
-The unchosen branch is completely eliminated. The result is a compile-time constant when both sides are constant.
+The unchosen branch is completely eliminated. The result is a compile-time constant when both sides are constant. This mirrors `if` and `switch`, which are also expressions (§12) — the difference is purely *when* the choice is made: `when` at compile time, `if`/`switch` at runtime.
 
 ---
 
-### 25.4 `when`/`else if`/`else`
+### 25.5 `when`/`else when`/`else`
 
 ```bestie
 when (target.arch == "x86_64") {
@@ -1567,79 +1605,42 @@ when (target.arch == "x86_64") {
 
 ---
 
-### 25.5 Rules
+### 25.6 `when` vs runtime `if` / `switch`
+
+`when` is **compile-time**; `if` and `switch` (§12) are **runtime**. They are not interchangeable:
+
+| | `when` | `if` / `switch` |
+| --- | --- | --- |
+| Evaluated | Compile time | Runtime |
+| Condition | Must be compile-time constant | Any runtime expression |
+| Losing branch | Erased — never compiled or type-checked | Compiled, type-checked, present in binary |
+| Runtime cost | Zero — nothing emitted | A branch / jump instruction |
+
+Use `switch`/`if` for decisions on runtime values. Use `when` for decisions fixed at compile time — it is faster (no branch) and it can guard code that would not compile on other targets.
+
+**Compiler diagnostic.** When a runtime `switch` or `if` branches solely on compile-time constants (e.g. `switch (target.os) { ... }`), the compiler emits a **warning** recommending `when`, because the decision is knowable at compile time and the runtime form needlessly compiles every branch and emits a live branch instruction:
+
+```
+warning: 'switch' branches only on compile-time constants (target.os) —
+         use 'when' to resolve this at compile time and eliminate dead branches
+```
+
+The warning is advisory, not an error: a runtime `switch` over `target.os` is still valid, it is simply never the intended tool for a compile-time decision.
+
+---
+
+### 25.7 Rules
 
 * `when` conditions must be **compile-time evaluable** — runtime expressions are a compile-time error
 * The rejected branch is **completely eliminated** — it is not type-checked as dead code
 * `when` is not a runtime `if` — it does not produce branches in the binary
-* `when` may appear at module level (top-level declarations), inside functions, and as expressions
+* `when` may appear at module level (top-level declarations), inside functions, as expressions, and around class members and function definitions
 * Nesting is allowed
+* A runtime `switch`/`if` that branches only on compile-time constants triggers the advisory "use `when`" warning (§25.6)
 
 ---
 
-## 26. Thread-Local Storage
-
-`threadlocal` is a **storage modifier** — not a class, not a wrapper, not a container.
-
-A `threadlocal` declaration gives each OS thread its **own independent copy** of the variable. Access is direct, with no `.get()`, `.set()`, or any other wrapper indirection.
-
-```bestie
-threadlocal val requestId: str = ""
-threadlocal var callDepth: int = 0
-```
-
----
-
-### 26.1 Usage
-
-Access and mutation are identical to any other variable:
-
-```bestie
-threadlocal var counter: int = 0
-
-fun tick() {
-    counter += 1
-}
-```
-
-There is no ceremony. `counter` is a variable. The compiler routes reads and writes to the calling thread's copy.
-
----
-
-### 26.2 Semantics
-
-* Each `threadOs` thread gets its **own independent copy**, initialized from the declared initializer
-* `threadLight` fibers share the copy of the OS thread they run on
-* Initialization is **per-thread at first access** (lazy, but compile-time lowered to a TLS slot — no heap allocation)
-* The initializer expression must be a **compile-time constant** or a pure function of compile-time constants
-* Copies are independent — writes in one thread are invisible to others
-
----
-
-### 26.3 Scope
-
-`threadlocal` is allowed at:
-
-* **Module level** (top-level declaration)
-* **Function level** (static local — initialized once per thread, not once per call)
-
-`threadlocal` inside a regular expression or block (non-static context) is a **compile-time error**.
-
----
-
-### 26.4 Rules
-
-* `threadlocal val` — immutable per-thread binding (the value is constant for that thread's lifetime)
-* `threadlocal var` — mutable per-thread binding
-* The initializer must be compile-time constant
-* No sharing across threads — compiler enforces this for `own` values
-* `ptr` into a `threadlocal` from another thread is legal but programmer-responsibility (same as all `ptr` use)
-* No runtime overhead beyond the platform TLS mechanism (hardware register + offset on x86_64/arm64)
-* No `@threadlocal` annotation, no `ThreadLocal<T>` class — `threadlocal` is a first-class storage modifier
-
----
-
-## 27. Stability
+## 26. Stability
 
 * Core is sealed
 * Backward compatibility is mandatory
