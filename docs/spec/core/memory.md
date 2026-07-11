@@ -402,6 +402,7 @@ student.free()
 
 `free()`:
 
+* If the object's class declares a `deinit()` (see oop.md §11.12), runs `deinit()` **first**, before releasing any storage
 * Frees **only the object itself**
 * Does **not** recurse into owned fields
 * Is valid only when all direct `own` fields have already had their ownership obligations discharged
@@ -415,11 +416,12 @@ student.free()
 student.freeDeep()
 ```
 
-`freeDeep()`:
+`freeDeep()`, in order:
 
-* Frees the object
-* Recursively frees all `own` fields
+* Runs the object's `deinit()` first, if one is declared (see oop.md §11.12)
+* Recursively frees all `own` fields, in **reverse** declaration order
 * Skips all `ref` fields
+* Releases the object's own storage last
 
 The behavior of `freeDeep()` is **entirely determined at compile time**.
 
@@ -468,6 +470,21 @@ fun good() {
 **Exception — construction failure cleanup:**
 
 The one case where the compiler inserts cleanup automatically is fallible `init()` failure (see oop.md section 11.6). When a fallible `init()` returns an error, the compiler emits field-drop logic in reverse initialization order before returning the error to the caller. This is not silent: it is a specified protocol that is deterministic and part of the two-phase construction contract. The programmer declares the failure path with `! ErrorSet`; the compiler handles the cleanup mechanics for the already-initialized fields. This is not RAII — it is a well-defined, bounded exception to the no-implicit-cleanup rule, scoped entirely to the construction failure path.
+
+---
+
+### 7.5 Destruction Hook (`deinit`) — Explicit, Not RAII
+
+A class may declare a `deinit()` cleanup hook (see oop.md §11.12) for teardown that field drops alone cannot express — closing a socket, releasing an FFI handle, or `c.free()`-ing a `ptr<T>` field (§10.1.1, which today leaves this to an unspecified "`release()` or similar" convention).
+
+`deinit()` does **not** reintroduce RAII:
+
+* It is invoked **only** because the programmer explicitly calls `free()` or `freeDeep()`. It never runs at scope exit, and the compiler never inserts the call.
+* The ownership accounting of §7.3 and the leak / double-free errors of §7.4 are unchanged — `deinit()` is the *body* of an explicit discharge, not a new implicit one.
+* It runs **before** the object's storage is released, and for an ownership tree (`freeDeep()`) **before** the `own` fields are dropped. For an `open`/`abstract class` hierarchy it chains most-derived-first, reversing the `super.init(...)` order.
+* It is **not** run on construction failure — the partial-init drop path (§11.6 in oop.md, and the exception in §7.4) frees already-initialized fields only; a never-completed object has no `deinit()`.
+
+This keeps the model's rule intact: cleanup happens **with** the developer's explicit `free()`, never behind their back.
 
 ---
 

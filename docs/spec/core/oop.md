@@ -229,7 +229,7 @@ class File {
 **Construction:**
 
 * Receives a compiler-generated memberwise `init()` if none is declared (see section 11.4)
-* If using `ext`, every `init()` must call `super.init(...)` as its first statement (see section 11.3)
+* If using `ext`, every `init()` must call `super.init(...)` exactly once, optionally preceded by a `this`-free prologue (see section 11.3)
 * May have fallible `init()` returning `! ErrorSet` (see section 11.6)
 * `@virtual` calls inside `init()` are a compile-time error (see section 11.7)
 
@@ -256,7 +256,7 @@ open class Shape {
 **Construction:**
 
 * `init()` follows standard rules (see section 11)
-* Subclasses must call `super.init(...)` as the first statement in every `init()` (see section 11.3)
+* Subclasses must call `super.init(...)` exactly once in every `init()`, optionally preceded by a `this`-free prologue (see section 11.3)
 * `@virtual` methods must not be called from `init()` — the derived subclass is not yet initialized (see section 11.7)
 
 **Warning — unsubclassed `open` within module:**
@@ -617,7 +617,7 @@ For construction rules specific to inner classes — including how the outer `in
 * Compile-time resolvable only
 * Refers to immediate parent
 * Forbidden in inner classes and protocols
-* `super.init(...)` must be the **first statement** in any derived class `init()` — see section 11.3
+* `super.init(...)` must appear exactly once in any derived class `init()`, preceded only by a `this`-free prologue — see section 11.3
 
 ---
 
@@ -689,7 +689,7 @@ class Temperature {
 
 ---
 
-## 11. Construction Rules (`init` / `new`)
+## 11. Construction & Destruction Rules (`init` / `deinit`)
 
 ### 11.1 Two-Phase Construction Model
 
@@ -725,9 +725,9 @@ Rules:
 
 ---
 
-### 11.3 Base-Class Initialization Order
+### 11.3 Base-Class Initialization Order and the Constructor Prologue
 
-In a derived class, `super.init(...)` **must be the first statement** in every `init()` body.
+In a derived class, every `init()` must call `super.init(...)` **exactly once** on every path. It need not be the literal first statement: it may be preceded by a **prologue** — a run of statements that does not touch the instance under construction.
 
 ```bestie
 open class Shape {
@@ -741,20 +741,31 @@ open class Shape {
 class Circle ext Shape {
     radius: int
 
-    init(color: str, radius: int) {
-        super.init(color)       // must be first
-        this.radius = radius    // derived fields follow
+    init(color: str, radius: int): ! ShapeError {
+        if radius <= 0 { return !BadRadius }   // prologue: validate before building the base
+        super.init(color)                      // ends the prologue; base now initialized
+        this.radius = radius                   // derived fields follow
     }
 }
 ```
 
-Rules:
+**Prologue rules:**
 
-* `super.init(...)` before any access to `this` fields or methods
-* The compiler rejects any `init()` in a derived class that does not call `super.init(...)` as the first statement
+* A prologue statement may read the `init()` parameters and locals, compute values, and `return !...` from a fallible `init()`.
+* A prologue statement may **not** read or write any field of `this`, call any method on `this` or `super`, take `this.address()`, or otherwise observe the instance being constructed. Violations are a compile-time error.
+* `super.init(...)` — or a delegating `this.init(...)` (§11.5) — **ends the prologue**. Exactly one such call must be reached on every path through the `init()` body.
+* After `super.init(...)` returns, all base fields are fully initialized, `this` becomes accessible, and derived-field assignment proceeds in declaration order (§11.2).
+
+**Rules:**
+
+* No access to `this` fields or methods before `super.init(...)` — only the `this`-free prologue may precede it
+* The compiler rejects any derived-class `init()` that does not reach `super.init(...)` (or a delegating `this.init(...)`) exactly once on every path
 * All base fields are fully initialized before any derived field assignment begins
-* This applies transitively — if the base itself derives from another class, its `super.init(...)` must be first in its own `init()`
+* This applies transitively — if the base itself derives from another class, its own `init()` follows the same prologue-then-`super.init(...)` shape
 * Since Bestie supports single inheritance only (`ext` binds exactly one class), initialization order is always a linear chain with no diamond ambiguity
+* Because the prologue cannot touch `this`, a failure returned from the prologue needs **no field drops** — nothing has been initialized yet. This is strictly cheaper than failing after `super.init(...)`, which must drop the base (§11.6).
+
+> **Why narrower than Java's flexible constructor bodies (JEP 482):** Java's main motivation is initializing subclass fields *before* `super()` so base-class virtual calls don't observe uninitialized derived state. Bestie forbids `@virtual` calls in `init()` entirely (§11.7), so that motivation does not apply — the prologue exists purely for early validation/argument computation and pairs with fallible construction (§11.6). Writing `this` fields before `super.init(...)` remains forbidden, preserving the linear "base fully initialized before any derived field" invariant.
 
 ---
 
@@ -802,8 +813,8 @@ class Server {
 
 Rules:
 
-* An `init()` may delegate to another `init()` overload of the same class using `this.init(...)`, which must be the first statement
-* `this.init(...)` and `super.init(...)` are mutually exclusive as the first statement — only one applies per `init()` body
+* An `init()` may delegate to another `init()` overload of the same class using `this.init(...)`. Like `super.init(...)`, it ends the prologue (§11.3) and may be preceded only by `this`-free statements
+* `this.init(...)` and `super.init(...)` are mutually exclusive — exactly one applies per `init()` body, and it ends the prologue
 * Delegation chains must terminate; circular delegation is a compile-time error
 * All paths through every `init()` overload must fully initialize all fields before returning
 
@@ -970,6 +981,43 @@ class Config {
 The plugin synthesizes the appropriate zero/default value for each field based on its type, removing the need to write `= 0` or `= ""` everywhere when that is the desired behavior.
 
 The core language itself is unchanged: without the plugin, `@Initialize` is an unknown annotation and the compiler will still reject uninitialized fields. This is explicitly an **opt-in escape hatch**, in the spirit of Java's Lombok project — extending the language through the plugin system without compromising the core's explicit-initialization guarantee.
+
+---
+
+### 11.12 Destruction (`deinit`)
+
+Bestie has **no C++-style destructor and no RAII**. `deinit()` is never invoked implicitly and never runs at scope exit. It is an explicit, deterministic cleanup hook that runs **only** because the programmer calls `free()` or `freeDeep()`. See `core/memory.md` §7 for how the call site drives it and why this does not reintroduce implicit cleanup.
+
+A class may declare at most one `deinit()`, for teardown that field drops alone cannot express — closing a socket, releasing an FFI handle, or `c.free()`-ing a `ptr<T>` field (see `memory.md` §10.1.1):
+
+```bestie
+class Connection {
+    socket: ptr<RawSocket>
+
+    init(host: str): ! ConnectionError {
+        this.socket = os.openSocket(host) catch |e| { return !Unreachable }
+    }
+
+    deinit() {
+        os.closeSocket(this.socket)    // teardown co-located with the type
+    }
+}
+
+val own c = Connection.new("localhost") catch |e| { ... }
+c.free()    // runs c.deinit(), then releases c's storage
+```
+
+**Rules:**
+
+* `deinit()` takes no parameters and declares no return type. It **cannot** be fallible (no `! ErrorSet`); an unrecoverable cleanup problem must `panic`.
+* `deinit()` runs when `free()` or `freeDeep()` is explicitly called on a live, fully-constructed instance. It is **not** called at scope exit, and the compiler still requires explicit discharge of every ownership obligation (`memory.md` §7.4).
+* **Execution order** — `x.freeDeep()`: (1) run `x.deinit()`; (2) drop `own` fields in **reverse** declaration order; (3) release `x`'s own storage. `x.free()`: run `x.deinit()`, then release only `x`'s storage — its direct `own` fields must already have been discharged (`memory.md` §7.1).
+* **Hierarchy chaining** — for an `open`/`abstract class` hierarchy, `deinit()` chains **most-derived first**, then each base `deinit()` up the chain, reversing the `super.init(...)` order. The compiler inserts the base calls automatically; do **not** call `super.deinit()` manually.
+* `deinit()` may read fields and call non-`@virtual` methods. Calling a `@virtual` method from `deinit()` is a compile-time error, for the same reason as §11.7: while a base subobject is being destroyed, the derived part may already be torn down.
+* `deinit()` must not move `this`, transfer ownership of `this`, or create a new owning alias of the instance — **resurrection is forbidden**.
+* `deinit()` is **not** invoked on construction failure. If a fallible `init()` returns an error, only the already-initialized fields are dropped in reverse order (§11.6); a never-completed object has no `deinit()`. `deinit()` pairs only with a *completed* `init()`.
+* A `panic` inside `deinit()` terminates the program immediately, consistent with the language-wide no-unwind guarantee. Fields not yet dropped are not cleaned up.
+* Only reference class kinds may declare `deinit()`: `class`, `open class`, `abstract class`. `value class`, `data class`, and `enum` cannot — they hold no `own`/`ref` fields (`memory.md` §10.1.1) and thus own no resource requiring teardown. An `enum` with an `own` payload still has its owned field freed by `freeDeep()`, but hosts no `deinit()` body.
 
 ---
 
