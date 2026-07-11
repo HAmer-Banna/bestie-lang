@@ -478,6 +478,65 @@ Rules:
 
 ---
 
+### 5.5 Type Checking with `is` (instanceof-equivalent)
+
+`is` is Bestie's runtime type-test operator. It is the equivalent of Java's `instanceof`: it answers the question *"does this value's actual type conform to `T`?"* and evaluates to a `bool`.
+
+```bestie
+val matched: bool = shape is Circle
+```
+
+**Where it is meaningful:**
+
+`is` only performs a *runtime* test where a runtime type actually exists:
+
+* `@virtual` hierarchies (`open` / `abstract class`) — the check reads compiler-emitted type metadata.
+* Sealed hierarchies — the check lowers to a compact type-tag comparison (no metadata pointer walk).
+
+In both cases the test uses compiler-emitted type information, **never reflection or a general RTTI API**.
+
+**Static (compile-time) resolution:**
+
+For a value whose concrete type is fully known at compile time (no `@virtual` involved), `x is T` is resolved at compile time to a constant `true` or `false`. Because static dispatch already knows the type, a check that can never vary is redundant — the compiler emits a warning:
+
+```
+warning: 'x is Circle' is always true — type is statically known, 'is' check is redundant
+```
+
+**Pairing with `as` (test-then-cast):**
+
+`is` narrows knowledge; `as` performs the cast. The idiomatic pattern is to test with `is`, then downcast with `as`:
+
+```bestie
+open class Shape {
+    @virtual fun area(): float64
+}
+class Circle ext Shape { radius: float64 }
+class Rectangle ext Shape { width: float64; height: float64 }
+
+fun describe(s: Shape): str {
+    if (s is Circle) {
+        val c = s as Circle          // safe — the runtime type was just tested
+        return "circle r=${c.radius}"
+    }
+    if (s is Rectangle) {
+        val r = s as Rectangle
+        return "rect ${r.width}x${r.height}"
+    }
+    return "unknown shape"
+}
+```
+
+**Rules:**
+
+* `is` respects the hierarchy: `child is Base` is `true` when `child`'s runtime type derives from `Base` (matching `instanceof` semantics).
+* Negation uses the standard logical operators: `not (s is Circle)` or `!(s is Circle)`.
+* `is` against an unrelated type that can never match is a **compile-time error**, not a runtime `false` (e.g. `circle is String` where the types share no hierarchy).
+* For sealed hierarchies, prefer exhaustive `switch`/pattern matching (section 12) over chains of `is`; the compiler can then verify all cases are handled.
+* `is` introduces no late binding and no reflection — it is purely a type-tag / metadata comparison resolved by the compiler.
+
+---
+
 ## 6. Inheritance & Override Rules
 
 * `@override` mandatory
@@ -587,6 +646,39 @@ var age: int => { get; set }
 ```bestie
 val own address: Address => { get }
 ```
+
+**Accessors with a body (`get` / `set` logic):**
+
+The shorthand forms above declare accessors with no logic. When a property needs to compute a value, validate an assignment, or wrap an explicit field, each accessor may instead be given an explicit **body**. Because Bestie generates no implicit backing field, a bodied accessor operates over state the class declares itself — a bodied property is either **computed** (derived from other fields) or a **validating wrapper** around an explicit private field.
+
+```bestie
+class Temperature {
+    private var _celsius: float64
+
+    // read-only computed property — a `get` body derives the value, no stored field of its own
+    val fahrenheit: float64 => {
+        get { return this._celsius * 9.0 / 5.0 + 32.0 }
+    }
+
+    // read/write property — `get` and `set` bodies wrap an explicit field
+    var celsius: float64 => {
+        get { return this._celsius }
+        set(value) {
+            if (value < -273.15) { panic("temperature below absolute zero") }
+            this._celsius = value
+        }
+    }
+}
+```
+
+**Accessor body rules:**
+
+* The `get` body must `return` a value of the property's declared type.
+* The `set` body receives the incoming value as a parameter — `set(value) { ... }`. The parameter name is chosen by the author (`set(v)` is equally valid).
+* A `val` property may declare a `get` body only. A `var` property may declare both a `get` and a `set` body.
+* Bodied accessors reference explicit fields — there is **no implicit backing field**. A computed property that only reads other fields declares no field of its own; a stored/validated property declares its own (typically `private`) field.
+* An accessor body follows normal method rules (ownership, visibility, static dispatch). Accessors are **not** `@virtual`.
+* Shorthand (`=> { get }` / `=> { get; set }`) and bodied accessors may be mixed within the same class as appropriate — use the shorthand for trivial exposure and a body only where logic is required.
 
 **Allowed contexts:**
 

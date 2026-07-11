@@ -1183,7 +1183,7 @@ The symbolic logical operators (`&&`, `||`, `!`) and their word-based equivalent
 
 ### Introspection and Identity
 
-* `is` — identity comparison
+* `is` — runtime type test (instanceof-equivalent): `x is T` yields `bool`. Meaningful for `@virtual` and sealed hierarchies; statically resolved (and warned as redundant) when the type is known at compile time. See `core/oop.md` §5.5.
 * `typeOf(x)` — compile-time type query
 * `sizeOf(T)` — compile-time size query
 
