@@ -288,7 +288,7 @@ Partial implementation with shared logic
 
 * May declare `init()` with shared initialization logic
 * `abstract class` `init()` is only reachable via `super.init(...)` from a concrete subclass
-* `T.new(...)` on an abstract class is a compile-time error — instantiation is forbidden
+* Constructing an abstract class (`T.init(...).new()`) is a compile-time error — instantiation is forbidden
 
 ---
 
@@ -426,8 +426,8 @@ Casting in Bestie is **explicit, directional, and binding-aware**.
 Allowed when moving **from concrete to abstraction**.
 
 ```bestie
-val s: Shape = Circle.new()
-val p: Printable = Circle.new()
+val s: Shape = Circle.init().new()
+val p: Printable = Circle.init().new()
 ```
 
 * Always safe
@@ -457,7 +457,7 @@ Rules:
 ### 5.3 Class ↔ Protocol Casting
 
 ```bestie
-val p: Printable = Circle.new()
+val p: Printable = Circle.init().new()
 val c: Circle = p as Circle
 ```
 
@@ -693,14 +693,22 @@ class Temperature {
 
 ### 11.1 Two-Phase Construction Model
 
-Every class construction follows two distinct phases:
+Construction is written as two explicit, chained steps — **nothing is called implicitly**:
 
-1. **Allocation (`new()`)** — raw memory is allocated for the object according to its compile-time-known layout. No fields are initialized. This is performed by the runtime allocator and is not user-visible.
-2. **Initialization (`init()`)** — user-defined `init()` runs, fields are assigned, and base-class initialization is completed.
+```bestie
+Connection.init("localhost", 9000).new()
+```
 
-Both phases always complete atomically from the caller's perspective. A partially-constructed object is **never observable** by user code. The caller receives either a fully-initialized object or an error.
+1. **`Type.init(args)` — the initializer.** Names an `init(...)` overload (§11.5) and binds its arguments. It is a **compile-time construction expression, not a value**: it cannot be bound to a variable, stored in a field, passed to a function, or returned. Its only valid continuation is a materialization verb.
+2. **`.new()` — materialization.** Takes **no arguments**. It allocates storage (heap for reference classes, yielding an `own Type`; stack/inline for `value` and `data` classes) and then runs the construction work: the prologue (§11.3), the `super.init(...)` chain, and field initialization (§11.2).
 
-`new()` and `init()` are always called together via the construction syntax `T.new(args)`. They cannot be invoked independently by user code unless the class is annotated with `@noNew` or `@noInit`.
+Both steps together form **one atomic construction** from the caller's perspective. A partially-constructed object is **never observable** by user code — because `Type.init(args)` is not itself an object, there is no uninitialized instance to observe. The caller receives either a fully-initialized object or an error (§11.6).
+
+Neither step is implicit: `.init(...)` selects the initializer and supplies its arguments; `.new()` allocates and runs it. Writing `Type.new()` with no preceding `.init(...)` is a compile-time error (no initializer to run), and `Type.init(...)` with no `.new()` is an incomplete expression and is likewise rejected. The lifecycle verbs `new()`, `free()`, and `freeDeep()` **all take no arguments** — arguments belong exclusively to `init(...)`.
+
+Construction may be restricted per class via `@noNew` / `@noInit` (§11.8).
+
+> **Why `init` before `new`:** the initializer is named first so the arguments attach to `init` — the phase that actually consumes them — while `new` (allocation) stays argument-free. The reverse chaining (`new().init(...)`) is deliberately **not** offered: it would expose the raw, uninitialized allocation as a usable value, which the atomicity guarantee above forbids.
 
 ---
 
@@ -779,7 +787,7 @@ data class Point {
     y: int
 }
 // compiler generates: init(x: int, y: int)
-// called as: Point.new(x: 3, y: 4)
+// called as: Point.init(x: 3, y: 4).new()
 ```
 
 Rules:
@@ -838,7 +846,7 @@ class Connection {
     }
 }
 
-val conn = Connection.new("localhost", 9000) catch |err| { ... }
+val conn = Connection.init("localhost", 9000).new() catch |err| { ... }
 ```
 
 Rules:
@@ -879,8 +887,8 @@ Rules:
 
 | Annotation | Effect |
 | ------------ | ------- |
-| `@noNew` | Prevents direct `T.new(...)` calls at call sites. Forces use of a factory function. The class may still be allocated internally by a factory. |
-| `@noInit` | Suppresses the compiler-generated memberwise init and forbids calling `init()` directly. Used for types built entirely via static factory methods or FFI. |
+| `@noNew` | Prevents the `.new()` materialization verb at external call sites. Forces use of a factory function. The class may still be materialized internally by a factory. |
+| `@noInit` | Suppresses the compiler-generated memberwise initializer and forbids `.init(...)` at external call sites. Used for types built entirely via static factory methods or FFI. |
 | `@noConstruct` | Combines `@noNew` and `@noInit`. No user-visible construction path exists. Useful for singleton types, opaque handles, and types managed entirely by a runtime or external system. |
 
 ```bestie
@@ -891,9 +899,9 @@ class DbHandle {
 
 fun openDb(dsn: str): DbHandle ! DbError {
     ...
-    return DbHandle.new(conn)       // permitted inside the module
+    return DbHandle.init(conn).new()    // permitted inside the module
 }
-// DbHandle.new(...) at an external call site → compile-time error
+// DbHandle.init(...).new() at an external call site → compile-time error
 ```
 
 ---
@@ -912,7 +920,7 @@ class Outer {
     inner: Inner
 
     init() {
-        this.inner = Inner.new(val: 42)    // outer explicitly constructs inner
+        this.inner = Inner.init(val: 42).new()    // outer explicitly constructs inner
     }
 }
 ```
@@ -1003,7 +1011,7 @@ class Connection {
     }
 }
 
-val own c = Connection.new("localhost") catch |e| { ... }
+val own c = Connection.init("localhost").new() catch |e| { ... }
 c.free()    // runs c.deinit(), then releases c's storage
 ```
 

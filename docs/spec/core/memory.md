@@ -141,7 +141,7 @@ Heap allocation is **never implicit**.
 Example:
 
 ```bestie
-own user = User.new()
+own user = User.init().new()
 ```
 
 ---
@@ -261,7 +261,7 @@ All forms are equivalent.
 Example:
 
 ```bestie
-val own user = User.new()
+val own user = User.init().new()
 ```
 
 Rules:
@@ -293,7 +293,7 @@ This guarantee applies to code that stays within `own/ref` semantics. Explicit l
 Ownership may be transferred via `move`:
 
 ```bestie
-own a = User.new()
+own a = User.init().new()
 own b = move a
 ```
 
@@ -366,7 +366,7 @@ When the returned expression is heap-allocated (for example via `new()`), owners
 
 ```bestie
 fun createUser(): User {
-    return User.new()
+    return User.init().new()
 }
 ```
 
@@ -457,12 +457,12 @@ There is no RAII-style auto-drop at scope exit. The programmer must explicitly c
 
 ```bestie
 fun bad() {
-    val own u = User.new()
+    val own u = User.init().new()
     // ❌ compile error: ownership of 'u' is not discharged before scope exits
 }
 
 fun good() {
-    val own u = User.new()
+    val own u = User.init().new()
     u.freeDeep()    // ✅ explicit discharge
 }
 ```
@@ -676,7 +676,7 @@ Rules:
 ```bestie
 class Server { var port: int; val name: str }
 
-val own s = Server.new(port: 8080, name: "prod")
+val own s = Server.init(port: 8080, name: "prod").new()
 val pp: ptr<int> = s.port.address()      // interior pointer at the port field's offset
 pp.val = 9090                             // ✅ port is var
 ```
@@ -744,7 +744,7 @@ User-defined classes and structs:
 * Are fully addressable
 
 ```bestie
-val own u = User.new()
+val own u = User.init().new()
 val p = u.address()   // ptr<User>
 ```
 
@@ -872,7 +872,7 @@ The const-ness of the returned pointer reflects whether the target may be mutate
 
 ```bestie
 // class — val binding → mutable pointer
-val own user = User.new()
+val own user = User.init().new()
 val p1 = user.address()          // ptr<User>
 
 // class — val binding → mutable pointer
@@ -884,11 +884,11 @@ const u3: User = someUser
 val p3 = u3.address()            // ptr<const User>  — const target cannot be mutated through it
 
 // data class — always const regardless of binding
-var dt: DateTime = DateTime.new(...)
+var dt: DateTime = DateTime.init(...).new()
 val p4 = dt.address()            // ptr<const DateTime>  — var binding but data class is immutable
 
 // value class — var binding → mutable pointer
-var pt: Point = Point.new(1, 2)
+var pt: Point = Point.init(1, 2).new()
 val p5 = pt.address()            // ptr<Point>
 
 // ref — always const pointer
@@ -915,7 +915,7 @@ class Server {
     val name: str        // immutable field
 }
 
-val own s = Server.new(port: 8080, name: "prod")
+val own s = Server.init(port: 8080, name: "prod").new()
 val p: ptr<Server> = s.address()
 
 p.val.port = 9090    // ✅ allowed — port is var
@@ -934,10 +934,10 @@ p2.val.port = 9090   // ❌ compile-time error — ptr<const T> forbids all writ
 **`data class` through `ptr<T>`:** Because all `data class` fields are implicitly `val`, even a `ptr<DataClass>` (non-const) cannot mutate any field — all field assignments are rejected at compile time. The const-ness of the pointer is effectively irrelevant for data classes; both `ptr<T>` and `ptr<const T>` give read-only access.
 
 ```bestie
-var dt: DateTime = DateTime.new(...)
+var dt: DateTime = DateTime.init(...).new()
 val p: ptr<DateTime> = dt.address()    // ptr<DateTime>, not ptr<const DateTime>
 
-p.val.date = Date.new(...)             // ❌ compile-time error — date is val in data class
+p.val.date = Date.init(...).new()      // ❌ compile-time error — date is val in data class
 ```
 
 **`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is raw, low-level code) but is the programmer's exclusive responsibility.
@@ -953,14 +953,14 @@ Protocols are **zero-cost compile-time abstractions**. They have no memory footp
 A variable declared as a protocol type stores the concrete object directly, with the concrete object's layout. The protocol type is a compile-time view — not a separate allocation, not a fat pointer.
 
 ```bestie
-val p: Printable = Circle.new(radius: 5)
+val p: Printable = Circle.init(radius: 5).new()
 // p stores a Circle — layout is Circle's layout
 // no boxing, no fat pointer, no vtable in p itself
 ```
 
 The concrete type must be statically known at the point of assignment. This means:
 
-* `val p: Printable = Circle.new()` — ✅ concrete type is known at compile time
+* `val p: Printable = Circle.init().new()` — ✅ concrete type is known at compile time
 * `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `@virtual` instead
 
 `.address()` on a protocol-typed variable resolves to the concrete type's pointer:
@@ -1121,7 +1121,7 @@ The key simplification that makes this tractable: **a locally-obtained `ref` bor
 ```bestie
 // ❌ What this rule forbids — storing a local borrow into a long-lived field:
 fun bad(c: ref Course): Student {
-    return Student.new(course: c)
+    return Student.init(course: c).new()
     // ERROR: c is a locally-scoped ref borrow; it cannot populate a field
     //        that outlives this function call
 }
@@ -1133,8 +1133,8 @@ class Student {
 }
 
 // ✅ Constructing with a reference-type value (no local ref involved):
-val own c = Course.new(...)
-val own s = Student.new(address: addr, course: c)
+val own c = Course.init(...).new()
+val own s = Student.init(address: addr, course: c).new()
 // Student holds a non-owning reference to c; c is still owned by this scope
 ```
 
@@ -1172,7 +1172,7 @@ fun good() {
 An `own` value cannot be moved while a `ref` to it is alive. The compiler tracks active borrows within the function body as a flow-sensitive analysis.
 
 ```bestie
-val own u = User.new()
+val own u = User.init().new()
 val r = ref u
 val own v = move u    // ❌ compile error: u is borrowed by r
 ```
@@ -1180,7 +1180,7 @@ val own v = move u    // ❌ compile error: u is borrowed by r
 The borrow expires at the end of its enclosing scope. Moving is allowed once the borrow is gone:
 
 ```bestie
-val own u = User.new()
+val own u = User.init().new()
 {
     val r = ref u
     use(r)
