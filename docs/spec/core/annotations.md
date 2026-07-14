@@ -71,7 +71,7 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 * `@pure` — Declares a function as side-effect free
 * `@expose` — Exposes an element for external tooling or APIs
 * `@noNew` — Prevents direct allocation via `new`
-* `@noInit` — Disallows initialization blocks
+* `@noInit` — Suppresses generated / external `Type(...)` initializer expressions
 * `@noConstruct` — Prevents construction entirely
 
 The exact semantics of each annotation are enforced at compile time.
