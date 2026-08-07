@@ -22,7 +22,7 @@ Bestie is **multi-paradigm**, but **single-runtime**.
 
 Bestie deliberately rejects:
 
-* Hidden closures
+* Hidden / environment closures (implicit upvalues over outer frames)
 * Implicit heap allocation
 * Lazy evaluation by default
 * Runtime-only abstractions
@@ -35,6 +35,7 @@ Bestie enforces:
 * Ownership-aware functions
 * Deterministic execution
 * Zero-cost abstractions
+* Capture only when written in source (`[x]` / `[var x]` on lambdas — never on local `fun`)
 
 ### Golden Rule
 
@@ -67,6 +68,7 @@ Functions may be:
 * Top-level
 * Class members (methods)
 * Extension functions
+* Local functions (nested inside a function, method, or block — see §2.4)
 
 Return type modifiers may be combined:
 
@@ -124,6 +126,124 @@ Rules:
 * Defaults are applied at the call site during compilation
 
 Default parameters and keyword arguments are **purely syntactic conveniences** and have **zero runtime cost**.
+
+---
+
+### 2.4 Local Functions
+
+Local functions are **named helpers nested inside a function, method, or block**. They exist for locality and encapsulation — not for closing over outer state.
+
+They parallel inner classes (`core/oop.md` §8): **lexically nested, not implicitly bound**.
+
+```bestie
+fun process(items: list<int>): int {
+    fun clamp(x: int): int {
+        if (x < 0) { return 0 }
+        if (x > 100) { return 100 }
+        return x
+    }
+
+    var total = 0
+    for item in items {
+        total += clamp(item)
+    }
+    return total
+}
+```
+
+#### Placement and visibility
+
+* A local `fun` may appear in any block scope (function body, method body, nested block)
+* Within a block, all local function names declared in that block are visible to each other for the whole block (supports mutual recursion without forward declarations)
+* A local function is not visible outside its enclosing block
+* Local functions are **never exportable** (see `modules-and-packaging.md` §7.2)
+* Nested local functions are allowed (a local `fun` may declare further local `fun`s)
+* A local function may not shadow another local function in the same block; shadowing an outer local function across nested blocks follows normal scope shadowing (`lang.md` §4.8)
+
+#### Non-closure rule (same default as lambdas)
+
+By default a local function captures **nothing**. It may access only:
+
+* Its own parameters
+* Compile-time constants (`const`)
+* Top-level / module-visible pure functions and types
+
+Accessing an enclosing local binding without passing it as a parameter is a **compile-time error**:
+
+```bestie
+fun outer(n: int): int {
+    fun bad(): int {
+        return n   // ❌ compile error: local function cannot see outer locals
+    }
+    return bad()
+}
+
+fun outerOk(n: int): int {
+    fun scale(x: int, factor: int): int = x * factor
+    return scale(2, n)   // ✅ pass explicitly
+}
+```
+
+Local functions **do not support capture lists**. Capturing is exclusively the domain of lambdas (`[x]` / `[var x]`, §7) and related callable construction (`bind`, bound method references). If a named capturing callable is needed:
+
+```bestie
+fun outer(factor: int): int {
+    val scale = [factor](x: int) => x * factor   // named lambda — explicit capture
+    return scale(10)
+}
+```
+
+#### Nested methods — not a separate construct
+
+There is no distinct “nested method” form that implicitly binds outer `this`.
+
+* Inside a method body, a nested `fun` is a **local function**, not a method
+* It does **not** receive or capture `this` implicitly
+* To use the receiver, pass `this` (or a field) as an ordinary parameter
+
+```bestie
+class Counter {
+    var value: int = 0
+
+    fun bumpTwice(): int {
+        fun step(c: Counter): void {
+            c.value += 1
+        }
+        step(this)
+        step(this)
+        return this.value
+    }
+}
+```
+
+#### Signature and semantics
+
+Local functions use the same declaration surface as other `fun`s:
+
+* Explicit parameter and return types
+* Expression-body form (`= expr`)
+* Complete / partial (`T ?`) / error (`T ! E`) returns
+* Default parameters and keyword arguments
+* Recursion by name (including mutual recursion in the same scope)
+
+#### Lowering model
+
+* Lowered to a **mangled static function** in the enclosing compilation unit
+* Static dispatch; direct `call` (or inline) when the callee is known
+* Taking the address of a local function, storing it, or passing it as `fn(T) -> R` uses the same thin/fat callable model as any named function (§6) — non-capturing, so thin / null-context fat
+* No trampolines, no heap frame, no runtime code generation
+* No hidden allocation
+
+#### Local function vs lambda
+
+| | Local `fun` | Lambda |
+| --- | --- | --- |
+| Name | Named, recursive by name | Anonymous (bind to `val`/`var` for a name) |
+| Capture | Never — pass parameters | None by default; explicit `[x]` / `[var x]` |
+| Role | Scoped static helper | Inline / first-class behavior value |
+| Lowering | Mangled static function | Thin or fat callable (§6) |
+
+**Design intent:** use local functions for **naming and scope**; use lambdas when you need a **callable value** or **explicit capture**. Nesting must not become a back door into Python-style environment closures.
 
 ---
 
@@ -429,7 +549,7 @@ Every callable value has a concrete compile-time lowering. There are two represe
 
 Used when:
 
-* The callable is a named function or non-capturing lambda
+* The callable is a named function (top-level, method, extension, or local), or a non-capturing lambda
 * The callee is statically known at the call site and inlined or directly called
 
 ```
@@ -484,10 +604,10 @@ The capture struct is stack-allocated at the lambda or `bind()` creation site. I
 
 | Callable kind | Representation | Call instruction |
 | ------------- | -------------- | ---------------- |
-| Named function, statically known | none (direct) | `call fn_ptr` |
+| Named function (incl. local), statically known | none (direct) | `call fn_ptr` |
 | Non-capturing lambda, statically known | thin (1 word) or none | `call fn_ptr` |
 | Non-capturing lambda, passed as `fn(T)->R` | fat (2 words, null context) | indirect call |
-| Capturing lambda | fat (2 words, live context) | indirect call |
+| Capturing lambda (explicit `[...]` only) | fat (2 words, live context) | indirect call |
 | Bound method — value copy | fat (2 words, inline context) | indirect call |
 | Bound method — `own` move | fat (2 words, inline context) | indirect call |
 | `bind()` with runtime args | fat (2 words, live context) | indirect call |
@@ -515,34 +635,85 @@ Properties:
 
 ### 7.2 Non-Closure Rule (Core Guarantee)
 
-**Lambdas in Bestie are not closures by default.**
+**Bestie does not have environment closures.**
 
-By default, lambdas:
+In Python, JavaScript, Kotlin, and similar languages, a nested function or lambda silently forms a *closure* over its lexical environment: free variables resolve to the outer frame (often by reference), lifetimes extend with the callable, and allocation / sharing costs are hidden.
+
+Bestie rejects that model. By default, lambdas and local functions:
 
 * Capture nothing
 * Access only:
 
   * Their parameters
-  * Compile-time constants
-  * Global pure functions
+  * Compile-time constants (`const`)
+  * Module-visible pure functions and types
 
-Illegal:
+Illegal without an explicit capture list:
 
 ```bestie
 val y = 10
-val f = (x: int) => x + y   // compile-time error
+val f = (x: int) => x + y   // compile-time error — y is not captured
 ```
 
 Guarantees:
 
 * No hidden sharing
-* No lifetime complexity
+* No outer-frame / upvalue machinery
+* No lifetime complexity beyond ordinary scope rules
 * Concurrency safety
-* Zero allocation
+* Zero allocation by default
 
 ---
 
-### 7.3 Explicit Immutable Capture
+### 7.3 Closures in Bestie — Evaluation and Position
+
+Bestie’s position is deliberate and locked to the low-level pillars:
+
+| Model | Status in Bestie |
+| --- | --- |
+| Implicit lexical closures (Python / JS / Kotlin default) | **Rejected** |
+| Closures that share / mutate the outer binding by reference | **Rejected** |
+| Closures that heap-allocate an environment object | **Rejected** in core |
+| Escaping nested functions via trampolines / executable stacks | **Rejected** |
+| Explicit capture-by-copy on lambdas (`[x]`, `[var x]`) | **Allowed** — the only capturing form |
+| Local `fun` with free outer locals | **Rejected** — pass parameters (§2.4) |
+
+What Bestie *does* provide is not an environment closure. It is an **explicit capture callable**:
+
+* Every captured name appears in a `[...]` list at the creation site
+* Capture is **by value (copy)** into a fixed-size, stack-allocated capture struct (§6)
+* `[var x]` still copies — it creates **private mutable state inside the callable**, not a live alias to the outer `var`
+* The callable may not outlive its capture struct (same scope liveness analysis as `ref`)
+* Cost and layout are visible and compile-time known
+
+```bestie
+var count = 0
+val counter = [var count](x: int): int => {
+    count += x
+    return count
+}
+count = 100
+counter(1)   // returns 1 — outer `count` was never shared
+```
+
+**Why this stays pillar-safe**
+
+* **Compilation speed** — no escape-driven environment inference; captures are written in source
+* **Optimizable** — non-capturing path stays a direct/thin call; capturing path is a known fat callable
+* **Layout** — capture struct size and field order are fixed at the creation site
+* **Machine code** — no trampolines, no runtime codegen, no hidden heap frames
+
+**Practical rule of thumb**
+
+* Need a scoped helper with a name? → local `fun` (§2.4), pass data as parameters
+* Need a callable value that carries data? → lambda with explicit `[...]` capture
+* Need to share mutable state with the outer scope? → do not capture; pass `ref` / mutate in the outer function, or redesign — Bestie will not form a live upvalue
+
+Capturing therefore remains a **lambda (and `bind` / bound-method) feature**, never a silent property of nesting.
+
+---
+
+### 7.4 Explicit Immutable Capture
 
 ```bestie
 val factor: int = 3
@@ -554,14 +725,15 @@ Rules:
 * Captured values are copied at the point of lambda creation
 * Captures are immutable — cannot be reassigned inside the lambda
 * `own` values cannot be captured
+* `ref` values cannot be captured (they must not escape their borrow scope)
 * Capture layout is compile-time known
 * No heap allocation introduced
 
 ---
 
-### 7.4 Explicit Mutable Capture
+### 7.5 Explicit Mutable Capture
 
-Mutable captures are allowed via `[var x]`. The lambda receives a mutable copy that persists between calls.
+Mutable captures are allowed via `[var x]`. The lambda receives a mutable **copy** that persists between calls of that callable value.
 
 ```bestie
 var count = 0
@@ -574,26 +746,28 @@ counter(5)   // returns 5  — internal count = 5
 counter(3)   // returns 8  — internal count = 8
 ```
 
-The original `count` is **unaffected** — the lambda owns its own mutable copy.
+The original `count` is **unaffected** — the lambda owns its own mutable copy. This is **not** an upvalue alias.
 
 Rules:
 
 * `[var x]` captures a mutable copy — the original binding is unchanged
-* Mutations to `var` captures persist between invocations
+* Mutations to `var` captures persist between invocations of that callable
 * Cannot be shared across threads — mutable state forbids it
-* May be passed, stored, and returned as a light callable value
+* May be passed, stored, and returned as a light callable value (subject to capture-struct lifetime)
 * `own` values cannot be captured as `var`
-* No heap allocation — captured state is inline in the callable value
+* `ref` values cannot be captured as `var`
+* No heap allocation — captured state is inline in the callable value / capture struct
 * Capture layout is compile-time known
 
 ---
 
-### 7.5 Lambda Allocation Model
+### 7.6 Lambda Allocation Model
 
 * Lambdas do not heap-allocate — compile-time lowered to inline code or light callable values
 * Immutable captures — part of a zero-size or fixed-size compile-time-known callable context
-* Mutable captures — inline in the callable value, no heap
+* Mutable captures — inline in the callable value / capture struct, no heap
 * Heap allocation for lambdas is **not part of the core language**
+* Environment-style closures (shared outer frames, heap-allocated upvalues) are **not part of the core language**
 
 ---
 
@@ -1003,8 +1177,9 @@ Enforced by:
 * Runtime monads
 * Hidden effect systems
 * Reflection-based dispatch
-* Closure-heavy abstractions
+* Environment closures and closure-heavy abstractions (implicit upvalues, shared outer bindings, heap environments, trampolines — see §7.3)
 * Anonymous classes (lambdas + named classes cover the same ground explicitly — see section 16)
+* Nested methods with implicit outer-`this` capture (local `fun` is unbound — see §2.4)
 
 ---
 
@@ -1018,5 +1193,7 @@ Functional programming in Bestie is:
 * Ownership-safe
 * Concurrency-safe
 * Zero-cost by design
+
+Local functions give **named locality** without capture. Lambdas give **callable values** with optional **explicit capture-by-copy**. Neither forms a Python-style environment closure.
 
 FP in Bestie exists to **compose behavior clearly**, not to obscure execution.

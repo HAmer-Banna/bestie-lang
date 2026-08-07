@@ -177,7 +177,7 @@ No implicit null propagation is possible because null does not exist to propagat
 
 ## 8. Callbacks and Function Pointers
 
-Callbacks are supported **without closures**.
+Callbacks are supported **without environment closures**. Only non-capturing callables are valid at the FFI boundary (see `core/fp.md` §7.3).
 
 ```bestie
 foreign fun registerHandler(
@@ -187,10 +187,11 @@ foreign fun registerHandler(
 
 Rules:
 
-* Callbacks must be non-capturing
+* Callbacks must be non-capturing (named functions, local functions, or non-capturing lambdas)
 * Fully static
 * ABI-compatible
 * No allocation
+* Capturing lambdas (`[x]` / `[var x]`) are rejected at FFI registration sites
 
 ---
 

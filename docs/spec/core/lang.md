@@ -1198,6 +1198,8 @@ No hidden operator behavior.
 * Static dispatch by default
 * No hidden allocation
 * Compile-time resolvable
+* Local (nested) functions for scoped helpers — no implicit capture
+* Lambdas may capture only with explicit `[...]` lists (no environment closures)
 
 See `fp.md`.
 
