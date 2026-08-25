@@ -227,20 +227,18 @@ See `std-lib/collections.md` §4.4 for full examples.
 
 ---
 
-## 9. Container Types: `option<T>` and `result<T, E>`
+## 9. Optional and Error-Union Wrappers (`T ?` / `T ! E`)
 
-These are wrapper types. Their immutability follows two layers:
+These wrappers have two immutability layers. Named `option<T>` / `result<T, E>` in std-lib are the same representation.
 
-* The **container variant** (`Present`/`None`, `Ok`/`Err`) is always immutable — it cannot be altered once set
+* The **container variant** (present/absent, ok/err) is always immutable — it cannot be altered once set
 * The **contained value's** mutability follows `T` (and `E`) according to the rules in this document
 
 ```bestie
-val o : option<list<int>> = option.Present({1, 2, 3})
-// o itself cannot be rebound
-// the list inside can still be mutated
+import bestie.lib.utilities.option
 
-@immutable val o2 : option<list<int>> = option.Present({1, 2, 3})
-// o2 frozen; the list inside is also frozen
+val o : int ? = option.Present(1)
+// o itself cannot be rebound to a different variant without reassignment of the binding
 ```
 
 ---
@@ -266,8 +264,8 @@ val o : option<list<int>> = option.Present({1, 2, 3})
 | `deque<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
 | `heap<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
 | `ptr<T>` | raw low-level built-in | ❌ | ❌ | ❌ | ⚠️ binding only | ❌ |
-| `option<T>` | wrapper (enum-like) | variant: ✅ / contents: depends | depends on T | ❌ | ✅ freezes both layers | ❌ |
-| `result<T,E>` | wrapper (enum-like) | variant: ✅ / contents: depends | depends on T, E | ❌ | ✅ freezes both layers | ❌ |
+| `T ?` / `option<T>` | core syntax / std-lib name | variant: ✅ / contents: depends | depends on T | ❌ | ✅ freezes both layers | ❌ |
+| `T ! E` / `result<T,E>` | core syntax / std-lib name | variant: ✅ / contents: depends | depends on T, E | ❌ | ✅ freezes both layers | ❌ |
 
 ---
 

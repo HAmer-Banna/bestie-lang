@@ -340,14 +340,16 @@ Rules:
 ## 12. Integration with Concurrency
 
 `bestie.api.fs` introduces **no** async keywords. Blocking calls run on whatever thread invokes
-them; concurrency is achieved with the core concurrency model (matching `bestie.api.io`):
+them; concurrency is achieved with core `thread` or `fiber` from `bestie.lib.concurrency` (matching `bestie.api.io`):
 
 ```bestie
-threadLight.start {
+import bestie.lib.concurrency.fiber
+
+fiber.of(() => {
     own stream = openRead(path) catch |err| { ... }
     defer stream.close()
     process(stream.read())
-}
+})
 ```
 
 * File handles are **not** implicitly thread-safe

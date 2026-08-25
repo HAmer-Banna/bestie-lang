@@ -138,7 +138,7 @@ A plugin may provide `@Initialize` to automatically generate zero or default fie
 | `float32`, `float64` | `0.0` |
 | `bool` | `false` |
 | `str` | `""` |
-| `option<T>` | `option.None` |
+| `T ?` | `option.Not_Present` (std-lib name; plugin may emit this) |
 | Collection types | empty collection |
 
 ```bestie

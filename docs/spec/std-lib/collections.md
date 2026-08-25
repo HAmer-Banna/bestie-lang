@@ -30,7 +30,7 @@ A collection's ownership of its elements is determined by the element type's `ow
 | ----------- | ------- |
 | `set<User>` | The set holds **copies** of `User` values. `User` is a value type. |
 | `set<own User>` | The set **owns** each `User` instance. `freeDeep()` frees all elements. |
-| `set<ref User>` | The set **borrows** `User` instances. It is not responsible for freeing them. |
+| `set<ref User>` | The set holds **non-owning handles**. It is not responsible for freeing them. |
 
 The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for both key and value types where applicable.
 
@@ -49,7 +49,7 @@ The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for bo
 All collections are **generic** (`<T>`).
 All variations are **explicit** and **compile-time validated**.
 
-Collection family names stay lowercase across Bestie so they remain aligned with core `array<T>` and other foundational abstractions such as `option<T>` and `result<T,E>`.
+Collection family names stay lowercase across Bestie so they remain aligned with core `array<T>` and std-lib names such as `option<T>` and `result<T,E>`.
 
 `list<T>` is the primary dynamic collection. Its default (no variation keyword) is an array-backed resizable list. The `linked` variation selects a linked-list representation. Additional sequence variations may be introduced in future versions.
 

@@ -149,27 +149,26 @@ own buf = Memory.wrap(alloc(128), size = 128)
 
 Bestie has no `null`, no `nil`, and no nullable pointer type. These concepts do not exist in the language. A `ptr<T>` in Bestie code is always treated as a valid address — it is programmer responsibility to not construct an invalid one.
 
-C APIs routinely return nullable pointers. At the FFI boundary, Bestie maps them to `option<ptr<T>>`:
+C APIs routinely return nullable pointers. At the FFI boundary, Bestie maps them to `ptr<T> ?` (named `option<ptr<T>>` in std-lib):
 
 ```bestie
 // C: char* getenv(const char* name);  — may return NULL
-foreign fun getenv(name: ptr<char>): option<ptr<char>>
+foreign fun getenv(name: ptr<char>): ptr<char> ?
 ```
 
 The FFI layer performs the mapping automatically:
-- C `NULL` (zero address) → `option.Not_Present`
-- Any non-zero C pointer → `option.Present(ptr<T>)`
+- C `NULL` (zero address) → absent
+- Any non-zero C pointer → present
 
-The caller handles the result with pattern matching — the same as any other `option<T>`:
+The caller handles the result like any other `T ?`:
 
 ```bestie
-switch (getenv("PATH")) {
-    option.Present(val p) => usePathPtr(p)
-    option.Not_Present    => println("PATH not set")
+if (val p = getenv("PATH")) {
+    usePathPtr(p)
 }
 ```
 
-**`null` is not a keyword, a type, a value, or a literal in Bestie.** It cannot appear anywhere in Bestie source code. Any C function that may return `NULL` must be declared with `option<ptr<T>>` as its return type — the compiler rejects a bare `ptr<T>` return for known-nullable C functions.
+**`null` is not a keyword, a type, a value, or a literal in Bestie.** It cannot appear anywhere in Bestie source code. Any C function that may return `NULL` must be declared with `ptr<T> ?` as its return type — the compiler rejects a bare `ptr<T>` return for known-nullable C functions.
 
 No implicit null propagation is possible because null does not exist to propagate.
 

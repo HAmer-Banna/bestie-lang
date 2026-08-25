@@ -82,7 +82,7 @@ Rules:
 ## 5. Parsing API
 
 ```bestie
-fun parseArgs(argv: list<str>, cmd: Command): result<Command, CliError>
+fun parseArgs(argv: list<str>, cmd: Command): Command ! CliError
 ```
 
 Properties:
@@ -97,7 +97,7 @@ Properties:
 
 ```bestie
 fun readLine(prompt: str): str
-fun readInt(prompt: str): int | InputError
+fun readInt(prompt: str): int ! InputError
 ```
 
 * Ownership of input strings is explicit

@@ -60,12 +60,12 @@ val arena = Arena.of(1, MB)
 ### Allocation
 
 ```bestie
-val n = arena.add(42)         // ref int
-val xs = arena.add(listOfInts) // ref list<int>
+val n = arena.add(42)         // ptr<int>
+val xs = arena.add(listOfInts) // ptr<list<int>>
 ```
 
-* `add(T)` allocates a single value and returns a `ref T` into arena-owned storage
-* `add(list<T>)` allocates a contiguous sequence and returns a `ref list<T>` into arena-owned storage
+* `add(T)` allocates a single value and returns a `ptr<T>` into arena-owned storage
+* `add(list<T>)` allocates a contiguous sequence and returns a `ptr<list<T>>` into arena-owned storage
 
 All allocations belong to the arena and share the same lifetime.
 
@@ -83,7 +83,7 @@ arena.release() // invalidate arena
 
 * Arenas do not move memory after allocation
 * Arenas do not escape their owning scope
-* Arena-returned references may not outlive the arena
+* A `ptr<T>` returned by `add` is programmer-owned: use after `release()` is a dangling pointer — not a compile-time error
 * Arenas do not participate in ordinary `own` transfer semantics
 
 ---
@@ -103,13 +103,13 @@ val fixed = FixedBuffer.of(4, KB)
 ### Allocation
 
 ```bestie
-val p = fixed.alloc(256) // option<ptr<byte>>
+val p = fixed.alloc(256) // ptr<byte> ?
 ```
 
 Semantics:
 
-* Success returns `option.Present(ptr<byte>)`
-* Capacity exhaustion returns `option.Not_Present`
+* Success returns a present `ptr<byte>`
+* Capacity exhaustion returns absent
 * No implicit heap fallback is allowed
 
 ### Lifetime Control

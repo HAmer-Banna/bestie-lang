@@ -198,17 +198,18 @@ process(stream)
 
 Concurrency is achieved via:
 
-* `threadOs`
-* `threadLight`
-* Structured concurrency
+* core `thread`
+* `fiber` from `bestie.lib.concurrency`
 
 Example:
 
 ```bestie
-threadLight.start {
+import bestie.lib.concurrency.fiber
+
+fiber.of(() => {
     own data = stream.read()
     process(data)
-}
+})
 ```
 
 This keeps:

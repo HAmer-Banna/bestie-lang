@@ -35,7 +35,7 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 * Error handling paths
 * Loop lowering and unrolling opportunities
 * Devirtualization
-* Concurrency safety for ownership/sharing rules (`own/ref`)
+* Concurrency safety for ownership/sharing rules (`own` cannot be implicitly shared; `ptr` sharing is programmer-owned)
 
 The runtime is intentionally minimal.
 
@@ -237,14 +237,17 @@ Correct forms:
 ```bestie
 val result: int = if (cond) 42 else 0   // ✅ always initialized
 
-// or use option<T> when absence is intentional
-val result: option<int> = if (cond) option.Present(42) else option.None
+fun maybeAnswer(): int ? {
+    if (cond) { return 42 }
+    return                          // ✅ absence is explicit
+}
+val result = maybeAnswer()
 ```
 
 Rules:
 
 * No implicit zero-initialization of locals — the programmer is always in control
-* Conditional initialization requires either a guaranteed `else` branch or `option<T>`
+* Conditional initialization requires either a guaranteed `else` branch or `T ?`
 * The same rule applies inside loops — a binding declared before a loop must be assigned before the loop can read it
 * `val` bindings assigned exactly once satisfy definite assignment; assigning a second time is a compile-time error
 
@@ -1078,7 +1081,7 @@ fun main(args: list<str>): void ! StartupError {
 ```
 
 * `main` is the sole entry point — no `static void main` ceremony
-* `main` executes on the process entry OS thread with `threadOs` semantics
+* `main` executes on the process entry OS thread with `thread` semantics
 
 ---
 
@@ -1094,7 +1097,7 @@ As an expression, `if` must produce a value:
 val x: int = if (cond) 4 else 0
 ```
 
-If a value does not have a natural empty representation, `option<T>` must be used.
+If a value does not have a natural empty representation, `T ?` must be used.
 
 As a statement, `if` may omit `else`.
 When used inside a function without `else`, the function becomes **partial**:
@@ -1219,9 +1222,9 @@ See `oop.md`.
 
 Manual, deterministic memory model:
 
-* `own`
-* `ref`
-* `ptr<T>`
+* On a **stored slot** (field or collection element): `own` = we free, `ref` = we do not
+* On a **call**: copy a value (`T`), move (`own T`), or point (`ptr<T>`). `class` is not copyable
+* `slice<T>` is the one fat view that cannot be stored and cannot outlive its source
 * First-class explicit low-level operations (`ptr`, FFI, manual free) — no `unsafe` block, just visible intent
 
 See `memory.md`.
@@ -1233,6 +1236,8 @@ See `memory.md`.
 * Explicit
 * Compile-time validated
 * No hidden sharing
+* Core primitive: `thread` (1:1 OS thread)
+* Fibers and coordination: `bestie.lib.concurrency`
 
 See `concurrency.md`.
 
@@ -1252,12 +1257,12 @@ Bestie avoids hidden null-like states and hidden exception flow.
 
 Mechanisms:
 
-* Complete returns
-* Partial returns (`?`)
-* `option<T>`
-* Explicit errors
+* `T ?` — absence (core syntax)
+* `T ! E` — recoverable failure (core syntax)
 
-See `exceptions.md`.
+Named `option<T>` / `result<T, E>` are std-lib (`bestie.lib.utilities`) — same representation, not a second system, not core.
+
+See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/util.md`.
 
 ---
 
@@ -1393,7 +1398,11 @@ switch (status) {
 
 Enum variants with payloads are destructured inline:
 
+Named `option` / `result` constructors live in `bestie.lib.utilities` (`import` required). Signatures should still use `T ?` and `T ! E`.
+
 ```bestie
+import bestie.lib.utilities.result
+
 switch (result) {
     case result.Ok(val value) => println("Got: ${value}")
     case result.Err(val err)  => println("Error: ${err}")
@@ -1403,6 +1412,8 @@ switch (result) {
 Enum variants without payloads match directly:
 
 ```bestie
+import bestie.lib.utilities.option
+
 switch (opt) {
     case option.Present(val user) => greet(user)
     case option.Not_Present       => println("no user")

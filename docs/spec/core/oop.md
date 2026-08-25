@@ -952,16 +952,18 @@ class Counter {
 
 This rule applies to all class kinds: `class`, `open class`, `abstract class`, `data class`, and `value class`.
 
-There is no "zero state" implicitly assigned to any type. Absence of a value is not the same as zero — if a field genuinely may not hold a value, it must be declared as `option<T>`:
+There is no "zero state" implicitly assigned to any type. Absence of a value is not the same as zero — if a field genuinely may not hold a value, declare it as `T ?`:
 
 ```bestie
+import bestie.lib.utilities.option
+
 class Session {
     userId: int
-    token: option<str>       // explicitly absent until authenticated
+    token: str ?                 // explicitly absent until authenticated
 
     init(userId: int) {
         this.userId = userId
-        this.token = option.None   // absence is visible and intentional
+        this.token = option.Not_Present
     }
 
     fun authenticate(tok: str) {
@@ -970,7 +972,7 @@ class Session {
 }
 ```
 
-Using `option<T>` for lazy or conditional fields makes the absent state a first-class part of the type. The caller must handle both `Present` and `None` — no accidental null dereference, no silent missing-value bug.
+Using `T ?` for lazy or conditional fields makes the absent state a first-class part of the type. The caller must handle both present and absent — no accidental null dereference, no silent missing-value bug. Named constructors come from std-lib; `if-let` on `token` needs no import.
 
 ---
 
@@ -1136,7 +1138,7 @@ User responsibility:
 
 * `open class` and mutable classes — use locks or ownership transfer
 * Mutable collections — use `.concurrent` builder or ownership transfer
-* Singleton-style global objects — use atomics or locks from std-api
+* Singleton-style global objects — use atomics or locks from `bestie.lib.concurrency`
 
 ---
 

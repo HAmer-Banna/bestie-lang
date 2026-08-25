@@ -18,7 +18,7 @@ Typical use cases:
 
 `stream` belongs to `std-framework` and builds on:
 
-- `bestie.api.ext.concurrency`
+- `bestie.lib.concurrency`
 - `bestie.api.io` / `bestie.api.network` (source and sink adapters)
 - `bestie.lib.functional`
 

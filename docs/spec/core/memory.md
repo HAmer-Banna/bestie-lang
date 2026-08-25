@@ -195,13 +195,13 @@ The following class kinds are **heap-allocated reference types**. A value of the
 | `open class` | ✅ | Same, plus vtable pointer in layout |
 | `abstract class` | ✅ | Cannot be instantiated directly |
 
-Reference types require explicit ownership qualification (`own` or `ref`) on bindings and fields to express who is responsible for freeing the heap object.
+A `class` is an identity on the heap. It is **not copyable**. To hold one you either **own** it or **point** at it. To store one on another object without owning it, the field is `ref` (see §5).
 
-Reference and indirection semantics exist **only** via explicit constructs:
+Indirection and ownership exist **only** via explicit constructs:
 
-* `ref T` — a borrowed, scoped, non-owning reference
-* `ptr<T>` — a raw address: no lifetime or ownership guarantees, correctness upheld by the programmer
-* `own` qualifier — explicit declaration of ownership responsibility
+* `own` — this slot or parameter is responsible for freeing (fields, collection elements, move parameters)
+* `ref` — this **stored slot** is not responsible for freeing (fields and collection elements only — never function parameters)
+* `ptr<T>` — a raw address: no lifetime or ownership guarantees; used to share or mutate the same object at a call boundary (C/Go style)
 
 There is no implicit reference behavior. No class kind is automatically reference-counted or garbage-collected.
 
@@ -233,9 +233,14 @@ Rules:
 
 `own` and `ref` are **ownership qualifiers**, not containers and not types.
 
-They describe **who is responsible for freeing memory**.
+They answer **who frees this stored slot**. They appear on **fields and collection elements**. `own` also appears on parameters and returns to **move**. `ref` never appears on a function parameter, local borrow, or return type.
 
-They may appear before or after `val` / `var`:
+Two questions, two places:
+
+1. On a field (or collection element): **do I free this?** → `own` or `ref`
+2. On a call: **copy, move, or point?** → `T`, `own T`, or `ptr<T>` (see §6)
+
+They may appear before or after `val` / `var` on fields:
 
 ```bestie
 val own address: Address
@@ -271,7 +276,7 @@ Rules:
 * `own` values cannot be captured by lambdas
 * Ownership transfer must be explicit
 * Moved-from bindings are invalid and cannot be used
-* Ownership back-links must use `ref` or `ptr`, not `own`
+* Ownership back-links must use a `ref` field or `ptr`, not `own`
 
 In ownership-validated code, every successful `new()` creates exactly one **ownership obligation**.
 The compiler tracks that obligation flow-sensitively until it is discharged exactly once by one of these actions:
@@ -284,7 +289,7 @@ The compiler tracks that obligation flow-sensitively until it is discharged exac
 If an ownership obligation reaches the end of its valid lifetime without being discharged, the compiler reports a **leak error**.
 If the same obligation is discharged more than once, the compiler reports a **double-free error**.
 
-This guarantee applies to code that stays within `own/ref` semantics. Explicit low-level paths through `ptr`, FFI, or `@trusted` constructs are the programmer's responsibility — the compiler steps back exactly where you ask it to, and nowhere else.
+This guarantee applies to code that stays within `own` accounting. Explicit low-level paths through `ptr`, FFI, or `@trusted` constructs are the programmer's responsibility — the compiler steps back exactly where you ask it to, and nowhere else.
 
 ---
 
@@ -304,57 +309,90 @@ After move:
 
 ---
 
-### 5.3 `ref` — Borrowed Reference
+### 5.3 `ref` — Stored Non-Owning Slot
 
-`ref` means:
+`ref` means: **this stored slot does not free the object**. Someone else owns it. The compiler does not track that owner's lifetime — that is the programmer's responsibility (the target must outlive the slot). `free()` / `freeDeep()` skip `ref` fields.
 
-* This value is **not owned**
-* Lifetime is controlled elsewhere
-* The reference is temporary and scoped
+`ref` is allowed **only** on:
 
-Example:
+* Class fields (`class` / `open class` / `abstract class`)
+* Collection element types (`list<ref User>`, `set<ref User>`, …)
+
+It is **not** a function-parameter mode, not a local loan, and not a return type. To share or mutate the same object in a function, use `ptr<T>` / `ptr<const T>` (§6).
 
 ```bestie
-fun printUser(user: ref User) {
-    print(user.name)
+class Student {
+    val own address: Address    // Student frees address
+    val ref course: Course      // Student does not free course
+}
+
+fun printUser(user: ptr<const User>) {
+    print(user.val.name)
 }
 ```
 
 Rules:
 
-* `ref` cannot outlive its owner
-* `ref` cannot be stored
-* `ref` cannot escape scope
 * `ref` never implies ownership
-* `ref` cannot cross thread boundaries
-* Returning `ref` is valid only when borrowed from a value that outlives the caller
+* `ref` is a qualifier, not a type constructor — the field's type is still `Course`, not `ref Course`
+* A `ref` field does not create a compile-time-tracked borrow
+* You cannot stack qualifiers (`ref own`, `own ref` are meaningless and rejected)
 
 ---
 
-## 6. Function Calls and Ownership
+## 6. Function Calls — Copy, Move, or Point
 
-### 6.1 Parameter Passing
+Call boundaries use **three** modes. There is no function-level `ref`.
 
-Default: pass by value
+### 6.1 Copy — `fun f(u: T)`
 
-Explicit:
+Default. The callee receives an independent copy. Mutating the parameter does not affect the caller.
 
-* `ref` → borrow
-* `own` → move
-
-Example:
+Copy is allowed only when `T` is copyable: primitives, `value class`, `data class`, `enum` without `own` payloads, `array` of copyable elements, `ptr<T>` (copies the address), `slice<T>` (copies the view words — the source must still outlive the slice).
 
 ```bestie
-fun process(own data: Data)
+fun translate(p: Point): Point {          // Point is a value class — copied
+    return Point(p.x + 1, p.y)
+}
 ```
 
----
+**`class` (identity / heap) is not copyable.** Writing `fun f(u: User)` when `User` is a `class` is a **compile-time error**. The compiler requires `own User` (move) or `ptr<User>` / `ptr<const User>` (same object). No silent handle-copy (that would be Java aliasing pretending to be a copy) and no silent deep copy.
 
-### 6.2 Return Values
+### 6.2 Move — `fun f(own u: T)`
 
-When a function creates or produces a value, **someone must own it**.
+Ownership enters the function. The caller’s binding is invalid after the call (same as `move`).
 
-Default return is by value.
+```bestie
+fun process(own data: Data) { ... }
+
+val own d = Data().new()
+process(move d)
+```
+
+Use this when the callee must free the object or store it in an `own` field.
+
+### 6.3 Point — `fun f(u: ptr<T>)` / `ptr<const T>`
+
+Same object, C/Go style. No copy of `T`, no ownership transfer. Mutation through `ptr<T>` is visible to the caller. `ptr<const T>` is read-only.
+
+```bestie
+fun bump(p: ptr<Counter>) {
+    p.val.n += 1
+}
+
+fun nameOf(u: ptr<const User>): str {
+    return u.val.name
+}
+
+val own c = Counter(n: 0).new()
+bump(c.address())
+```
+
+`.address()` is explicit. The compiler does not track whether the pointer outlives the object — that is the programmer's responsibility, as with all `ptr<T>`.
+
+### 6.4 Return Values
+
+Default return is by value (copy of a copyable `T`).
 
 ```bestie
 fun makeId(): int {
@@ -362,33 +400,22 @@ fun makeId(): int {
 }
 ```
 
-When the returned expression is heap-allocated (for example via `new()`), ownership is transferred to the caller.
+When the function produces a heap `class`, ownership is transferred to the caller:
 
 ```bestie
-fun createUser(): User {
+fun createUser(): own User {
     return User().new()
 }
 ```
 
-Equivalent explicit form (optional for readability):
-
-```bestie
-fun createUser(): own User
-```
+`fun createUser(): User` is accepted as the same transfer for a newly created `class` — the caller owns the result. The explicit `own` form is allowed for readability.
 
 Rules:
 
-* Value returns follow value semantics
-* Returned objects are **owned by the caller**
-* Returning an owned value transfers its ownership obligation to the caller
-* Returning `ref` requires the owner to outlive the caller
+* Copyable returns copy
+* Returned `class` / `own` values transfer the ownership obligation to the caller
+* There is no `ref` return type — return a copy, return `own`, or return `ptr<T>` (programmer-upheld lifetime)
 * Returned `own` values cannot be duplicated by assignment
-
-This eliminates:
-
-* Escaping borrows
-* Hidden heap sharing
-* Lifetime ambiguity
 
 ---
 
@@ -528,12 +555,11 @@ Return type depends on mutability:
 | -------------------- | -------------- |
 | `val T` binding      | `ptr<T>`       |
 | `const T` binding    | `ptr<const T>` |
-| Borrowed `ref T`     | `ptr<const T>` |
 | Runtime resource     | `ptr<const T>` |
 
-A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Borrowed references and runtime handles are likewise read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
+A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Runtime handles are read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
 
-> **`val` here is the binding axis, not the field axis.** The pointer's const-ness derives from the **binding** form (`val`/`var`/`const`/`ref`), i.e. whether the *name* designates writable or read-only storage. This is distinct from field-level `val` immutability: a `val` *field* inside a class cannot be mutated after construction. Field-level `val` governs write permission **through the resulting pointer on a per-field basis** (see §10.1.3) — it does not change whether `.address()` returns `ptr<T>` or `ptr<const T>`. For the two axes of the `val` keyword, see `core/lang.md` §4.2.
+> **`val` here is the binding axis, not the field axis.** The pointer's const-ness derives from the **binding** form (`val`/`var`/`const`), i.e. whether the *name* designates writable or read-only storage. This is distinct from field-level `val` immutability: a `val` *field* inside a class cannot be mutated after construction. Field-level `val` governs write permission **through the resulting pointer on a per-field basis** (see §10.1.3) — it does not change whether `.address()` returns `ptr<T>` or `ptr<const T>`. For the two axes of the `val` keyword, see `core/lang.md` §4.2.
 
 ---
 
@@ -609,7 +635,7 @@ val cc = c.address()     // ptr<const ptr<int>>    (const binding → read-only 
 
 **Pointer arithmetic** on a `ptr<ptr<T>>` strides by one machine word (`sizeof(ptr<T>)`), since the elements are pointers.
 
-**`option` and the niche (§18.6):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `option<ptr<ptr<T>>>` has **no niche** and uses an explicit tag, exactly like `option<ptr<T>>`.
+**`T ?` and the niche (§18.6):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `ptr<ptr<T>> ?` has **no niche** and uses an explicit tag, exactly like `ptr<T> ?`.
 
 ---
 
@@ -629,7 +655,7 @@ val same = (p == q)      // true iff p and q hold the same address
 fun isZero(): bool      // true if the pointer holds the zero address
 ```
 
-To model "a pointer that may be absent" in **safe** code, use `option<ptr<T>>` — the FFI layer maps a C `NULL` to `option.Not_Present` (see `foreign.md` §7). Reach for `isZero()` only inside `foreign` / `@trusted` code that handles raw addresses directly.
+To model "a pointer that may be absent" in **safe** code, use `ptr<T> ?` — the FFI layer maps a C `NULL` to absent (see `foreign.md` §7). Reach for `isZero()` only inside `foreign` / `@trusted` code that handles raw addresses directly.
 
 ---
 
@@ -684,7 +710,7 @@ pp.val = 9090                             // ✅ port is var
 Rules:
 
 * The result points at the field's storage slot, at its compile-time-known offset within the object.
-* Const-ness follows the same two-axis rule as any other address: the **binding** axis sets the pointer's base const-ness (§10.1.2) and the **field**'s own `val`/`var` governs write-through (§10.1.3). A pointer to a `val` field rejects writes even when the pointer is non-const; a pointer derived from a `const` or `ref` binding is `ptr<const _>`.
+* Const-ness follows the same two-axis rule as any other address: the **binding** axis sets the pointer's base const-ness (§10.1.2) and the **field**'s own `val`/`var` governs write-through (§10.1.3). A pointer to a `val` field rejects writes even when the pointer is non-const; a pointer derived from a `const` binding is `ptr<const _>`.
 * An interior pointer is valid only while the enclosing object is alive and not moved. If the object is freed or moved, the interior pointer dangles — programmer responsibility, identical to the ephemeral-address rule for value types (§10.1.2, §10.1.5).
 * Interior pointers into a `value class` or other stack/inline value are ephemeral and must not be returned, stored, or sent across threads (§10.1.5).
 * Pointer arithmetic from an interior pointer can walk adjacent fields; the compiler accepts compile-time-provable in-bounds offsets and rejects provable out-of-bounds (§8.5). Everything else is the programmer's responsibility.
@@ -764,16 +790,11 @@ This section defines the complete relationship between class kinds and the memor
 
 ### 10.1.1 `own` and `ref` Field Rules per Class Kind
 
-#### Two distinct uses of `ref`
+#### `ref` is one thing: a stored non-owning slot
 
-`ref` plays two completely different roles in Bestie. Conflating them produces the contradiction. They must be kept separate:
+`ref` is only the field / collection-element qualifier from §5.3. There is no second “local borrow” `ref`. Function-level sharing is `ptr<T>` (§6.3).
 
-| Use | Syntax | What it means | Compiler enforcement |
-| --- | ------ | -------------- | -------------------- |
-| **Field ownership qualifier** | `val ref course: Course` (in a class body) | This field is non-owning. Do not free it. | Ownership accounting only — `free()`/`freeDeep()` skip this field |
-| **Local borrow** | `val r = ref x` or `fun f(x: ref Course)` | A scope-bounded borrow of an existing value | Scope-based liveness analysis — cannot outlive its source |
-
-These are not the same thing. The rule in §13 — "a locally-obtained `ref` borrow cannot be assigned to a class field" — applies exclusively to the local borrow form. It has nothing to say about field ownership qualifiers.
+The compiler does **not** track the lifetime of a `ref` field. `freeDeep()` skips it. The object stored there must outlive the field — programmer responsibility.
 
 ---
 
@@ -834,11 +855,12 @@ For fields whose type is a value type (`value class`, `data class`, `enum`, prim
 
 ---
 
-#### What `ref` field qualifier does NOT mean
+#### What `ref` does NOT mean
 
-* It does NOT create a compile-time-tracked borrow — lifetime enforcement applies only to local `ref` borrows (§13)
+* It does NOT create a compile-time-tracked borrow
 * It does NOT prevent the programmer from freeing the referenced object while the field still points to it — that is programmer responsibility
-* It does NOT produce a `ref T` type — the field's type is still `Course`, not `ref Course`. `ref` is a qualifier, not a type constructor.
+* It does NOT appear on function parameters — use `ptr<T>` to share or mutate the same object
+* It does NOT produce a `ref T` type — the field's type is still `Course`. `ref` is a qualifier, not a type constructor.
 
 ---
 
@@ -858,9 +880,9 @@ For fields whose type is a value type (`value class`, `data class`, `enum`, prim
 
 **Rule 2 — Binding mutability determines const-ness for mutable types:**
 
-The const-ness of the returned pointer reflects whether the target may be mutated. A `val T` binding yields `ptr<T>` — the address of writable storage. A `const T` binding yields `ptr<const T>` — a pointer to const, through which the target cannot be mutated. `var T` and `own T` likewise yield `ptr<T>`; a borrowed `ref T` yields `ptr<const T>`.
+The const-ness of the returned pointer reflects whether the target may be mutated. A `val T` binding yields `ptr<T>` — the address of writable storage. A `const T` binding yields `ptr<const T>` — a pointer to const, through which the target cannot be mutated. `var T` and `own T` likewise yield `ptr<T>`.
 
-> **Binding axis vs. field axis.** Rule 2 reads the **binding** form (`val`/`var`/`const`/`ref`) — the `val` here means "the binding cannot be rebound," not "the field cannot be mutated." It governs the *pointer's* const-ness only. Field-level `val` is a separate concept: it controls which fields may be written *through* the resulting pointer, per field, and is applied in §10.1.3. A non-const `ptr<T>` can still refuse a write to a `val` field.
+> **Binding axis vs. field axis.** Rule 2 reads the **binding** form (`val`/`var`/`const`) — the `val` here means "the binding cannot be rebound," not "the field cannot be mutated." It governs the *pointer's* const-ness only. Field-level `val` is a separate concept: it controls which fields may be written *through* the resulting pointer, per field, and is applied in §10.1.3. A non-const `ptr<T>` can still refuse a write to a `val` field.
 
 | Binding | `.address()` returns |
 | ------- | -------------------- |
@@ -868,20 +890,16 @@ The const-ness of the returned pointer reflects whether the target may be mutate
 | `var T` | `ptr<T>` |
 | `const T` | `ptr<const T>` — pointer to const; the target cannot be mutated through it |
 | `own T` (heap-allocated class) | `ptr<T>` — owner has full access |
-| `ref T` (borrowed reference) | `ptr<const T>` — a borrow cannot produce a mutable pointer; mutation through borrowed address would bypass the borrow rules |
 
 ```bestie
-// class — val binding → mutable pointer
+// class — own binding → mutable pointer
 val own user = User().new()
 val p1 = user.address()          // ptr<User>
 
-// class — val binding → mutable pointer
-val u2: User = someUser
-val p2 = u2.address()            // ptr<User>
-
-// class — const binding → const pointer
-const u3: User = someUser
-val p3 = u3.address()            // ptr<const User>  — const target cannot be mutated through it
+// class — const own is not a thing; use ptr<const User> to pass read-only
+fun inspect(u: ptr<const User>) {
+    val p6 = u                   // already a pointer
+}
 
 // data class — always const regardless of binding
 var dt: DateTime = DateTime(...).new()
@@ -890,11 +908,6 @@ val p4 = dt.address()            // ptr<const DateTime>  — var binding but dat
 // value class — var binding → mutable pointer
 var pt: Point = Point(1, 2).new()
 val p5 = pt.address()            // ptr<Point>
-
-// ref — always const pointer
-fun inspect(r: ref User) {
-    val p6 = r.address()         // ptr<const User>
-}
 ```
 
 **Ephemeral address warning for value types:**
@@ -1035,7 +1048,7 @@ What `copy()` / `deepCopy()` do, per element kind:
 | Element kind | `copy(a)` | `deepCopy(a)` |
 | ------------ | --------- | ------------- |
 | value elements (`list<int>`) | new buffer, elements copied | identical to `copy` |
-| reference / borrow (`list<ref T>`) | new buffer, **same borrows** (aliased) | same |
+| reference-type elements (`list<ref T>`) | new buffer, **same handles** (aliased; list does not own) | same |
 | ownership (`list<own T>`) | ❌ forbidden (would duplicate ownership) | new buffer, **each element deep-copied** |
 | raw pointers (`list<ptr<T>>`) | new buffer, **same addresses** (aliased) | same (raw pointers not followed) |
 
@@ -1051,7 +1064,7 @@ val q = deepCopy(o)  // ✅ new container; each User deep-copied
 val r = copy(o)      // ❌ forbidden — would duplicate ownership of elements
 ```
 
-Duplication semantics are defined in full in `std-lib/util.md` §8. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
+Duplication semantics are defined in full in `std-lib/util.md` §7. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
 
 ---
 
@@ -1078,7 +1091,7 @@ Any collection may hold raw pointers as elements — `array<ptr<T>>`, `list<ptr<
 | Element type | What the container owns | `freeDeep()` | Copy semantics |
 | ------------ | ----------------------- | ------------ | -------------- |
 | `list<own T>` | the elements | frees buffer **and every element** | move-only (no copy) |
-| `list<ref T>` | nothing (borrows) | frees buffer only | borrow |
+| `list<ref T>` | nothing (non-owning handles) | frees buffer only — **elements are never freed** | shallow copy (aliasing) allowed |
 | `list<ptr<T>>` | nothing (raw addresses) | frees buffer only — **pointees are never freed** | shallow copy (aliasing) allowed |
 
 Consequences, all in the explicit low-level domain:
@@ -1110,179 +1123,39 @@ The compiler may inline, elide, reorder, and optimize as long as observable beha
 
 ---
 
-## 13. Lifetime Enforcement
+## 13. What the Compiler Checks vs. What It Does Not
 
-This section defines the **compiler mechanism** that enforces `ref` safety. The rules apply exclusively to **local `ref` borrows** — values obtained via `ref` expressions or `ref` parameters (the local borrow form of `ref`). Field ownership qualifiers (`val ref course: Course` in a class declaration) are a separate concept and are not subject to these rules — see §10.1.1.
+There is no local-borrow checker, no `val r = ref x`, and no `from` annotation. `ref` is a stored-slot qualifier (§5.3), not a scoped borrow.
 
-The rules in this section are enforced through **scope-based liveness analysis** within function bodies.
-
-The key simplification that makes this tractable: **a locally-obtained `ref` borrow cannot be assigned to a class field**. The `ref` qualifier on a class field *declaration* is not an assignment of a local borrow — it is a compile-time ownership annotation. The restriction is: you cannot take a `ref` borrow of a local or parameter value and store that borrow into a field whose lifetime exceeds the borrow's scope. This eliminates the need for lifetime parameters in types — the analysis stays entirely within function bodies.
-
-```bestie
-// ❌ What this rule forbids — storing a local borrow into a long-lived field:
-fun bad(c: ref Course): Student {
-    return Student(course: c).new()
-    // ERROR: c is a locally-scoped ref borrow; it cannot populate a field
-    //        that outlives this function call
-}
-
-// ✅ What is allowed — ref as a field ownership qualifier at declaration time:
-class Student {
-    val own address: Address
-    val ref course: Course      // OK: ownership qualifier, not a stored local borrow
-}
-
-// ✅ Constructing with a reference-type value (no local ref involved):
-val own c = Course(...).new()
-val own s = Student(address: addr, course: c).new()
-// Student holds a non-owning reference to c; c is still owned by this scope
-```
-
----
-
-### 13.1 Rule: Lexical Scope Containment
-
-A `ref` is valid only within the scope where its source is alive. The compiler performs scope-based liveness analysis — no lifetime annotations required for this case.
-
-```bestie
-// ❌ compile error — x doesn’t outlive r
-fun bad() {
-    var r: ref int
-    {
-        val x = 42
-        r = ref x    // x dies before r’s scope ends
-    }
-    print(r)
-}
-
-// ✅ fine — x outlives the inner block where r lives
-fun good() {
-    val x = 42
-    {
-        val r = ref x
-        print(r)
-    }
-}
-```
-
----
-
-### 13.2 Rule: No Move While Borrowed
-
-An `own` value cannot be moved while a `ref` to it is alive. The compiler tracks active borrows within the function body as a flow-sensitive analysis.
-
-```bestie
-val own u = User().new()
-val r = ref u
-val own v = move u    // ❌ compile error: u is borrowed by r
-```
-
-The borrow expires at the end of its enclosing scope. Moving is allowed once the borrow is gone:
-
-```bestie
-val own u = User().new()
-{
-    val r = ref u
-    use(r)
-}                      // r expires here
-val own v = move u     // ✅ borrow has expired
-```
-
----
-
-### 13.3 Rule: Returning `ref` — Derivation and `from`
-
-Returning a `ref` from a function is only valid when the returned reference derives from a value that outlives the caller. The compiler enforces this through three cases:
-
-**Case 1 — Method returning from `this` (implicit, no annotation):**
-
-```bestie
-class User {
-    val name: str
-    fun getName(): ref str {
-        return ref this.name    // ✅ derives from this — always safe
-    }
-}
-```
-
-**Case 2 — Single `ref` parameter (lifetime elision, no annotation):**
-
-When a function has exactly one `ref` input, the returned `ref` is assumed to derive from it:
-
-```bestie
-fun first(xs: ref list<T>): ref T {
-    return ref xs[0]    // ✅ only one ref input — derivation is unambiguous
-}
-```
-
-**Case 3 — Multiple `ref` parameters (`from` annotation required):**
-
-When derivation is ambiguous, `from` makes it explicit:
-
-```bestie
-fun longer(a: ref str, b: ref str): ref str from a, b {
-    return if (a.len > b.len) ref a else ref b
-}
-```
-
-`from a, b` tells the compiler: the returned `ref` may originate from either `a` or `b`. The caller must ensure both outlive the result.
-
-**Returning a ref to a local is always a compile error:**
-
-```bestie
-fun bad(): ref int {
-    val x = 42
-    return ref x    // ❌ compile error: x doesn’t outlive the caller
-}
-```
-
----
-
-### 13.4 Rule: No `ref` Across Thread Boundaries
-
-The compiler rejects any `ref` passed into a thread closure at the point of thread creation:
-
-```bestie
-val x = 42
-val r = ref x
-threadOs.of(() => print(r))    // ❌ compile error: ref cannot cross thread boundary
-```
-
-Immutable values and `own` transfers (via `move`) are the safe alternatives. See `concurrency.md`.
-
----
-
-### 13.5 What the Compiler Checks vs. What It Does Not
+The compiler **does** enforce:
 
 | Rule | How enforced |
 | ---- | ------------ |
-| `ref` doesn’t outlive source | Scope-based liveness analysis |
-| No move while borrowed | Flow-sensitive borrow tracking within function body |
-| `ref` not stored in fields | Type system |
-| `ref` doesn’t cross thread boundaries | Thread closure analysis |
-| Returned `ref` derives from valid input | `from` annotation + single-input elision |
-| Every `new()` is discharged exactly once in safe ownership code | Ownership accounting over `own` values |
-| `ptr<T>` bounds | Only when statically provable |
+| `class` is not copyable | Type system — pass `own T` or `ptr<T>` |
+| `own` is discharged exactly once in safe ownership code | Ownership accounting |
+| `own` cannot be implicitly shared across threads | Type system — `move` or explicit `ptr` |
+| `slice<T>` cannot be stored in a field or outlive its source | Type system — see `types.md` |
+| `ptr<T>` arithmetic that is statically out of bounds | Compile-time reject when provable |
 
-**Not checked by the compiler:**
+The compiler **does not** enforce:
 
-* Aliasing of two `ref T` to the same value within a single thread — programmer responsibility, same as C
-* Validity of `ptr<T>` beyond static bounds — programmer responsibility
+* That a `ref` field still points at a live object — programmer responsibility
+* That a `ptr<T>` is non-null, in-bounds, or still valid — programmer responsibility
+* Aliasing of two `ptr<T>` to the same object — programmer responsibility, same as C
 
-This is not as strict as Rust’s exclusive `&mut` model, but it is significantly safer than C: no dangling refs for `own` values, no use-after-move, and no cross-thread ref races. The tradeoff favors simplicity and C-level performance.
+`slice<T>` is the one fat view with a compiler-checked lifetime: it cannot be stored, and it cannot outlive its source. Everything else that needs "look at this object without owning it" at a call boundary is `ptr<T>` — raw, explicit, programmer-owned.
+
+This is not as strict as Rust’s exclusive `&mut` model. It is safer than C on the `own` axis (no use-after-move, no forgotten `free` in safe ownership code) and as explicit as C on the `ptr` axis.
 
 ---
 
 ## 14. Concurrency Rules
 
-* `own` values cannot be implicitly shared
-* `ref` cannot cross thread boundaries (compile-time enforced — see 13.4)
-* `ptr<T>` crossing threads is explicit and programmer-owned
+* `own` values cannot be implicitly shared — transfer with `move`, or share the address with `ptr<T>`
+* A `ref` field is not a thread-safe handle. Sharing the object it names across threads is done with `ptr<T>`, and that is programmer-owned
+* `ptr<T>` may cross thread boundaries; races, dangling, and lifetime are programmer-owned
 
-These rules ensure:
-
-* Data-race freedom for code that stays within `own/ref` rules
-* Deterministic memory behavior in safe code paths
+These rules ensure deterministic `own` accounting. They do **not** promise data-race freedom for `ptr<T>` sharing. See `concurrency.md`.
 
 ---
 
@@ -1434,18 +1307,18 @@ Tag-only variants occupy the tag slot only; their payload region is undefined an
 
 ---
 
-### 18.6 `option<T>` — Niche Optimization
+### 18.6 `T ?` — Niche Optimization
 
-`option<T>` uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
+`T ?` (named `option<T>` in std-lib) uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
 
 | `T` | Optimization |
 | --- | ------------ |
 | Reference or `own` heap-allocated type | Zero-address niche: `Not_Present` = all-zero word; `Present(x)` = non-zero address |
-| `ptr<T>` (raw pointer) | No niche — `ptr<T>` may legitimately hold the zero address; `option<ptr<T>>` uses a tag |
+| `ptr<T>` (raw pointer) | No niche — `ptr<T>` may legitimately hold the zero address; `T ?` of a pointer uses a tag |
 | Primitive with a reserved bit pattern (e.g., `bool`) | Compiler-specific niche if unambiguous |
 | All other types | Explicit tag: `[ tag: uint8 | padding | value ]` |
 
-The niche optimization is invisible to user code. `option<T>` always behaves as a two-variant type; the layout is a compiler implementation detail.
+The niche optimization is invisible to user code. `T ?` always behaves as a two-variant type; the layout is a compiler implementation detail.
 
 ---
 
@@ -1468,10 +1341,10 @@ Bestie’s memory and ownership model is:
 * Deterministic, not runtime-driven
 * Safe by default, with first-class explicit low-level control — no `unsafe` block, no second-class corner
 
-`own` answers **who frees**
-`ref` answers **who borrows**
-`ptr<T>` answers **where in memory**
-`from` answers **where a returned ref originates**
+`own` answers **who frees** (stored slots, and move at the call boundary)
+`ref` answers **who does not free** (stored slots only — fields and collection elements)
+`ptr<T>` answers **where in memory** (the same object, at calls and across threads)
+`slice<T>` is the one fat view that cannot be stored and cannot outlive its source
 
 `ptr<T>` composes freely — it **nests** (`ptr<ptr<T>>`, with per-level const), lives **in containers** (`array<ptr<T>>`, which own nothing they point through), and **casts** (`cast<U>()`, `@trusted` to drop const) — always as raw, unowned, explicit indirection. Pointer-of-pointers, pointer elements, pointer casts, function pointers, and interior pointers are all the same single primitive used compositionally, never new machinery.
 

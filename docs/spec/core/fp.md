@@ -75,7 +75,7 @@ Return type modifiers may be combined:
 | Signature                        | Meaning                                      |
 | -------------------------------- | -------------------------------------------- |
 | `fun f(): T`                     | Always returns `T`                           |
-| `fun f(): T ?`                   | May not return (partial)                     |
+| `fun f(): T ?`                   | May be absent (`T ?` — core syntax)          |
 | `fun f(): T ! E`                 | Returns `T` or error from set `E`            |
 | `fun f(): T ! `                  | Returns `T` or inferred error set            |
 | `fun f(): (T, U)`                | Returns multiple values as tuple             |
@@ -282,66 +282,71 @@ fun f(): int {
 
 ### 3.2 Partial Functions
 
-`T ?` is syntactic sugar for `option<T>` as a return type. A partial function either returns a value (wrapped in `option.Present`) or returns nothing (`option.Not_Present`). The `?` modifier is a declaration-site shorthand — the caller always receives an `option<T>`.
+`T ?` is core syntax (see `types.md` §8.3). On a function return it is the natural spelling: a partial function either returns a value or returns nothing.
 
 ```bestie
-fun getUser(id: int): User ?   // equivalent to: fun getUser(id: int): option<User>
+fun getUser(id: int): User ?
 ```
 
 Inside the function body:
-- `return value` → compiler wraps as `option.Present(value)`
-- bare `return` → compiler emits `option.Not_Present`
+- `return value` → the result is present
+- bare `return` → the result is absent
 
 ```bestie
 fun getUser(id: int): User ? {
     if (exists(id)) {
-        return repository.find(id)   // → option.Present(user)
+        return repository.find(id)
     }
-    return                           // → option.Not_Present
+    return
 }
 ```
 
 Rules:
 
-* Caller always receives `option<T>` — no hidden null, no truthiness check
+* Caller always receives `User ?` — no hidden null, no truthiness check
 * Compiler enforces exhaustiveness — the absent case must be handled
 * No implicit exceptions, no sentinel values
+* Optional **parameters and fields** use the same syntax: `fun connect(host: str, port: int ?)`, `val token: str ?`. `?` is not return-only.
+
+The named type `option<T>` and constructors `option.Present` / `option.Not_Present` live in `bestie.lib.utilities`. They are the same representation as `T ?`, not a second system. Import them to match by name; `if-let` below needs no import.
 
 ---
 
 ### 3.3 Calling Partial Functions
 
-The result of a partial function is an `option<T>`. It must be explicitly handled. There is no truthiness check — Bestie has no null and no implicit presence test.
+The result of a partial function is `T ?`. It must be explicitly handled. There is no truthiness check — Bestie has no null and no implicit presence test.
 
-**Pattern matching — full control:**
-
-```bestie
-switch (getUser(id)) {
-    case option.Present(val user) => sendEmail(user)
-    case option.Not_Present       => println("user not found")
-}
-```
-
-**`if`-let — bind and enter block only when present:**
+**`if`-let — core, no import.** Bind and enter the block only when present:
 
 ```bestie
 if (val user = getUser(id)) {
-    sendEmail(user)   // user is User here, not option<User>
+    sendEmail(user)   // user is User here, not User ?
 }
 ```
 
-**`else` unwrap — provide a fallback or divert:**
+**`else` unwrap — core.** Provide a fallback or divert:
 
 ```bestie
 val user = getUser(id) else { return }           // absent → early return
 val user = getUser(id) else { User.anonymous() } // absent → fallback value
 ```
 
+**Named matching — std-lib.** Import `bestie.lib.utilities` to match constructors:
+
+```bestie
+import bestie.lib.utilities.option
+
+switch (getUser(id)) {
+    case option.Present(val user) => sendEmail(user)
+    case option.Not_Present       => println("user not found")
+}
+```
+
 Compiler enforces:
 
-* `option<T>` cannot be used directly where `T` is expected — unwrapping is required
+* `T ?` cannot be used directly where `T` is expected — unwrapping is required
 * All branches of `switch` on `option<T>` must be covered
-* `if`-let binds the inner `T` value — the outer `option<T>` is not accessible inside the block
+* `if`-let binds the inner `T` value — the outer `T ?` is not accessible inside the block
 
 ### 3.4 Lambdas and Partiality
 
@@ -371,14 +376,14 @@ This promise holds across all layers of the system:
 
 ### 4.1 Pure Bestie Code
 
-There is no null literal. There is no nullable type. There is no way to write null in a Bestie source file. The compiler has no concept of a "null value" — only `option.Not_Present` for the absent case.
+There is no null literal. There is no nullable type. There is no way to write null in a Bestie source file. The compiler has no concept of a "null value" — only absence of `T ?`.
 
 | In other languages | In Bestie |
 | ------------------ | --------- |
 | `null`, `nil`, `nullptr` | Does not exist |
-| `T?` (nullable reference) | `option<T>` (explicit, typed) |
+| `T?` (nullable reference) | `T ?` (core syntax; named `option<T>` in std-lib) |
 | Null pointer dereference | Cannot occur through safe code |
-| Sentinel `-1` or `0` for "no value" | `option<T>` |
+| Sentinel `-1` or `0` for "no value" | `T ?` |
 | Returning `null` | `return` (bare) in a `T ?` function |
 
 ---
@@ -396,19 +401,19 @@ There is no null literal. There is no nullable type. There is no way to write nu
 
 ### 4.3 Third-Party Bestie Libraries
 
-A library written in Bestie is structurally incapable of introducing null. It can only express absence via `option<T>` or `T ?`. This is enforced by the type system — not a convention, not a guideline.
+A library written in Bestie is structurally incapable of introducing null. It can only express absence via `T ?` (or the named std-lib form `option<T>`). This is enforced by the type system — not a convention, not a guideline.
 
 ---
 
 ### 4.4 FFI / Foreign C Libraries
 
-C functions that return nullable pointers are mapped to `option<ptr<T>>` at the FFI boundary. The FFI layer converts C `NULL` (zero address) → `option.Not_Present` automatically. The `null` keyword is not used in the foreign function declaration — see `std-api/foreign.md` §7.
+C functions that return nullable pointers are mapped to `ptr<T> ?` at the FFI boundary. The FFI layer converts C `NULL` (zero address) to absent automatically. The `null` keyword is not used in the foreign function declaration — see `std-api/foreign.md` §7.
 
 ---
 
 ### 4.5 The Structural Guarantee
 
-No code path in a Bestie program — core, stdlib, third-party, or FFI wrapper — can return a value typed as something the caller must null-check. Every absent case is an explicit `option.Not_Present` handled at the call site through pattern matching or an `else` unwrap. The compiler enforces this exhaustively.
+No code path in a Bestie program — core, std-lib, third-party, or FFI wrapper — can return a value typed as something the caller must null-check. Every absent case is `T ?`, handled at the call site through `if-let`, `else` unwrap, or (with std-lib names) pattern matching. The compiler enforces this exhaustively.
 
 ---
 
@@ -707,7 +712,7 @@ counter(1)   // returns 1 — outer `count` was never shared
 
 * Need a scoped helper with a name? → local `fun` (§2.4), pass data as parameters
 * Need a callable value that carries data? → lambda with explicit `[...]` capture
-* Need to share mutable state with the outer scope? → do not capture; pass `ref` / mutate in the outer function, or redesign — Bestie will not form a live upvalue
+* Need to share mutable state with the outer scope? → do not capture; pass `ptr<T>` / mutate in the outer function, or redesign — Bestie will not form a live upvalue
 
 Capturing therefore remains a **lambda (and `bind` / bound-method) feature**, never a silent property of nesting.
 
@@ -725,7 +730,6 @@ Rules:
 * Captured values are copied at the point of lambda creation
 * Captures are immutable — cannot be reassigned inside the lambda
 * `own` values cannot be captured
-* `ref` values cannot be captured (they must not escape their borrow scope)
 * Capture layout is compile-time known
 * No heap allocation introduced
 
@@ -755,7 +759,6 @@ Rules:
 * Cannot be shared across threads — mutable state forbids it
 * May be passed, stored, and returned as a light callable value (subject to capture-struct lifetime)
 * `own` values cannot be captured as `var`
-* `ref` values cannot be captured as `var`
 * No heap allocation — captured state is inline in the callable value / capture struct
 * Capture layout is compile-time known
 
@@ -839,14 +842,16 @@ Rules:
 ### 10.1 Unbound Method References
 
 ```bestie
-val f: fn(User) -> str = User::getName
+val f: fn(ptr<User>) -> str = User::getName
 ```
 
 Equivalent to:
 
 ```bestie
-(u: User) => u.getName()
+(u: ptr<User>) => u.getName()
 ```
+
+For a value type, the unbound receiver is copied: `fn(Point) -> int`. A `class` is not copyable, so the unbound receiver is `ptr<T>` (or `own T` if the method consumes the instance).
 
 Rules:
 
@@ -893,22 +898,14 @@ val own u = User.new()
 val f: fn() -> str = u::getName   // ❌ compile error: u is own, use 'move u::getName'
 ```
 
-**`ref` values — forbidden:**
+**`ptr` receivers — unbound, pass explicitly:**
 
-`ref` cannot escape scope or be stored, so binding a `ref` to a method reference is always a compile-time error:
-
-```bestie
-fun bad(user: ref User) {
-    val f = user::getName   // ❌ compile error: ref cannot be captured
-}
-```
-
-Use an unbound reference and pass the value explicitly instead:
+A bound method reference cannot store a `ptr<T>` as an implicit capture of "this object." Use an unbound reference:
 
 ```bestie
-fun good(user: ref User) {
-    val f: fn(ref User) -> str = User::getName
-    f(user)   // ✅
+fun greet(user: ptr<User>) {
+    val f: fn(ptr<User>) -> str = User::getName
+    f(user)
 }
 ```
 
@@ -918,7 +915,7 @@ Rules summary:
 
 * Value types — copied at binding site, no ownership tracking needed
 * `own` values — `move` required, source becomes invalid
-* `ref` values — forbidden, use unbound references instead
+* `class` via `ptr<T>` — unbound; pass the pointer at the call
 * No allocation introduced in any case
 * Lowered at compile time
 

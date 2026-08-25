@@ -259,11 +259,11 @@ Bestie has a **minimal runtime**.
 
 ### Runtime Responsibilities:
 
-* OS thread startup
-* Light-thread scheduling
-* Channel coordination
+* OS thread startup (`thread`)
 * Panic handling (should be unreachable in correct code)
 * Foreign boundary glue
+
+Fiber scheduling and channel coordination live in `bestie.lib.concurrency` and are linked only when that library is used.
 
 ### Runtime Does NOT:
 

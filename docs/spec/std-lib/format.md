@@ -258,14 +258,14 @@ Serialization captures a **value snapshot** of an object graph; deserialization 
 
 Rationale:
 
-* A `ref` is a borrow with no independent existence — on deserialization there is no owner to borrow from, so it cannot be reconstructed automatically.
+* A `ref` field is a non-owning stored handle — on deserialization there is no owner attached, so it cannot be reconstructed automatically.
 * A `ptr<T>` is a raw machine address; it is meaningless in another process, another run, or after relocation. It is transient by definition.
 
 ### 11.2 Auto-Derivation and Custom Codecs
 
 * A type is **auto-serializable** (compiler-derivable `Serializer<T>` / `Parser<T>`) when every serialized field is itself serializable — i.e. value fields and `own` fields of serializable types. `data class`es are the common case and derive trivially.
 * `ref` and `ptr<T>` fields are **skipped**. If a type cannot be validly reconstructed without them, the compiler cannot derive a `Parser` for it — the programmer must supply a **custom `Parser<T>`** (§9) that re-establishes those links after the owned fields are built.
-* There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`util.md` §8). Capability is always a real method, never an empty tag.
+* There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`util.md` §7). Capability is always a real method, never an empty tag.
 
 ### 11.3 Containers
 
@@ -274,10 +274,10 @@ A container serializes element-by-element, following the element kind from §11.
 | Container | Serialization |
 | --------- | ------------- |
 | `list<value T>` / `list<own T>` | every element serialized; deserializes to an **owning** container the caller owns |
-| `list<ref T>` | elements are borrows → **not serializable** (a custom codec must decide how to resolve them) |
+| `list<ref T>` | elements are non-owning handles → **not serializable** (a custom codec must decide how to resolve them) |
 | `list<ptr<T>>` | raw addresses → **not serializable** |
 
-A deserialized collection always **owns** its elements and its buffer — there is no way to deserialize into a borrowing collection.
+A deserialized collection always **owns** its elements and its buffer — there is no way to deserialize into a non-owning collection.
 
 ### 11.4 Immutability
 
@@ -285,11 +285,11 @@ Immutable data (`data class`, `str`, `const` values) serializes and deserializes
 
 ### 11.5 Relationship to `copy` / `deepCopy`
 
-A serialize → deserialize round-trip is closely related to `deepCopy` (`util.md` §8):
+A serialize → deserialize round-trip is closely related to `deepCopy` (`util.md` §7):
 
 * Both produce a **fully owned, independent** graph of the value-and-`own` portion.
 * Both **do not follow `ptr<T>`** — raw pointers are outside the managed graph.
-* The difference: `deepCopy` preserves `ref` aliasing (the copy borrows the same targets), whereas serialization **drops** `ref` entirely (there is nothing to borrow after a round-trip).
+* The difference: `deepCopy` preserves `ref` aliasing (the copy holds the same non-owning handles), whereas serialization **drops** `ref` entirely (there is no stored handle to restore after a round-trip).
 
 ### 11.6 Cycles
 
@@ -312,7 +312,7 @@ Deserialization in Bestie treats input as **untrusted data, never as instruction
 * If a constructor rejects the parsed values (precondition fails), deserialization fails with a typed `ParseError` (`InvalidType` / a validation variant) — it never yields a half-built or invalid object.
 * `data class`es are pure data with a total constructor, so they deserialize directly. Types with **non-trivial invariants** must expose a constructor/factory that validates, or provide a custom `Parser<T>` (§9) that calls it; the compiler will not derive a `Parser` that skips validation.
 
-> Contrast with `deepCopy` (`util.md` §8.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
+> Contrast with `deepCopy` (`util.md` §7.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
 
 ### 11.8 Excluding Fields (`@transient`)
 

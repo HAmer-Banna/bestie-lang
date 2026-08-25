@@ -52,7 +52,7 @@ bestie.api.db
 
 ```bestie
 class DbConnection {
-    fun execute(query: str): result<DbResult, DbError>
+    fun execute(query: str): DbResult ! DbError
     fun beginTransaction(): DbTransaction
     fun close(): void
 }
@@ -64,8 +64,8 @@ class DbConnection {
 
 ```bestie
 class DbTransaction {
-    fun commit(): result<void, DbError>
-    fun rollback(): result<void, DbError>
+    fun commit(): void ! DbError
+    fun rollback(): void ! DbError
 }
 ```
 
@@ -85,7 +85,7 @@ class DbResult {
 ## 5. Queries
 
 ```bestie
-fun executeQuery(conn: DbConnection, query: str): result<DbResult, DbError>
+fun executeQuery(conn: DbConnection, query: str): DbResult ! DbError
 ```
 
 * Returns explicit typed errors
@@ -98,7 +98,7 @@ fun executeQuery(conn: DbConnection, query: str): result<DbResult, DbError>
 
 ```bestie
 class PreparedStatement {
-    fun execute(params: list<str>): result<DbResult, DbError>
+    fun execute(params: list<str>): DbResult ! DbError
     fun close(): void
 }
 ```

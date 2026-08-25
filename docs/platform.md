@@ -10,13 +10,22 @@ The objective is to maintain:
 - Clear layering
 - Long-term stability
 
-Bestie is structured in strict layers:
+Bestie is structured in layers. **The language is the layers together**, not core alone:
 
 ```
 
-core → std-lib → std-api → std-framework
+core → std-lib → std-api → (optional std-framework)
 
 ```
+
+| Layer | Role | Change appetite |
+| ----- | ---- | --------------- |
+| **Core** | Sealed minimum: `class`, `fun`, `lambda`, `if`, `own`/`ref`/`ptr`, `thread`, syntax `T ?` / `T ! E` | Almost never. A break here is a language break. |
+| **Std-lib** | Still the language. Helpers, named types (`option`, `result`, collections), fibers | Conservative, but allowed to evolve |
+| **Std-api** | Credit to the outer world: OS, files, HTTP, FFI, MMIO | Allowed to evolve with platforms |
+| **Std-framework** | Bestie in the real world (optional; third-party install is fine) | Most likely to change |
+
+This split exists so Bestie does not repeat Java module headaches, Python 2→3, or JavaScript `==` vs `===`. Core stays small so it can stay stable. Std-lib is not "outside the language."
 
 Each layer has **different stability, responsibility, and evolution rules**.
 
@@ -35,10 +44,10 @@ Each layer has **different stability, responsibility, and evolution rules**.
   - Major performance-preserving improvements
 - No imports required
 - Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
-- Foundational abstractions use lowercase (`list`, `str`, `ptr`, `byte`)
+- Foundational abstractions use lowercase (`list`, `str`, `ptr`, `byte`, `thread`)
 - Core is **built-in and always available**
 - Defines **semantic guarantees** (memory, ownership, layout, concurrency)
-- Safe-by-default semantics for ownership-validated (`own/ref`) paths
+- Safe-by-default semantics for ownership-validated (`own`) paths; `ref` is a stored non-owning slot, not a borrow checker
 - Explicit unsafe boundaries (`ptr`, FFI, manual `free`) remain visible in source
 
 ### Stability Target
@@ -62,14 +71,15 @@ Provides **high-level utilities** without system dependency.
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
 - `format` — formatting and templates
-- `utilities` — helpers, option, result, StringBuilder
+- `concurrency` — fibers, channels, atomics, locks (built on core `thread`)
+- `utilities` — `option`, `result`, StringBuilder, copy helpers
 - `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator, Singleton via `Lazy`/`Once`)
 
 ### Properties
 
 - Closed but not sealed
 - Evolves conservatively
-- Purely library-level (no runtime system)
+- Purely library-level (no OS/file/network runtime). `concurrency` may include a fiber scheduler, linked only when `fiber` is used.
 - Foundational abstractions use lowercase (`option`, `result`, `set`, `map`)
 - Nominal concrete types use PascalCase (`StringBuilder`, `Date`, `Command`)
 - Requires `import`
@@ -99,7 +109,6 @@ Provides **system-level and external interaction**.
 - `io` — filesystem & streams
 - `network` — sockets & protocols
 - `os` — operating system
-- `ext.concurrency` — advanced threading
 - `ext.memory` — memory inspection
 - `foreign` — FFI / native interop
 

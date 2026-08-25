@@ -600,11 +600,11 @@ for (s in scores) {
 
 `slice<T>` is a built-in **borrowed view** over a contiguous run of elements. It is the result of slicing an `array<T>` (or, in `std-lib`, an array-backed `list<T>`), and a `slice<byte>` is the result of slicing a `str`.
 
-A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is the contiguous-memory application of Bestie's `ref` borrow: a slice *borrows* its source.
+A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is the one fat view in core: it cannot be stored, and it cannot outlive its source (`memory.md` §13).
 
 ```bestie
 val xs : array<int>[] = {10, 20, 30, 40, 50}
-val mid : slice<int> = xs[1..4]   // borrows xs[1], xs[2], xs[3] — no copy
+val mid : slice<int> = xs[1..4]   // view of xs[1], xs[2], xs[3] — no copy
 ```
 
 ### Bound Forms
@@ -644,12 +644,13 @@ Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. W
 
 A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing, and re-slicing all behave exactly as they do on `array<T>`. Element access is a single contiguous load — pointer arithmetic, no indirection.
 
-### Borrow Rules
+### View Rules
 
-A `slice<T>` borrows its source, so it follows the same `ref` rules defined in `memory.md`:
+`slice<T>` is the one fat view with a compiler-checked lifetime (`memory.md` §13). It is not `ref` and not `ptr<T>`.
 
-* It **cannot outlive its source** and **cannot be stored in a struct field**. It may be passed down into calls and returned only by borrowing a parameter (the same escape rules as `ref`).
-* While a `slice<T>` is alive, the source **cannot be mutated in a way that would move or free its storage** — for example, a `list<T>` cannot grow/reallocate while a slice borrows it. The compiler rejects such use, which is what prevents a dangling view.
+* It **cannot outlive its source** and **cannot be stored in a field**.
+* It may be passed into calls. Returning a slice is valid only when it is a subview of a slice parameter (the result cannot outlive that parameter's source).
+* While a `slice<T>` is alive, the source **cannot be mutated in a way that would move or free its storage** — for example, a `list<T>` cannot grow/reallocate while a slice views it. The compiler rejects such use.
 
 ### Read vs Mutable Slices
 
@@ -658,7 +659,7 @@ A `slice<T>` borrows its source, so it follows the same `ref` rules defined in `
 | `slice<T>` | Read-only view — elements may be read, not written |
 | `slice<var T>` | Mutable view — `s[i] = v` writes through to the backing storage |
 
-A `slice<var T>` is an exclusive borrow: while it is alive, no other access to the overlapped region is permitted, mirroring `ref var` semantics. A read `slice<T>` may coexist with other read borrows.
+A `slice<var T>` is exclusive: while it is alive, no other access to the overlapped region is permitted. A read `slice<T>` may coexist with other read views of the same region.
 
 ### Immutable Sources
 
@@ -777,13 +778,71 @@ val text = s.toStr()
 
 ---
 
+## 8.3 Optional types — `T ?`
+
+`T ?` is **core syntax**. It is the type of a value that may be absent. It is not a second null; there is no implicit empty state on other types.
+
+```bestie
+fun find(id: int): User ?
+fun connect(host: str, port: int ?)
+val token: str ?
+```
+
+This syntax is sealed with the rest of core. The named type `option<T>`, its constructors (`Present` / `Not_Present`), and any helper methods live in **`bestie.lib.utilities`** — part of the language, not part of core. See `std-lib/util.md`. `int ?` and `option<int>` are the same representation; the names can evolve with the library, the `?` spelling cannot.
+
+**Core surface (no import):**
+
+* Signatures, parameters, and fields spelled `T ?`
+* On `fun f(): T ?`: `return value` is present; a bare `return` is absent
+* `if (val x = …)` binds only when present (`fp.md` §3)
+* FFI: C `NULL` maps to `ptr<T> ?` (`foreign.md`)
+
+**Std-lib surface (`import bestie.lib.utilities`):**
+
+* The name `option<T>`
+* Matching `option.Present` / `option.Not_Present`
+* Generics that read better as `list<option<User>>` (equivalently `list<User ?>` without import)
+
+Default parameters (`x: int = 0`) are a different tool: the caller may omit the argument and the compiler fills a compile-time constant. `x: int ?` means the value may be absent at runtime. Both are valid; they are not interchangeable.
+
+`?` binds to the immediately preceding type: `list<str ?>` is a list of optional strings; `list<str> ?` is an optional list.
+
+---
+
+## 8.4 Error unions — `T ! E`
+
+`T ! E` is **core syntax**. `E` is an error set (see `exceptions.md`). This is recoverable failure, not absence.
+
+```bestie
+fun parse(s: str): int ! ParseError
+```
+
+The named type `result<T, E>`, its constructors (`Ok` / `Err`), and any helper methods live in **`bestie.lib.utilities`**. `int ! ParseError` and `result<int, ParseError>` are the same representation.
+
+**Core surface (no import):**
+
+* Signatures spelled `T ! E`
+* `try` / `catch` at the call site
+* Type arguments that are “a value or an error” — `Channel<int ! WorkError>`
+
+**Std-lib surface (`import bestie.lib.utilities`):**
+
+* The name `result<T, E>`
+* Matching `result.Ok` / `result.Err`
+
+Function signatures should use `T ! E`. Do not invent a second error API.
+
+A function may not return both `?` and `!` on the same slot (`T ? ! E` is rejected). Absence and failure are different: use `T ?` for “no value”, `T ! E` for “this failed”.
+
+---
+
 ## 9. Summary
 
 Bestie's core type surface is intentionally compact:
 
 * Primitive numeric values behave like zero-cost value classes
 * `bool`, `char`, and `str` expose explicit core operations only
-* `tuple`, `array<T>`, `slice<T>`, and `range<T>` are first-class built-in value forms
+* `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms. Named `option<T>` / `result<T, E>` live in `bestie.lib.utilities`
 * Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
 * `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()` / `.toList()`)
 * Conversions are explicit

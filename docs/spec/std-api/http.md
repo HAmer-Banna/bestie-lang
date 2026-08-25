@@ -114,7 +114,7 @@ class HttpResponse {
 
 ```bestie
 protocol HttpBody {
-    fun read(buffer: ref ByteBuffer): int
+    fun read(buffer: ptr<ByteBuffer>): int
 }
 ```
 

@@ -87,8 +87,8 @@ Represents a connected TCP stream.
 
 ```bestie
 class TcpSocket {
-    fun read(buffer: ref ByteBuffer): int
-    fun write(buffer: ref ByteBuffer): int
+    fun read(buffer: ptr<ByteBuffer>): int
+    fun write(buffer: ptr<ByteBuffer>): int
     fun close(): void
 }
 ```
@@ -137,8 +137,8 @@ fun listen(addr: SocketAddress, backlog: int): TcpListener
 
 ```bestie
 class UdpSocket {
-    fun send(to: SocketAddress, buffer: ref ByteBuffer): int
-    fun receive(from: ref SocketAddress, buffer: ref ByteBuffer): int
+    fun send(to: SocketAddress, buffer: ptr<ByteBuffer>): int
+    fun receive(from: ptr<SocketAddress>, buffer: ptr<ByteBuffer>): int
     fun close(): void
 }
 ```

@@ -299,7 +299,7 @@ Not included in `bestie.lib.algorithms`:
 
 These belong to:
 
-* `ext.concurrency`
+* `bestie.lib.concurrency`
 * `ext.simd`
 * Domain-specific libraries
 

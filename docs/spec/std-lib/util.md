@@ -2,7 +2,7 @@
 
 This document defines the **utility package** of the Bestie standard library. These types form the foundation for error modeling and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
 
-Bestie uses lowercase for foundational abstractions such as `option<T>` and `result<T,E>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
+Bestie uses lowercase for foundational library types such as `option<T>` and `result<T,E>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
 
 ---
 
@@ -55,72 +55,34 @@ val s = sb.toStr()
 
 ---
 
-## 2. option<T>
+## 2. option<T> and result<T, E>
 
-`option<T>` represents **explicit presence or absence** of a value.
+`option<T>` and `result<T, E>` are **standard-library names** for the types spelled `T ?` and `T ! E` in core. They are part of the language. They are not core. Core keeps the syntax sealed; this package owns the names, constructors, and any helpers so those can evolve. See `platform.md`.
 
-Bestie does not use null, none, or nil.
+Canonical core syntax: `core/types.md` §8.3–8.4, `core/fp.md` §3, `core/exceptions.md` §5.
 
-### Definition
+Requires `import bestie.lib.utilities` (or a more specific import of `option` / `result`). Signatures, `if-let`, bare `return`, and `try`/`catch` need no import.
 
 ```bestie
+import bestie.lib.utilities.option
+import bestie.lib.utilities.result
+
 enum option<T> {
-  Present(T)
-  Not_Present
+    Present(T)
+    Not_Present
 }
-```
 
-### Usage
-
-```bestie
-fun findUser(id: int): option<User> {
-  if exists(id) {
-    return option.Present(loadUser(id))
-  }
-  return option.Not_Present
-}
-```
-
-### Properties
-
-* Fully type-safe
-* Exhaustive pattern matching enforced
-* No implicit unwrapping
-
----
-
-## 3. result<T, E>
-
-`result<T, E>` represents an operation that may succeed or fail with a typed error.
-
-### Definition
-
-```bestie
 enum result<T, E> {
-  Ok(T)
-  Err(E)
+    Ok(T)
+    Err(E)
 }
 ```
 
-### Usage
-
-```bestie
-fun parseInt(s: str): result<int, ParseError> {
-  if valid(s) {
-    return result.Ok(convert(s))
-  }
-  return result.Err(ParseError.InvalidFormat)
-}
-```
-
-### Guidelines
-
-* Prefer `result` for expected, recoverable failures
-* Do not mix `result` and panic-based invariant handling without justification
+`int ?` is the same representation as `option<int>`. `int ! ParseError` is the same representation as `result<int, ParseError>`. Prefer `fun f(): User ?` and `fun parse(s: str): int ! ParseError` at function boundaries. Use the names when matching or when a named type reads better.
 
 ---
 
-## 4. Equable Protocol
+## 3. Equable Protocol
 
 `Equable` defines **structural equality** between two values of the same type.
 
@@ -158,7 +120,7 @@ No dynamic dispatch is introduced.
 
 ---
 
-## 5. Comparable Protocol
+## 4. Comparable Protocol
 
 `Comparable` defines a total ordering between values.
 
@@ -178,7 +140,7 @@ protocol Comparable<T> {
 
 ---
 
-## 6. Hashable Protocol
+## 5. Hashable Protocol
 
 `Hashable` defines a stable hash for a value and uses **`ext Equable`**.
 
@@ -203,7 +165,7 @@ protocol Hashable<T> ext Equable<T> {
 
 ---
 
-## 7. Operator Overloading Protocols
+## 6. Operator Overloading Protocols
 
 Bestie supports operator overloading through **explicit protocols**. The compiler lowers operator expressions to protocol method calls at compile time — fully monomorphized, no runtime dispatch, no vtables.
 
@@ -211,7 +173,7 @@ All operator protocols are resolved at compile time. Using an operator on a type
 
 ---
 
-### 7.1 Arithmetic Operators
+### 6.1 Arithmetic Operators
 
 ```bestie
 protocol Addable<T> {
@@ -246,7 +208,7 @@ protocol Negatable {
 
 ---
 
-### 7.2 Index Operators
+### 6.2 Index Operators
 
 ```bestie
 protocol Indexable<I, T> {
@@ -260,7 +222,7 @@ protocol IndexAssignable<I, T> {
 
 ---
 
-### 7.3 Lowering Rules
+### 6.3 Lowering Rules
 
 The compiler lowers operator syntax to protocol calls at compile time:
 
@@ -280,7 +242,7 @@ The compiler lowers operator syntax to protocol calls at compile time:
 
 ---
 
-### 7.4 Example
+### 6.4 Example
 
 ```bestie
 class Vec2 impl Addable<Vec2> {
@@ -297,7 +259,7 @@ val c = a + b    // compile-time lowered to a.add(b)
 
 ---
 
-### 7.5 Rules
+### 6.5 Rules
 
 * Operator protocols are **opt-in** — no type is forced to implement them
 * All dispatch is **static** — fully resolved at compile time
@@ -307,7 +269,7 @@ val c = a + b    // compile-time lowered to a.add(b)
 
 ---
 
-## 8. Copyable and DeepCopyable
+## 7. Copyable and DeepCopyable
 
 Bestie distinguishes three separate operations. Conflating them is the source of most copy-related bugs in other languages, so they are kept explicit:
 
@@ -317,7 +279,7 @@ Bestie distinguishes three separate operations. Conflating them is the source of
 | `copy(a)` | An explicit **shallow** independent duplicate |
 | `deepCopy(a)` | An explicit **deep** duplicate of the entire owned subgraph |
 
-### 8.1 Protocols
+### 7.1 Protocols
 
 ```bestie
 protocol Copyable<T> {
@@ -338,7 +300,7 @@ fun deepCopy<T>(value: T): T    // requires T : DeepCopyable
 
 **There is no separate `Cloneable` protocol, and there are no marker protocols in Bestie.** `Copyable` / `DeepCopyable` *are* Bestie's "clone" mechanism, and they are **method-bearing** contracts (`copy()` / `deepCopy()`) — not Java-style empty markers that rely on a magic `Object.clone()`. A type opts in by satisfying a real method (explicitly or by compiler derivation, §8.2); capability is expressed by the method that performs the work, never by a contentless tag. This keeps duplication explicit, statically resolved, and free of reflective or runtime cloning machinery.
 
-### 8.2 Compiler Derivation
+### 7.2 Compiler Derivation
 
 Like `Equable`, copy behavior is **compiler-derivable**, with no runtime reflection:
 
@@ -347,7 +309,7 @@ Like `Equable`, copy behavior is **compiler-derivable**, with no runtime reflect
 * `DeepCopyable` auto-derives only when **every `own` field is itself `DeepCopyable`** — each owned field is recursively duplicated into a fresh allocation, producing a fully independent owning graph.
 * A type may **`impl` either protocol manually** to override the default (e.g. to copy a cache lazily, or to deep-copy across a `ptr` boundary it knows the size of).
 
-### 8.3 Shallow Copy and Ownership
+### 7.3 Shallow Copy and Ownership
 
 A shallow `copy()` of a type that owns memory would duplicate the owning pointer — two owners, one allocation, an inevitable double free. Therefore:
 
@@ -363,7 +325,7 @@ val c2 = copy(c)         // ❌ compile error: Cache has an own field — use de
 val c3 = deepCopy(c)     // ✅ new Cache owning a fresh copy of data
 ```
 
-### 8.4 Raw Pointers Are Never Followed
+### 7.4 Raw Pointers Are Never Followed
 
 Copying a `ptr<T>` duplicates the **address**, not the pointee — for both `copy` and `deepCopy`. A raw pointer carries no ownership or size information, so it is outside the managed graph by design:
 
@@ -374,22 +336,22 @@ val p3 = deepCopy(p)    // also the same address — deepCopy does not chase raw
 
 To duplicate what a `ptr<T>` points at, the programmer must do it explicitly (they alone know the size and lifetime).
 
-### 8.5 Containers
+### 7.5 Containers
 
 | Element type | `copy()` | `deepCopy()` |
 | ------------ | -------- | ------------ |
 | `list<value T>` | new container, elements copied (independent) | identical to `copy()` |
 | `list<own T>` | ❌ forbidden — would duplicate ownership | new container, **each element deep-copied** |
-| `list<ref T>` | new container, **same borrows** (aliased) | identical (borrows aren't owned) |
+| `list<ref T>` | new container, **same handles** (aliased; list does not own) | identical (handles aren't owned) |
 | `list<ptr<T>>` | new container, **same addresses** (aliased) | identical (raw pointers not followed) |
 
 This is consistent with §8.3–8.4: ownership is duplicated only by `deepCopy`, never silently.
 
-### 8.6 Immutable Values
+### 7.6 Immutable Values
 
 For an immutable value type such as `str`, `val b = a`, `copy(a)`, and `deepCopy(a)` are **observably identical** — each yields an independent value, and whether the backing storage is shared is an invisible implementation detail (safe precisely because the value cannot mutate). The copy/deep-copy distinction only becomes observable for **mutable** or **owning** types.
 
-### 8.7 Copy Operates on Fields, Never Accessors
+### 7.7 Copy Operates on Fields, Never Accessors
 
 `copy()` and `deepCopy()` duplicate **stored fields directly**. They never invoke user methods — no `get()`, no resolver, no lazy-initialization trigger. This guarantees:
 

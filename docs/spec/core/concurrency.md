@@ -1,26 +1,26 @@
 # Bestie Core Concurrency Model
 
-This document defines the **core concurrency primitives** of Bestie.
+This document defines the **core concurrency primitive** of Bestie.
 
 Core concurrency in Bestie is:
 
 * Low-level
 * Deterministic
 * Explicit
-* Safe-by-default for `own/ref` paths, with first-class explicit low-level control via `ptr`
+* Safe-by-default for `own` accounting, with first-class explicit low-level control via `ptr`
 
-**Parallelism is a core feature**, available directly through `threadOs` without reaching into any API layer.
+**Parallelism is a core feature**, available directly through `thread` — the language's 1:1 OS-thread primitive.
 
-Higher-level concurrency patterns (actors, channels, structured concurrency, thread pools) live in **std-api** and are built on top of these two primitives.
+Cooperative fibers, channels, atomics, and locks live in **`bestie.lib.concurrency`**. They are helpers, not language structure. A program that never imports that library has no fiber scheduler and no extra concurrency runtime.
 
 > Unlike Go/Java runtime models, Bestie does not implicitly create an extra `main` worker thread.
-> Program entry starts on the process entry OS thread, and `main` executes there with `threadOs` semantics.
+> Program entry starts on the process entry OS thread, and `main` executes there with `thread` semantics.
 
 ---
 
 ## 1. Design Principles
 
-1. Minimal — two primitives only
+1. Minimal — one execution primitive in core
 2. Explicit — no implicit scheduling or sharing
 3. Compile-time validated ownership and sharing
 4. Deterministic lifecycle
@@ -30,11 +30,9 @@ Higher-level concurrency patterns (actors, channels, structured concurrency, thr
 
 ---
 
-## 2. Core Execution Units
+## 2. OS Threads (`thread`)
 
-### 2.1 OS Threads (`threadOs`) — Parallel Execution
-
-`threadOs` maps 1:1 to an OS-level thread. It is the **parallel execution primitive**.
+`thread` maps 1:1 to an OS-level thread. It is the **parallel execution primitive**.
 
 * Heavyweight, long-lived
 * Mapped 1:1 to OS threads
@@ -45,7 +43,7 @@ Higher-level concurrency patterns (actors, channels, structured concurrency, thr
 **Factory creation:**
 
 ```bestie
-val t = threadOs.of(() => work())
+val t = thread.of(() => work())
 ```
 
 **Available methods:**
@@ -60,97 +58,46 @@ val t = threadOs.of(() => work())
 
 ---
 
-### 2.2 Lightweight Threads (`threadLight`) — Concurrent Execution
+## 3. Class Rules
 
-`threadLight` is a **cooperative lightweight thread** (fiber). It is the **concurrent execution primitive**.
+`thread` is:
 
-* Low-overhead, high-concurrency
-* Cooperatively scheduled — yields control explicitly
-* Runs on an OS thread managed by the runtime scheduler
-* Does **not** run in parallel with other `threadLight` instances on the same scheduler
-* Deterministic lifecycle semantics
-
-**Factory creation:**
-
-```bestie
-val t = threadLight.of(() => compute())
-```
-
-**Available methods:**
-
-| Method                | Description                                    |
-| --------------------- | ---------------------------------------------- |
-| `await()`             | Waits until the light thread completes         |
-| `isCompleted(): bool` | Checks if execution finished                   |
-| `cancel()`            | Cancels execution (explicit handling required) |
-| `id(): int`           | Returns internal thread identifier             |
-
-**Yield points** — a `threadLight` yields at:
-
-* `await()` calls on other light threads
-* Explicit `threadLight.yield()`
-* Blocking I/O calls (runtime parks the fiber and resumes when ready)
-
-There is no preemptive scheduling. Execution is deterministic within a scheduler.
-
----
-
-## 3. Parallel vs Concurrent — Core Distinction
-
-| Primitive     | Model        | Scheduling    | Parallelism |
-| ------------- | ------------ | ------------- | ----------- |
-| `threadOs`    | OS thread    | Preemptive    | Yes — explicit, guaranteed |
-| `threadLight` | Fiber        | Cooperative   | No — concurrent only |
-
-Use `threadOs` when you need work to run **at the same time** on multiple cores.
-Use `threadLight` when you need high-concurrency **I/O or coordination** without the cost of OS threads.
-
----
-
-## 4. Class Rules
-
-Both `threadOs` and `threadLight` are:
-
-* Closed classes
+* A closed class
 * Not inheritable
-* Not value classes
-* Created **only via factories**
+* Not a value class
+* Created **only via factory**
 
 ```bestie
-threadOs.new()      // ❌ forbidden
-threadLight.init()  // ❌ forbidden
+thread.new()      // ❌ forbidden
+thread.init()     // ❌ forbidden
+thread.of(...)    // ✅
 ```
 
-```bestie
-threadOs.of(...)    // ✅
-threadLight.of(...) // ✅
-```
-
-No inheritance, reflection, or dynamic creation is allowed for core concurrency types.
+No inheritance, reflection, or dynamic creation is allowed for the core thread type.
 
 ---
 
-## 5. Ownership & Sharing
+## 4. Ownership & Sharing
 
-### 5.1 Forbidden
+### 4.1 Forbidden
 
 ```bestie
-val own u = User.new()
-threadOs.of(() => use(u))    // ❌ compile error: implicit ownership sharing
+val own u = User().new()
+thread.of(() => use(u))    // ❌ compile error: implicit ownership sharing
 ```
 
-### 5.2 Explicit Ownership Transfer
+### 4.2 Explicit Ownership Transfer
 
 Ownership may be moved into a thread explicitly. The source binding becomes invalid immediately.
 
 ```bestie
-val own u = User.new()
-threadOs.of(move u, (own user: User) => use(user))   // ✅
+val own u = User().new()
+thread.of(move u, (own user: User) => use(user))   // ✅
 
 use(u)    // ❌ compile error: moved value
 ```
 
-### 5.3 Allowed — Immutable Sharing
+### 4.3 Allowed — Immutable Sharing
 
 Thread safety comes from the **type**, not the binding. `val` makes a binding immutable — it does not make the value deeply immutable or safe to share.
 
@@ -165,41 +112,43 @@ Safe to share across threads — deep immutability must be explicit:
 ```bestie
 val cfg = Config.load()                          // Config is a data class ✅
 val xs  = list<int>.immutable.build()            // explicitly immutable ✅
-threadOs.of(() => read(cfg))                     // ✅ safe
-threadOs.of(() => process(xs))                   // ✅ safe
+thread.of(() => read(cfg))                       // ✅ safe
+thread.of(() => process(xs))                     // ✅ safe
 ```
 
 **Not** safe to share:
 
 ```bestie
 val xs: list<int> = list<int>.build()
-threadOs.of(() => read(xs))    // ❌ compile error: mutable list, val binding is not enough
+thread.of(() => read(xs))    // ❌ compile error: mutable list, val binding is not enough
 ```
 
 ---
 
-## 6. Compile-Time Guarantees
+## 5. Compile-Time Guarantees
 
 * Implicit ownership sharing across threads is a **compile-time error**
-* `ref` crossing a thread boundary is a **compile-time error**
-* Lifetimes are validated at the thread creation site
-* No implicit runtime ownership checks for safe (`own/ref`) code paths
+* `own` cannot be implicitly shared; transfer with `move`
+* `ptr<T>` may cross thread boundaries; races and lifetime are programmer-owned
+* A `ref` field is not a thread-safe handle — sharing the object it names is done with `ptr<T>`
 
-> If `own/ref` sharing rules compile, concurrency sharing is safe by construction.
+> If `own` sharing rules compile, ownership accounting is safe by construction.
 > `ptr`-based sharing remains explicit programmer responsibility.
+
+The same ownership rules apply to compiler-known spawn points in `bestie.lib.concurrency` (`fiber.of`). See that package.
 
 ---
 
-## 7. Panic Behavior in Threads
+## 6. Panic Behavior in Threads
 
 A panic represents a violated invariant — the program is in an invalid state. There is no partial recovery.
 
 **A panic in any thread terminates the entire program.**
 
-This applies to both `threadOs` and `threadLight`. There is no mechanism to catch or isolate a thread panic at the core level.
+There is no mechanism to catch or isolate a thread panic at the core level.
 
 ```bestie
-val t = threadOs.of(() => {
+val t = thread.of(() => {
     panic("something is wrong")   // entire program terminates
 })
 t.join()
@@ -210,31 +159,31 @@ t.join()
 Core thread bodies return `void`. There is no return value from a thread at the core level.
 
 ```bestie
-threadOs.of(() => doWork())       // void body
-threadLight.of(() => compute())   // void body
+thread.of(() => doWork())       // void body
 ```
 
 ### Communicating Results and Errors
 
-To get results or typed errors (`!`) back from a worker thread, use **std-api channels**:
+To get results or typed errors (`!`) back from a worker thread, use **channels** from `bestie.lib.concurrency`:
 
 ```bestie
-// std-api — not core
-val ch = Channel<int ! WorkError>.new()
-threadOs.of(move ch, (ch) => {
-    val result = try compute()
-    ch.send(result)
+import bestie.lib.concurrency.Channel
+
+val ch = Channel<int ! WorkError>.of(1)
+thread.of(move ch, (ch) => {
+    val outcome = try compute()
+    ch.send(outcome)
 })
-val result = ch.receive()
+val outcome = try ch.receive()
 ```
 
 This keeps the core minimal and the result-passing pattern explicit.
 
 ---
 
-## 8. Thread-Local Storage
+## 7. Thread-Local Storage
 
-`threadlocal` is a **storage modifier** — not a class, not a wrapper, not a container. It lives with the concurrency model because it is meaningful only in the presence of threads (`threadOs` / `threadLight`).
+`threadlocal` is a **storage modifier** — not a class, not a wrapper, not a container. It lives with the concurrency model because it is meaningful only in the presence of `thread`.
 
 A `threadlocal` declaration gives each OS thread its **own independent copy** of the variable. Access is direct, with no `.get()`, `.set()`, or any other wrapper indirection.
 
@@ -243,7 +192,7 @@ threadlocal val requestId: str = ""
 threadlocal var callDepth: int = 0
 ```
 
-### 8.1 Usage
+### 7.1 Usage
 
 Access and mutation are identical to any other variable:
 
@@ -257,15 +206,15 @@ fun tick() {
 
 There is no ceremony. `counter` is a variable. The compiler routes reads and writes to the calling thread's copy.
 
-### 8.2 Semantics
+### 7.2 Semantics
 
-* Each `threadOs` thread gets its **own independent copy**, initialized from the declared initializer
-* `threadLight` fibers share the copy of the OS thread they run on
+* Each `thread` gets its **own independent copy**, initialized from the declared initializer
+* Fibers from `bestie.lib.concurrency` share the copy of the OS thread they run on
 * Initialization is **per-thread at first access** (lazy, but compile-time lowered to a TLS slot — no heap allocation)
 * The initializer expression must be a **compile-time constant** or a pure function of compile-time constants
 * Copies are independent — writes in one thread are invisible to others
 
-### 8.3 Scope
+### 7.3 Scope
 
 `threadlocal` is allowed at:
 
@@ -274,7 +223,7 @@ There is no ceremony. `counter` is a variable. The compiler routes reads and wri
 
 `threadlocal` inside a regular expression or block (non-static context) is a **compile-time error**.
 
-### 8.4 Rules
+### 7.4 Rules
 
 * `threadlocal val` — immutable per-thread binding (the value is constant for that thread's lifetime)
 * `threadlocal var` — mutable per-thread binding
@@ -286,31 +235,30 @@ There is no ceremony. `counter` is a variable. The compiler routes reads and wri
 
 ---
 
-## 9. What Core Does Not Include
+## 8. What Core Does Not Include
 
-Core provides the two execution primitives. Everything else is **std-api**, built on top:
+Core provides `thread` and `threadlocal`. Everything else is **`bestie.lib.concurrency`**, built on top:
 
-* Channels (CSP-style message passing)
-* Actors
-* Mutexes, atomics, semaphores
+* Fibers (`fiber`)
+* Channels
+* Mutexes, atomics
+* Cooperative cancellation tokens
 * Thread pools and work-stealing schedulers
-* Structured concurrency
-* Supervised thread groups (isolation of panics at API level)
-* Async helpers or parallel collections
 
-These are **API-level patterns** — not language features.
+These are **library helpers** — not language features and not OS APIs.
+
+Actors, structured concurrency, and reactive pipelines belong in frameworks or application code, not in core and not in this library's required surface.
 
 ---
 
-## 10. Summary
+## 9. Summary
 
 | Need | Use |
 | ---- | --- |
-| Parallel execution on multiple cores | `threadOs` (core) |
-| High-concurrency cooperative I/O | `threadLight` (core) |
-| Message passing between threads | Channels (std-api) |
-| Actor-based concurrency | Actors (std-api) |
-| Shared mutable state | Locks / atomics (std-api) |
+| Parallel execution on multiple cores | `thread` (core) |
+| High-concurrency cooperative I/O | `fiber` (`bestie.lib.concurrency`) |
+| Message passing between threads | `Channel` (`bestie.lib.concurrency`) |
+| Shared mutable state | Locks / atomics (`bestie.lib.concurrency`) |
 
-> `threadOs` and `threadLight` are the only core primitives.
-> Parallelism is in core. Patterns are in std-api.
+> `thread` is the only core execution primitive.
+> Parallelism is in core. Fibers and coordination are in std-lib.

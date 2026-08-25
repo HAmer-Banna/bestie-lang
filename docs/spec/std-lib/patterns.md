@@ -160,13 +160,13 @@ The `Proxy<T>` protocol represents **controlled indirection**.
 
 ```bestie
 protocol Proxy<T> {
-    fun get(): ref T
+    fun get(): ptr<T>
 }
 ```
 
 ### Semantics
 
-* `get()` returns a reference to the underlying object
+* `get()` returns a pointer to the underlying object
 * Access may be:
 
   * Lazy
@@ -189,10 +189,10 @@ protocol Proxy<T> {
 
 ### Interaction with `copy` / `deepCopy`
 
-A proxy is duplicated like any other object — by its **stored fields**, never by invoking `get()` (see `util.md` §8.7). Duplication therefore preserves a lazy proxy's unresolved state and follows the proxy's field qualifiers:
+A proxy is duplicated like any other object — by its **stored fields**, never by invoking `get()` (see `util.md` §7.7). Duplication therefore preserves a lazy proxy's unresolved state and follows the proxy's field qualifiers:
 
 * If the proxy holds its target as an `own` field, `deepCopy` duplicates the target and `copy` is forbidden (it would duplicate ownership).
-* If the proxy holds its target as `ref` or `ptr<T>` (the common case, since `get()` returns `ref T`), both `copy` and `deepCopy` produce a proxy that **aliases the same target**. The target's lifetime remains the programmer's responsibility — it must outlive every proxy that borrows it.
+* If the proxy holds its target as `ref` or `ptr<T>` (the common case, since `get()` returns `ptr<T>`), both `copy` and `deepCopy` produce a proxy that **aliases the same target**. The target's lifetime remains the programmer's responsibility — it must outlive every proxy that points at it.
 
 A proxy must not hide ownership transfer through duplication: copying a proxy never silently moves or frees the proxied object.
 
@@ -204,7 +204,7 @@ Singleton is a **library pattern**, not a core language class kind.
 
 ```bestie
 protocol Singleton<T> {
-    fun instance(): ref T
+    fun instance(): ptr<T>
 }
 ```
 

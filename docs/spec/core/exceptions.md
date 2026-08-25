@@ -312,13 +312,19 @@ fun readConfig(path: str): str ! IoError {
 
 ## 5. Integration with Core Return Types
 
-| Mechanism            | When to use                                          |
-| -------------------- | ---------------------------------------------------- |
-| `?` partial function | Function may simply not return (no error reason)     |
-| `! ErrorSet`         | Recoverable failure with a typed reason — preferred  |
-| `option<T>`          | Absence of a value (not a failure)                   |
-| `result<T, E>`       | Stdlib interop or composable error pipelines         |
-| `panic()`            | Violated invariant — no recovery possible            |
+| Mechanism | When to use | Layer |
+| --------- | ----------- | ----- |
+| `T ?` | Function return, parameter, or field that may be absent | **Core syntax** |
+| `option<T>` | Named form: matching `Present` / `Not_Present`, helpers | **Std-lib** (`bestie.lib.utilities`) — same representation as `T ?` |
+| `T ! E` | Recoverable failure with a typed reason — **the spelling for function signatures** | **Core syntax** |
+| `result<T, E>` | Named form: matching `Ok` / `Err`, helpers | **Std-lib** (`bestie.lib.utilities`) — same representation as `T ! E` |
+| `panic()` | Violated invariant — no recovery possible | Core |
+
+`T ?` is presence. `T ! E` is success-or-error. They are not four systems. `option` / `result` are names for those two types so matching and helpers can evolve without touching core syntax.
+
+Function signatures should use `T ?` and `T ! E`. Import `bestie.lib.utilities` when you need the names.
+
+See `types.md` §8.3 and §8.4, and `std-lib/util.md`.
 
 ---
 
