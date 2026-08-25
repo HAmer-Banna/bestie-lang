@@ -146,7 +146,7 @@ A named error set can be declared as the union of existing sets:
 errors FileError = ParseError | IoError
 ```
 
-`FileError` is a new flat error set whose variants are the union of all variants from `ParseError` and `IoError`. At runtime it is an integer tag — same representation as any other error set, just with more variants. The discriminant size follows the compact representation rules (§6.3 of `lang.md`).
+`FileError` is a new flat error set whose variants are the union of all variants from `ParseError` and `IoError`. At runtime it is an integer tag — same representation as any other error set, just with more variants. The discriminant size follows the compact representation rules (§6.3 of `base.md`).
 
 Named unions can chain:
 
@@ -298,7 +298,7 @@ Assertions are active in `debug` and `safe` builds, elided in `release`.
 
 `defer` replaces `finally` — and works for all scope exits, not just error paths.
 
-See `lang.md` section 19 for the full `defer` specification.
+See `base.md` §23 for the full `defer` specification.
 
 ```bestie
 fun readConfig(path: str): str ! IoError {

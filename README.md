@@ -42,6 +42,10 @@ Bestie is that answer: the **ambition of C++** — real classes, lambdas, protoc
 
 Bestie chases the goals of C++ without inheriting its baggage — no undefined behavior in safe code, no hidden cost, no ceremony.
 
+C gives control with limited safety. C++ gives power with rising complexity. Java gives safety and takes control. Rust gives safety with a high cognitive tax. Bestie exists to keep native performance, explicit memory, and a complexity budget a working engineer can hold.
+
+OOP, FP, and procedural style are **tools**, not identities. Bestie supports all of them and enforces none of them.
+
 ---
 
 ## ⚡ Core Principles
@@ -59,8 +63,7 @@ If a program compiles under declared ownership/safety semantics, its behavior re
 No hidden costs. No runtime surprises.
 
 ### ✔ Explicit control, safe by default
-Ownership-validated (`own/ref`) code paths are compiler-checked for illegal sharing and lifetime misuse.
-Unsafe power (`ptr`, FFI, manual `free`) is allowed only through explicit syntax at the call site.
+`own` accounting is compiler-checked. Sharing the same object at a call is `ptr<T>`, marked in source. `ptr`, FFI, and manual `free` stay visible — there is no `unsafe` block.
 
 ### ✔ Elegant and structured
 A clean, Kotlin-inspired syntax with strong compile-time guarantees and a consistent mental model.
@@ -121,20 +124,18 @@ Higher-level frameworks may trade performance for productivity, but never change
 
 ## 🧱 Architecture
 
-Bestie is structured in strict layers:
+Bestie is structured in layers. **The language is all of them**, not core alone:
 
 ```
-
-core → std-lib → std-api → std-framework
-
+core → std-lib → std-api → (optional std-framework)
 ```
 
-- **Core** — language guarantees and invariants (nearly sealed)
-- **Std-lib** — essential utilities and value abstractions
-- **Std-api** — system and OS-level interfaces
-- **Std-framework** — minimal foundation for higher-level frameworks
+- **Core** — language structure (syntax, types, ownership, `thread`)
+- **Std-lib** — helpers (`option`, collections, `map`/`filter`, fibers)
+- **Std-api** — talking to the outside (OS, files, console, HTTP, FFI)
+- **Std-framework** — optional real-world stacks
 
-Each layer builds on the previous one without breaking core guarantees.
+If a helper in lib and a type in api would share a name, **lib wins**. Specs live under `docs/spec/` (`base.md` is core syntax, not “the whole language”). The platform contract is `docs/platform.md`.
 
 ---
 
@@ -172,9 +173,9 @@ Future architecture branches:
 
 ## 📘 Language Specification
 
-Full specification and design documents:
-
-➡️ `docs/spec/` (core language specification)
+- **Landing / identity** — this README
+- **Platform contract** (locked pillars, layers, versioning, build) — `docs/platform.md`
+- **Language spec** — `docs/spec/` (`core/base.md` is core syntax; lib and api are the rest of the language)
 
 ---
 

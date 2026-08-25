@@ -1,14 +1,61 @@
-# Bestie Language — Ecosystem, Versioning, and Build Workflow
+# Bestie Language — Platform
 
-This document defines the **Bestie ecosystem architecture**, including the **core language, standard libraries, APIs, frameworks, tools, versioning model, and compiler workflow**.
+This document is the **language constitution**: locked compiler pillars, then the layering, versioning, and build rules that keep those pillars from being broken.
 
-The objective is to maintain:
+Identity lives in `README.md`. Specs live under `docs/spec/`. This file is the contract between them.
 
-- Predictable evolution
-- Deterministic performance
-- Explicit unsafe boundaries
-- Clear layering
-- Long-term stability
+---
+
+## Locked pillars
+
+These pillars are **non-negotiable**. A change that violates them is a design regression, regardless of feature demand.
+
+### 1 — Compilation speed is a first-class requirement
+
+Fast builds are a hard constraint, not an optimization target. The compiler must stay usable in large monorepos, CI, and tight edit-compile loops. Compile times should scale linearly with code size whenever possible.
+
+Rejected when they would blow this: whole-program global inference, Rust-style lifetime solvers, C++ template explosion, combinatorially expanding macros, hidden multi-phase resolution.
+
+If a feature significantly degrades compilation speed, it is **rejected** — even if it is expressive.
+
+### 2 — Compiler engineering is part of the language contract
+
+Bestie is designed *with* the compiler. Semantics must be predictable, analyzable, and optimizable. Aggressive but safe transformations are expected.
+
+Explicit ownership, no hidden allocation, no null, and a sealed core exist so the optimizer has a stable contract.
+
+If a feature cannot be reliably optimized, it does **not belong in core**.
+
+### 3 — Memory layout is a strategic advantage
+
+Bestie guarantees predictable, cache-friendly layout: minimal headers, tight packing, reduced pointer chasing. The programmer expresses structure; the compiler chooses layout within semantic guarantees.
+
+The compiler may reorder, inline, flatten, and compact **when observable behavior is preserved**. Layout optimization is always on, transparent, and forward-compatible.
+
+### 4 — Machine code quality matters
+
+Native code quality is a core engineering job: backend improvement, PGO, architecture-aware lowering, scheduling, cache-friendly codegen — without changing program semantics.
+
+### Invariants these pillars require
+
+- No hidden allocation in core semantics
+- Static dispatch by default
+- No runtime reflection
+- `own` accounting at compile time; `ptr` / FFI / manual `free` remain explicit in source
+- Predictable object layout
+- Explicit concurrency (`thread` in core)
+
+### What they reject
+
+Novel syntax, paradigm purity, academic experiments, trend-driven features, and hidden runtime abstractions do **not** override these pillars.
+
+Bestie is a deterministic, compiler-driven native language that also supports high-performance backends. It is not scripting-first, not a research language, not macro-driven, and not runtime-centered.
+
+**Compile fast. Optimize hard. Layout that is known. Code that is good. Everything else is secondary.**
+
+---
+
+## Layers
 
 Bestie is structured in layers. **The language is the layers together**, not core alone:
 
@@ -20,10 +67,12 @@ core → std-lib → std-api → (optional std-framework)
 
 | Layer | Role | Change appetite |
 | ----- | ---- | --------------- |
-| **Core** | Sealed minimum: `class`, `fun`, `lambda`, `if`, `own`/`ref`/`ptr`, `thread`, syntax `T ?` / `T ! E` | Almost never. A break here is a language break. |
-| **Std-lib** | Still the language. Helpers, named types (`option`, `result`, collections), fibers | Conservative, but allowed to evolve |
-| **Std-api** | Credit to the outer world: OS, files, HTTP, FFI, MMIO | Allowed to evolve with platforms |
+| **Core** | Language **structure**: `class`, `fun`, `if`, `own`/`ref`/`ptr`, `thread`, syntax `T ?` / `T ! E` | Almost never. A break here is a language break. |
+| **Std-lib** | **Helpers** still in the language: `option`, `result`, collections, `map`/`filter`/`fold`, fibers | Conservative, but allowed to evolve |
+| **Std-api** | **Talking to the outside**: OS, files, console, HTTP, FFI, MMIO | Allowed to evolve with platforms |
 | **Std-framework** | Bestie in the real world (optional; third-party install is fine) | Most likely to change |
+
+Direction of dependency is always **core → lib → api** (then optional framework). A higher layer does not redefine a lower-layer name. If a helper in lib and a type in api would collide, **lib wins**; api picks another name.
 
 This split exists so Bestie does not repeat Java module headaches, Python 2→3, or JavaScript `==` vs `===`. Core stays small so it can stay stable. Std-lib is not "outside the language."
 
@@ -34,7 +83,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
 ## 1. Core Language (`core`)
 
 **Components included:**
-`lang.md`, `types.md`, `fp.md`, `oop.md`, `memory.md`, `constants.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+`base.md`, `types.md`, `fp.md`, `oop.md`, `memory.md`, `constants.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
 
 ### Properties
 
@@ -249,11 +298,11 @@ Restrictions:
 
 Purpose:
 
-- Low Level development
-- Kernal & drivers development
-- Experiments
-- Small tools
-- Scripts
+- Kernels and drivers (no OS I/O)
+- Freestanding experiments
+- Logic that only needs core + std-lib helpers
+
+Hello-world `println` and any talk to the OS require std-api (Tier 2).
 
 ---
 

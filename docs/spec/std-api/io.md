@@ -2,9 +2,7 @@
 
 This document defines the **I/O API layer** for Bestie.
 
-`bestie.api.io` provides **structured, explicit, and composable I/O abstractions** built on top of the Bestie core language.
-
-It intentionally **does not replace** the minimal console I/O that exists in the core language.
+`bestie.api.io` is how Bestie **talks to the outside world** for I/O: console, files, and streams. String interpolation (`"Hello ${name}"`) is core syntax. Codecs (JSON, XML, …) are `bestie.lib.format`.
 
 ---
 
@@ -12,6 +10,7 @@ It intentionally **does not replace** the minimal console I/O that exists in the
 
 The purpose of `bestie.api.io` is to provide:
 
+* Hosted console I/O (`print`, `println`, `input`, `printf`)
 * Stream-based I/O
 * Buffered I/O
 * Binary and text I/O
@@ -28,42 +27,26 @@ It is designed for:
 
 ---
 
-## 2. What Is Already in Core (Explicitly)
-
-The **Bestie core language** provides **minimal console I/O**, equivalent to C’s `scanf` / `printf`.
-
-These are:
-
-* Always available
-* Zero-configuration
-* Synchronous
-* Blocking
-* Side-effectful by definition
-
-Examples (core, not API):
+## 2. Hosted Console
 
 ```bestie
-print("Enter name:")
-val name = input()
-print("Hello ${name}")
+import bestie.api.io.println
+import bestie.api.io.print
+import bestie.api.io.input
+import bestie.api.io.printf
+
+fun main() {
+    println("Hello, Bestie")
+    print("Enter name: ")
+    val name = input()
+    println("Hello ${name}")
+    printf("age %d\n", 30)
+}
 ```
 
-Rules:
+Synchronous and blocking. No streams, no buffering control, no async. Freestanding / bare-metal programs do not use this surface — they use MMIO or other `bestie.api` packages.
 
-* No streams
-* No buffering control
-* No async variants
-* No extensibility
-
-This is **intentional** and sufficient for:
-
-* Scripts
-* REPL
-* Experiments
-* Serverless handlers
-* Debugging
-
-Anything beyond this belongs to `bestie.api.io`.
+`printf` uses C format specifiers (`%s`, `%d`, `%f`, `%x`, …), type-checked when the format string is a literal.
 
 ---
 
@@ -277,10 +260,10 @@ Rules:
 
 ## 13. Summary
 
-* Core language provides **minimal console I/O**
-* `bestie.api.io` provides **structured stream-based I/O**
-* No overlap, no duplication
-* Explicit, safe, composable, and predictable
+* Interpolation is core syntax
+* Hosted console, files, and byte/text streams live in `bestie.api.io`
+* Structured codecs live in `bestie.lib.format` — lib wins the `format` name
+* Explicit, composable, and predictable
 
 This clean separation keeps the core sealed and the ecosystem extensible.
 

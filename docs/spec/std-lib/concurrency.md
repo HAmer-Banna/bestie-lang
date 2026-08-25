@@ -221,7 +221,7 @@ Rules:
 
 ```bestie
 fun worker(token: CancellationToken): void {
-    while (!token.cancelled()) {
+    while (not token.cancelled()) {
         doWork()
     }
 }

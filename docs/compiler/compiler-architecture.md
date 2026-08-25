@@ -327,7 +327,46 @@ Foreign code is **contained**, not viral.
 
 ---
 
-## 12. Versioning and Stability
+## 12. Layout Compaction (Compiler Obligation)
+
+This is the object-file side of `base.md` §6.2–6.3. The language contract is: the compiler uses the minimum valid representation. Programmers do not opt in. `@layout(stable)` is the FFI exception — layout then matches declaration order, no reordering, no compaction.
+
+### Range constraints as facts
+
+A value of a type `as T in lo..=hi` is checked **once**, at construction (`try (x as Score)` or a `const` that is in range). After that:
+
+* No repeated range checks at use sites
+* An index whose range is a subset of a collection's index space emits no bounds check
+* Unused bit patterns of the underlying type are niches for enum tags (a `Score` in `0..=100` can carry `Win`/`Lose`/`Draw` in the leftover patterns with no extra tag word)
+* Arithmetic the compiler can prove stays in range emits no overflow branch
+* Struct fields may store a smaller machine width than the declared ABI type when the range fits
+* A `float64 in 0.0..=1.0` is finite; NaN/Inf guards can be skipped
+
+### Enum discriminant sizing
+
+| Variant count | Discriminant storage | Bytes |
+| ------------- | -------------------- | ----- |
+| 2             | `uint1` (stored as `uint8`) | 1 |
+| 3 – 256       | `uint8`              | 1     |
+| 257 – 65 536  | `uint16`             | 2     |
+| 65 537+       | `uint32`             | 4     |
+
+### Niches (discriminant-free enums)
+
+Invalid bit patterns of a payload encode the tag. No annotation.
+
+| Type | Valid patterns | Niches |
+| ---- | -------------- | ------ |
+| `bool` | `0`, `1` | 2–255 |
+| `char` | Unicode scalars | surrogates and out-of-range |
+| `own T` / non-null heap address | non-zero | zero address (internal only — not a language `null`) |
+| `uint8 in 0..=200` | `0..=200` | 201–255 |
+
+The compiler assigns niches greedily (most constrained payload first). `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Sealed class hierarchies use a minimum-size type tag, not a vtable pointer, and dispatch with a `switch` on that tag.
+
+---
+
+## 13. Versioning and Stability
 
 Compiler components are versioned alongside:
 
@@ -343,7 +382,7 @@ Rules:
 
 ---
 
-## 13. Summary
+## 14. Summary
 
 The Bestie compiler is:
 

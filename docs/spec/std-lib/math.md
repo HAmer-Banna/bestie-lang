@@ -26,7 +26,7 @@ Only primitives that must be understood by the compiler live in core. Everything
 
 ## 2. Core Numeric Types
 
-Core numeric primitives match the **Primitive Types** section of the [core language spec](../core/lang.md). In short:
+Core numeric primitives match the **Primitive Types** section of the [core base spec](../core/base.md). In short:
 
 * **Signed integers:** `int8`, `int16`, `int32`, `int64`, and pointer-sized `int`
 * **Unsigned integers:** `uint8`, `uint16`, `uint32`, `uint64`, and pointer-sized `uint` (`byte` is an alias for `uint8`)

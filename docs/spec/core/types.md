@@ -215,10 +215,12 @@ Higher-level math such as `sqrt`, `pow`, trigonometry, and linear algebra remain
 
 `bool` supports:
 
-* Logical negation: `!`
-* Logical conjunction: `&&`
-* Logical disjunction: `||`
+* Logical negation: `not`
+* Logical conjunction: `and`
+* Logical disjunction: `or`
 * Equality and inequality: `==`, `!=`
+
+`!`, `&&`, and `||` are not boolean operators. `!` is reserved for `T ! E` and overflow-trap (`+!`). See `base.md` §15.
 
 #### Methods
 
@@ -226,7 +228,6 @@ Higher-level math such as `sqrt`, `pow`, trigonometry, and linear algebra remain
 | ------ | ------- | ----- |
 | `toStr()` | `str` | `"true"` or `"false"` |
 | `toInt()` | `int` | `1` or `0` |
-| `not()` | `bool` | Method form of logical negation |
 
 ---
 
@@ -399,7 +400,7 @@ val arr3 : array<int>[5] = array<int>[5].fill(0)  // capacity 5, size 5 — all 
 
 `fill()` is the explicit escape hatch for pre-sized buffers and default-value grids, avoiding the need to write large literals. The value is copied into each slot — no implicit zero-filling ever occurs without it.
 
-**Literal default type:** when a `{v, v, ...}` literal appears without a type annotation, the compiler infers `array<T>`. To obtain a different collection type from the same literal syntax, an explicit type annotation is required — see `lang.md` §5.4.
+**Literal default type:** when a `{v, v, ...}` literal appears without a type annotation, the compiler infers `array<T>`. To obtain a different collection type from the same literal syntax, an explicit type annotation is required — see `base.md` §5.4.
 
 ### Operators
 

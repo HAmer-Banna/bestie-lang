@@ -1,4 +1,4 @@
-# Bestie Language — Core Specification
+# Bestie Core — Base Syntax
 
 ## 1. Overview
 
@@ -17,6 +17,18 @@ Bestie prioritizes:
 * Zero-cost abstractions
 * Long-term stability
 
+### First program
+
+```bestie
+import bestie.api.io.println
+
+fun main() {
+    println("Hello, Bestie")
+}
+```
+
+A first program is a function, not a class. Console output talks to the outside world, so it lives in `bestie.api.io` — not in core. Interpolation (`"Hello ${name}"`) is core syntax. See §10 and §11, and `std-api/io.md`.
+
 ---
 
 ## 2. Core Design Principles
@@ -28,9 +40,8 @@ The Bestie compiler resolves **everything that is resolvable** at compile time, 
 * Memory layout, padding, and alignment
 * Protocol dispatch
 * Inline expansion
-* Lifetime and destructor placement
-* Ownership validation
-* Pointer correctness
+* Ownership accounting (`own` discharged exactly once)
+* `defer` / destructor placement
 * Builder chains
 * Error handling paths
 * Loop lowering and unrolling opportunities
@@ -427,6 +438,8 @@ Bestie includes exactly one collection in the core language: `array<T>`.
 `array<T>` is built-in and available without `import`.
 It provides fixed-capacity contiguous storage, deterministic layout, and index-based access.
 
+`{1, 2, 3}` is an **array**, not a Python/Java `List`. A growable sequence is `list<T>` in `bestie.lib.collections` — write `val xs: list<int> = {1, 2, 3}`. That annotation is how a newcomer opts into growth; the default stays the cheap form.
+
 Core `array<T>` supports:
 
 * `array<T>[n]` — sized declaration, capacity `n`, initially empty
@@ -611,93 +624,7 @@ An inline constraint is an anonymous constrained type. The same construction and
 
 ---
 
-#### What the Compiler Does With Range Information
-
-This is where range constraints create binary-level differences. Every piece of range information is a fact the compiler exploits without the programmer doing anything further.
-
-**1. Single validation point — no repeated checks**
-
-The check happens once at construction. Every subsequent use of the value is bounds-check-free. A `Score` passed through ten functions never re-validates.
-
-**Object file impact:** Eliminates a `cmp + jae/jb` pair at every use. In a hot loop over a list of `Score` values, this removes N branches for N iterations.
-
----
-
-**2. Array bounds check elimination**
-
-When a range-constrained value is used as an index into a collection whose size matches or exceeds the range, the bounds check is eliminated entirely:
-
-```bestie
-val table: list<str>[101]   // indices 0..=100
-val s: Score                // guaranteed 0..=100
-
-val name = table[s]         // ✅ no bounds check emitted — range ⊆ [0..=100]
-```
-
-**Object file impact:** Removes the `cmp + conditional-branch` before the load instruction. In SIMD loops over indexed lookups, this also unblocks vectorization (bounds checks are a barrier to auto-vectorization).
-
----
-
-**3. Enum niche optimization**
-
-When a range-constrained type is used inside an `enum` payload, the unused bit patterns of the underlying type are available to the compiler to encode the discriminant — eliminating the tag field entirely.
-
-```bestie
-type Score as int32 in 0..=100
-// valid bit patterns: 0..=100
-// unused bit patterns: 101..=2^31-1 (over 2 billion niches)
-
-enum GameResult {
-    Win(Score)    // compiler uses bit patterns 101+ to encode the Lose/Draw discriminants
-    Lose
-    Draw
-}
-// sizeof(GameResult) == sizeof(int32) — no separate tag field
-```
-
-**Object file impact:** Saves 4–8 bytes per `enum` instance (the eliminated tag field + its padding). In a `list<GameResult>`, every element is 4 bytes instead of 8 — twice the elements fit in a cache line.
-
----
-
-**4. Arithmetic overflow elimination**
-
-When the compiler can prove that arithmetic on range-constrained values stays within the valid range of the result type, overflow checks are eliminated:
-
-```bestie
-type Byte as uint8 in 0..=200
-
-val a: Byte
-val b: Byte
-val sum = (a as uint16) + (b as uint16)   // max = 400, fits in uint16 — no overflow possible
-```
-
-**Object file impact:** Eliminates `jo`/`jno` (overflow flag checks) or the `ADDS`/`ADDV` with branch instructions on ARM. In arithmetic-heavy loops, this is a measurable throughput improvement.
-
----
-
-**5. Smaller internal storage (struct packing)**
-
-When a range-constrained type's range fits within a smaller underlying type, the compiler may use smaller storage **within struct layouts** while preserving the declared type in function signatures and operations.
-
-```bestie
-type WeekDay as int32 in 0..=6
-// range fits in 3 bits / 1 byte — compiler uses uint8 storage in structs
-```
-
-The declared type (`int32`) governs arithmetic and ABI. The compiler chooses the minimum storage in struct fields transparently.
-
-**Object file impact:** A struct with four `WeekDay` fields uses 4 bytes instead of 16. Better cache density.
-
----
-
-**6. Float constraints eliminate NaN/Inf checks**
-
-A `float64 in 0.0..=1.0` is guaranteed finite and in range. The compiler can:
-- Skip `isNaN` / `isInfinite` guards before using the value
-- Apply SIMD strategies that are only valid for finite, bounded floats
-- Use approximation instructions (`RCPPS`, `RSQRTPS`) without correctness concerns
-
----
+After construction, the range is a fact the compiler uses: one check at the construction site, then no repeated checks, possible bounds-check elimination, niche tags, and overflow proofs. That is a compiler obligation, not something you write. See `docs/compiler/compiler-architecture.md` (layout compaction).
 
 #### Rules
 
@@ -713,107 +640,9 @@ A `float64 in 0.0..=1.0` is guaranteed finite and in range. The compiler can:
 
 ### 6.3 Compact Representation Guarantee
 
-The Bestie compiler is **obligated** to use the minimum valid representation for every type. This is not a quality-of-implementation optimization — it is a spec requirement. The compiler must never use more bits or bytes than the type's value set requires.
+The compiler is **obligated** to use the minimum valid representation for every type — enum tags, niches, sealed-class tags, `bool`, `char`. You do not opt in. The exception is `@layout(stable)` for FFI: layout is then exactly as declared.
 
-This applies everywhere the compiler has type-level information: enum discriminants, payload types, struct fields, bool values, characters, sealed hierarchies, and any other composite type.
-
----
-
-#### Enum Discriminant Sizing
-
-The discriminant (tag field) of an enum uses the minimum integer type needed to encode all variants. No enum pays for a 4-byte tag when 1 byte is sufficient.
-
-| Variant count | Discriminant storage | Bytes |
-| ------------- | -------------------- | ----- |
-| 2             | `uint1` (stored as `uint8`) | 1 |
-| 3 – 256       | `uint8`              | 1     |
-| 257 – 65 536  | `uint16`             | 2     |
-| 65 537+       | `uint32`             | 4     |
-
-```bestie
-enum Direction { North, South, East, West }
-// 4 variants → uint8 discriminant → 1 byte tag (not 4)
-```
-
-**Object file impact:** A struct containing a `Direction` field uses 1 byte for the tag, not 4. After field reordering, this tag may share a padding gap that already existed — net cost zero.
-
----
-
-#### Niche Optimization — Discriminant-Free Enums
-
-When a payload type has **invalid bit patterns** (values the type can never legally hold), the compiler uses those patterns to encode discriminant values — eliminating the tag field entirely.
-
-The compiler performs niche analysis automatically. No annotation required.
-
-**Types with known niches:**
-
-| Type | Valid bit patterns | Available niches |
-| ---- | -------------- | ---------------- |
-| `bool` | `0`, `1` | 254 niche patterns (2–255) |
-| `char` | `0..=0xD7FF`, `0xE000..=0x10FFFF` | All surrogate and out-of-range codepoints |
-| `ptr<T>` (from `own`) | Any non-zero address | Zero address (0x0) — 1 niche |
-| `uint8 in 0..=200` | `0..=200` | 55 niche patterns (201–255) |
-
-> **Note:** Bestie has no `null` value — the zero address (0x0) is an **internal bit pattern** used only by the compiler as a niche slot. It is never a language-level value, never expressible in Bestie source code, and never returned from safe Bestie functions. The niche mechanism is entirely transparent to the programmer.
-
-```bestie
-enum MaybeChar {
-    Some(char)   // char has invalid codepoints — compiler uses one as the None discriminant
-    None
-}
-// sizeof(MaybeChar) == sizeof(char) == 4 bytes. No separate tag field.
-
-enum NonNullPtr {
-    Live(own Foo)   // own Foo is always a valid address — compiler uses 0x0 as the Dead discriminant
-    Dead
-}
-// sizeof(NonNullPtr) == sizeof(ptr) — no tag byte
-```
-
-**Niche selection:** The compiler assigns niches greedily — most structurally constrained variant first. For enums with multiple payloads, the payload with the most available niches is analyzed first.
-
-**Object file impact:** Eliminates 1–8 bytes per enum instance (the tag field and its padding). In a `list<MaybeChar>`, every element is 4 bytes instead of 8 — twice the density per cache line.
-
----
-
-#### Bool Representation
-
-`bool` is always stored as 1 byte. The values `0` and `1` are the only valid bit patterns. The compiler treats any use of a `bool` value as known to be in `{0, 1}` — no masking, no widening checks needed when promoting to a wider integer type.
-
-Multiple `bool` fields in a struct are **not** automatically bit-packed (bit-packing has read-modify-write cost on writes). They benefit from field reordering — consecutive `bool` fields are grouped, consuming the minimum number of bytes with no padding between them.
-
----
-
-#### `char` Representation
-
-`char` is a 32-bit Unicode scalar. The valid range is `0..=0xD7FF` and `0xE000..=0x10FFFF`. The surrogate range (`0xD800..=0xDFFF`) and values above `0x10FFFF` are permanently invalid. The compiler exploits these as niches in enum payloads without any programmer action.
-
----
-
-#### Sealed Class Type Tag
-
-A `sealed` class hierarchy has a finite, compile-time-known set of concrete types. The compiler uses a **minimum-size type tag** — the same sizing rule as enum discriminants — instead of a vtable pointer.
-
-```bestie
-sealed class Shape permits Circle, Rectangle, Triangle
-// 3 implementors → uint8 type tag → 1 byte (not a pointer-sized vtable)
-```
-
-Dispatch through a sealed type uses a `switch` on the tag byte, not an indirect call through a vtable. This eliminates the vtable pointer load and the indirect branch.
-
----
-
-#### General Principle
-
-The compact representation guarantee extends to every place the compiler stores a discriminant, tag, flag, or type identifier:
-
-* Enum discriminants — minimum integer size
-* Niche optimization — zero bytes when payload has available invalid patterns
-* Sealed type tags — minimum integer size, not pointer-sized
-* `bool` fields — 1 byte, grouped by field reordering, no hidden padding
-* `char` — niches available to enclosing enum
-
-The programmer does nothing to enable this. It is the compiler's obligation. The only exception is types marked `@layout(stable)` for FFI compatibility — those are laid out exactly as declared and exempt from all reordering and compaction.
+How it packs, which niches exist, and what that does to the object file: `docs/compiler/compiler-architecture.md` (layout compaction).
 
 ---
 
@@ -986,13 +815,9 @@ val has = r.contains(42) // true
 
 ---
 
-## 10. String Formatting
+## 10. String Interpolation
 
-Bestie core provides string formatting and I/O as built-in functions — no import required.
-
-### 10.1 String Interpolation
-
-Embed expressions directly in string literals using `${}`:
+Embed expressions in string literals with `${}`:
 
 ```bestie
 val name = "Alice"
@@ -1000,48 +825,11 @@ val age  = 30
 val msg  = "Hello ${name}, you are ${age} years old"
 ```
 
-* Expression inside `${}` is evaluated and converted to `str`
+* The expression is evaluated and converted to `str`
 * Compile-time constant expressions are resolved at compile time
 * No hidden allocation for simple value types
 
-### 10.2 `printf` — Formatted Output
-
-Writes a formatted string to stdout:
-
-```bestie
-printf("Hello %s, age %d\n", name, age)
-printf("Value: %.2f\n", 3.14159)
-```
-
-Format specifiers follow C conventions (`%s`, `%d`, `%f`, `%x`, etc.).
-Types are checked at compile time when the format string is a literal.
-
-### 10.3 `format` — Formatted String
-
-Returns a formatted `str` without printing:
-
-```bestie
-val msg: str = format("User %s has %d items", name, count)
-```
-
-Same format specifiers as `printf`. Compile-time verified when format string is a literal.
-
-### 10.4 `print` / `println` — Basic Output
-
-```bestie
-print("Hello")          // no newline
-println("Hello")        // with newline
-println(42)             // works on any type with str conversion
-```
-
-### 10.5 `input` / `inputf` — Input
-
-```bestie
-val line: str  = input()                  // reads a line from stdin
-val name: str  = inputf("Enter name: ")   // prints prompt, then reads a line
-```
-
-`inputf` is a convenience wrapper — it prints the prompt and immediately reads the response. No format parsing on the input side; use the `!` error return if parsing is needed.
+Hosted console I/O (`print`, `println`, `input`, `printf`) lives in `bestie.api.io`. Structured data codecs live in `bestie.lib.format`.
 
 ---
 
@@ -1052,29 +840,31 @@ val name: str  = inputf("Enter name: ")   // prints prompt, then reads a line
 `main` is the program entry point. It implicitly returns `void` — no return type annotation needed.
 
 ```bestie
+import bestie.api.io.println
+
 fun main() {
     println("Hello, Bestie")
 }
 ```
 
-With command-line arguments:
+With command-line arguments (fixed argv — not a resizable `list`):
 
 ```bestie
-fun main(args: list<str>) {
+fun main(args: array<str>) {
     println(args[0])
 }
 ```
 
-Both forms are valid. `args` contains the raw command-line arguments as strings. Structured argument parsing lives in `bestie.api.cli`.
+Both forms are valid. Structured argument parsing lives in `bestie.api.cli`.
 
 ### 11.2 Rules
 
 * `main` always returns `void` — writing the return type is unnecessary and not idiomatic
-* `main` may declare `args: list<str>` as its only parameter — omitting it is fine
-* `main` may return `! ErrorSet` for propagating startup errors:
+* `main` may declare `args: array<str>` as its only parameter — omitting it is the beginner form
+* `main` may be fallible (`! ErrorSet`) for startup errors:
 
 ```bestie
-fun main(args: list<str>): void ! StartupError {
+fun main(args: array<str>): void ! StartupError {
     val cfg = try loadConfig(args)
     run(cfg)
 }
@@ -1091,28 +881,30 @@ fun main(args: list<str>): void ! StartupError {
 
 `if` is both a **statement** and an **expression**.
 
-As an expression, `if` must produce a value:
+As a **statement**, `else` is optional. A missing `else` does not change the function's type. A function that can miss a `return` on some path is a compile-time error (incomplete), not silently `T ?`.
+
+```bestie
+fun f(cond: bool): int {
+    if (cond) {
+        return 1
+    }
+    return 0
+}
+```
+
+As an **expression**, every branch must yield a value of the same type:
 
 ```bestie
 val x: int = if (cond) 4 else 0
 ```
 
-If a value does not have a natural empty representation, `T ?` must be used.
-
-As a statement, `if` may omit `else`.
-When used inside a function without `else`, the function becomes **partial**:
-
-```bestie
-fun f(): bool ? = if (cond) return true
-```
-
-See `fp.md` for partial functions.
+If you need “maybe no value”, use a `T ?` function or `if-let` — not a missing `else` that secretly changes the function type. See `fp.md` for partial functions.
 
 Properties:
 
-* Statement and expression
-* Expressions must return values
-* Missing branch → partial function (`?`)
+* Statement: `else` optional; missing `return` paths are errors
+* Expression: all branches produce a value
+* No implicit “this function is now partial” from a bare `if`
 
 ### `switch`
 
@@ -1121,7 +913,7 @@ Properties:
 Properties:
 
 * No fallthrough
-* Exhaustiveness enforced when expression
+* **Always exhaustive** (statement or expression) — missing cases are a compile-time error; `_` covers the rest
 * Fully compile-time analyzable
 
 ```bestie
@@ -1144,26 +936,21 @@ Supports:
 * `for in`
 * `while`
 
-Loops may include an `else` clause (similar to Python) when the loop completes without `break`.
-
-Loops may be used as **expressions when compile-time resolvable**:
-
 ```bestie
-val x: int = for (i = 0; i < 5; i++) i + 5
-val xs: list<int> = for (i in 0..3) i * 2
-```
+for (i = 0; i < 10; i += 1) {
+    work(i)
+}
 
-While loop example:
+for (item in items) {
+    process(item)
+}
 
-```bestie
 var i = 0
 while (i < 10) {
-  print(i)
-  i += 1
+    work(i)
+    i += 1
 }
 ```
-
-This provides comprehension-style behavior without stream abstractions.
 
 ---
 
@@ -1177,14 +964,21 @@ This provides comprehension-style behavior without stream abstractions.
 
 ## 15. Operators
 
-Bestie supports a balanced mix of symbolic and word-based operators.
+Logical operators are words. Bitwise operators are symbols. One spelling each — the same choice as `ptr` / `.address()` over `&` / `*`.
 
-### Logical and Bitwise
+### Logical
 
-* `&&`, `||`, `!`, `and`, `or`, `not`
+* `and`, `or`, `not`
+
+`not` is boolean negation. `!` is **not** boolean not: it is the error-union operator (`T ! E`) and the overflow-trap suffix (`+!`, `-!`, `*!`). `&&` and `||` are not in the language.
+
+```bestie
+if (ready and not failed) { ... }
+```
+
+### Bitwise
+
 * `&`, `|`, `^`, `~`, `<<`, `>>`
-
-The symbolic logical operators (`&&`, `||`, `!`) and their word-based equivalents (`and`, `or`, `not`) are interchangeable spellings of the same operators — pick whichever reads best.
 
 ### Introspection and Identity
 
@@ -1270,7 +1064,7 @@ See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/util.md`.
 
 Overflow behavior in Bestie is **defined, deterministic, and zero-cost in release builds**.
 
-### 18.1 Unsigned Integers — Always Wrap
+### 22.1 Unsigned Integers — Always Wrap
 
 Unsigned overflow always wraps, unconditionally:
 
@@ -1279,7 +1073,7 @@ val x: uint8 = 255
 val y = x + 1   // y = 0, always
 ```
 
-### 18.2 Signed Integers — Wrap in Release, Trap in Debug
+### 22.2 Signed Integers — Wrap in Release, Trap in Debug
 
 In release builds, signed overflow wraps (two's complement). No cost, no surprise.
 In debug builds, signed overflow traps at runtime to surface bugs early.
@@ -1292,7 +1086,7 @@ val y = x + 1   // release: y = -128
 
 Build mode is set in `bestie-project.toml`. No per-expression overhead in release.
 
-### 18.3 Explicit Overflow Operators
+### 22.3 Explicit Overflow Operators
 
 When wrapping, saturating, or checked behavior is intentionally required, use explicit operators:
 
@@ -1328,7 +1122,7 @@ Rules:
 
 It is compile-time lowered. There is no runtime mechanism, no allocation, and no overhead.
 
-### 19.1 Basic Usage
+### 23.1 Basic Usage
 
 ```bestie
 fun readConfig(path: str): str ! IoError {
@@ -1339,7 +1133,7 @@ fun readConfig(path: str): str ! IoError {
 }
 ```
 
-### 19.2 Multiple Defers — LIFO Order
+### 23.2 Multiple Defers — LIFO Order
 
 Multiple `defer` statements in the same scope run in **reverse declaration order**:
 
@@ -1351,7 +1145,7 @@ val tx = try db.beginTx()
 defer tx.rollback()       // runs first
 ```
 
-### 19.3 Defer Inside Loops
+### 23.3 Defer Inside Loops
 
 `defer` inside a loop fires at the **end of each iteration**, not the end of the function:
 
@@ -1363,7 +1157,7 @@ for (item in items) {
 }
 ```
 
-### 19.4 Rules
+### 23.4 Rules
 
 * `defer` executes at the end of its **enclosing scope block**, not the function
 * `defer` body cannot use `return` or `try`
