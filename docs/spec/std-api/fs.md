@@ -56,7 +56,7 @@ All file system APIs live under:
 bestie.api.fs
 ```
 
-No re-exports. No wildcards.
+No re-exports.
 
 ```bestie
 import bestie.api.fs

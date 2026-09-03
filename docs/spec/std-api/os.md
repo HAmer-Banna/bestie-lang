@@ -57,7 +57,7 @@ All OS APIs live under:
 bestie.api.os
 ```
 
-No re-exports. No wildcards.
+No re-exports.
 
 ---
 

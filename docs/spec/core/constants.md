@@ -5,11 +5,11 @@ This document defines the **compiler-provided constants** built into Bestie.
 Every value described here is:
 
 * **Compile-time known** — resolved entirely by the compiler, never computed at runtime
-* **Zero-cost** — each use is substituted as an immediate operand at its use site (see `core/base.md` §4), occupying zero bytes of data unless its address is taken
+* **Zero-cost** — each use is substituted as an immediate operand at its use site (see `core/lang.md` §4), occupying zero bytes of data unless its address is taken
 * **Compiler-known, not a library API** — no `import` is required, and none of these are functions you call
 * **Cross-compilation-correct** — platform-dependent values resolve to the *target's* value, not the host's
 
-These constants exist to drive **conditional compilation** (`when`, `core/base.md` §25) and to give exact, target-correct numeric bounds. They are the *only* implicitly available constants in the core language; domain constants (π, e, physical units, …) live in the standard library (`bestie.lib.math` and friends), not here.
+These constants exist to drive **conditional compilation** (`when`, `core/lang.md` §25) and to give exact, target-correct numeric bounds. They are the *only* implicitly available constants in the core language; domain constants (π, e, physical units, …) live in the standard library (`bestie.lib.math` and friends), not here.
 
 ---
 
@@ -49,7 +49,7 @@ Flags that are not declared are `false` by default — **no runtime check, no li
 | `build.mode`  | `str`  | `"debug"`, `"release"`  |
 | `build.debug` | `bool` | `true` in debug builds  |
 
-`build.mode` is set in `bestie-project.toml` and is the same switch that governs signed-overflow trapping (`core/base.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:
+`build.mode` is set in `bestie-project.toml` and is the same switch that governs signed-overflow trapping (`core/lang.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:
 
 ```bestie
 when (build.debug) {
@@ -113,5 +113,5 @@ val inf = float64.INFINITY
 * Every predefined constant is a **compile-time constant** and may be used anywhere a `const` is valid: `const` initializers, `when` conditions, `array<T>` sizes, `range<T>` bounds, and generic arguments.
 * They are **compiler-known**, not importable symbols — no `import`, no namespace, no header.
 * **Platform-dependent** constants (`target.*`, `build.*`, `int.MAX`, `int.MIN`, `uint.MAX`) resolve to the concrete *target* value at compile time, making cross-compilation correct by construction.
-* Using predefined constants in a `when` condition enables **dead-code elimination**: the unchosen branch is never compiled (`core/base.md` §25).
+* Using predefined constants in a `when` condition enables **dead-code elimination**: the unchosen branch is never compiled (`core/lang.md` §25).
 * None of these constants carry runtime cost; each is emitted as an immediate operand, not a memory load.

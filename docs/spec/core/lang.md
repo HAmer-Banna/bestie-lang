@@ -1,4 +1,4 @@
-# Bestie Core — Base Syntax
+# Bestie Core — Language Syntax
 
 ## 1. Overview
 

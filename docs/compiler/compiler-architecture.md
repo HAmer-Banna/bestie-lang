@@ -329,7 +329,7 @@ Foreign code is **contained**, not viral.
 
 ## 12. Layout Compaction (Compiler Obligation)
 
-This is the object-file side of `base.md` §6.2–6.3. The language contract is: the compiler uses the minimum valid representation. Programmers do not opt in. `@layout(stable)` is the FFI exception — layout then matches declaration order, no reordering, no compaction.
+This is the object-file side of `lang.md` §6.2–6.3. The language contract is: the compiler uses the minimum valid representation. Programmers do not opt in. `@layout(stable)` is the FFI exception — layout then matches declaration order, no reordering, no compaction.
 
 ### Range constraints as facts
 

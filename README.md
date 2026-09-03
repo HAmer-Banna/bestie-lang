@@ -135,7 +135,7 @@ core → std-lib → std-api → (optional std-framework)
 - **Std-api** — talking to the outside (OS, files, console, HTTP, FFI)
 - **Std-framework** — optional real-world stacks
 
-If a helper in lib and a type in api would share a name, **lib wins**. Specs live under `docs/spec/` (`base.md` is core syntax, not “the whole language”). The platform contract is `docs/platform.md`.
+If a helper in lib and a type in api would share a name, **lib wins**. Specs live under `docs/spec/` (`lang.md` is core syntax, not “the whole language”). The platform contract is `docs/platform.md`.
 
 ---
 
@@ -175,7 +175,7 @@ Future architecture branches:
 
 - **Landing / identity** — this README
 - **Platform contract** (locked pillars, layers, versioning, build) — `docs/platform.md`
-- **Language spec** — `docs/spec/` (`core/base.md` is core syntax; lib and api are the rest of the language)
+- **Language spec** — `docs/spec/` (`core/lang.md` is core syntax; lib and api are the rest of the language)
 
 ---
 

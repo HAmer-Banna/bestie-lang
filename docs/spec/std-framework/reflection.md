@@ -16,7 +16,7 @@ In Bestie, reflection is a tool for **frameworks**, not a substitute for explici
 
 ## Layering and Dependencies
 
-`reflection` is a `std-framework` module built on the core operators `typeOf(x)` and `sizeOf(T)` (see `core/base.md` §15) and the compile-time annotation model (see `core/annotations.md`).
+`reflection` is a `std-framework` module built on the core operators `typeOf(x)` and `sizeOf(T)` (see `core/lang.md` §15) and the compile-time annotation model (see `core/annotations.md`).
 
 It is consumed by other `std-framework` modules (`orm`, `di`, `web`, `test`) and by application frameworks.
 

@@ -35,7 +35,7 @@ All random APIs live under:
 bestie.lib.random
 ```
 
-No re-exports. No wildcards. No global instance.
+No re-exports. No global instance.
 
 ```bestie
 import bestie.lib.random

@@ -315,39 +315,86 @@ Then code inside the module may import exported symbols from `net`.
 
 ---
 
-### 8.2 Import Syntax
+### 8.2 Import Declarations
 
-Imports are **file-scoped** and reference **exported symbols**:
+Imports are **file-scoped**. Every `import` is an explicit declaration: the file may use only what it declares (plus the prelude in §9).
+
+Three declaration forms are allowed. All of them require a declared module dependency (§8.1). All of them import only `public` symbols listed in the providing module’s `exports`. None of them re-export.
+
+Wildcard imports (`import pkg.*`) are **not allowed**. They hide where a name comes from, collide silently across packages, and are unused anywhere in the language surface. Module and package declarations already cover “bring this API in” without `*`.
+
+**Symbol import** — one exported symbol, available by its unqualified name:
 
 ```bestie
 import net.http.client.HttpClient
+import bestie.api.io.println
 ```
 
-Rules:
+**Module import declaration** — every symbol in a **module’s** `exports`, each available by its unqualified name:
+
+```bestie
+import bestie.lib.math
+import payments
+```
+
+This is the form used for std-lib, std-api, and std-framework modules:
+
+```bestie
+import bestie.lib.<library>
+import bestie.api.<api>
+import bestie.framework.<framework>
+```
+
+**Package import declaration** — the path names a package that is not itself a module. The last path segment is bound as a qualifier; members stay qualified:
+
+```bestie
+import bestie.lib.format.json
+
+val user = try json.parse<User>(input)
+```
+
+A package import does not dump names into file scope and does not recurse into sub-packages.
+
+---
+
+### 8.3 Import Rules
 
 * No relative imports
 * No file-path imports
 * No wildcard imports (`*`)
-* Imports must be explicit and fully qualified
-* No package aliasing
-* Symbol aliasing is allowed only for imported types/functions
+* Paths are fully qualified from a module or package root
+* No package aliasing (`import net.http.client as http` is illegal)
+* Symbol aliasing is allowed only for imported types and functions (`import net.http.client.HttpClient as Client`)
+* Module imports cannot be aliased
+* If two import declarations introduce the same unqualified name into a file, it is a compile-time error — disambiguate with a symbol import and an alias, or with a package import
+* Importing a path that is not an exported symbol, a package, or a depended-upon module is a compile-time error
+
+Resolution of an import path:
+
+1. An exported symbol of a depended-upon module → symbol import
+2. A depended-upon module’s canonical name → module import declaration
+3. A package inside a depended-upon module → package import declaration
+4. Otherwise → compile-time error
 
 ---
 
-### 8.3 Explicitness Rule
+### 8.4 Explicitness Rule
 
 Bestie does not allow:
 
 * Implicit imports
-* Default imports (except core primitives)
+* Default imports (except the prelude in §9)
 * Importing undeclared dependencies
+* Wildcard imports
+
+Module and package imports are still explicit: the file names the module or package it uses. They do not make imports implicit, and they do not weaken the export or dependency rules.
 
 ---
 
 ## 9. Default Imports
 
-The following namespaces are available through the language prelude
-(not via user-written wildcard imports):
+The following namespaces are available through the language prelude.
+They are not user-written imports; writing `import core.lang` is not required and is not how the prelude is provided:
 
 ```
 core.lang
@@ -360,7 +407,7 @@ This includes:
 * `ptr`, `option`
 * Basic annotations
 
-Everything else must be imported explicitly.
+Everything else must be imported with an import declaration.
 
 ---
 

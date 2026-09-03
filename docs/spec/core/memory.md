@@ -559,7 +559,7 @@ Return type depends on mutability:
 
 A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Runtime handles are read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
 
-> **`val` here is the binding axis, not the field axis.** The pointer's const-ness derives from the **binding** form (`val`/`var`/`const`), i.e. whether the *name* designates writable or read-only storage. This is distinct from field-level `val` immutability: a `val` *field* inside a class cannot be mutated after construction. Field-level `val` governs write permission **through the resulting pointer on a per-field basis** (see §10.1.3) — it does not change whether `.address()` returns `ptr<T>` or `ptr<const T>`. For the two axes of the `val` keyword, see `core/base.md` §4.2.
+> **`val` here is the binding axis, not the field axis.** The pointer's const-ness derives from the **binding** form (`val`/`var`/`const`), i.e. whether the *name* designates writable or read-only storage. This is distinct from field-level `val` immutability: a `val` *field* inside a class cannot be mutated after construction. Field-level `val` governs write permission **through the resulting pointer on a per-field basis** (see §10.1.3) — it does not change whether `.address()` returns `ptr<T>` or `ptr<const T>`. For the two axes of the `val` keyword, see `core/lang.md` §4.2.
 
 ---
 

@@ -158,7 +158,7 @@ fun process(items: list<int>): int {
 * A local function is not visible outside its enclosing block
 * Local functions are **never exportable** (see `modules-and-packaging.md` §7.2)
 * Nested local functions are allowed (a local `fun` may declare further local `fun`s)
-* A local function may not shadow another local function in the same block; shadowing an outer local function across nested blocks follows normal scope shadowing (`base.md` §4.8)
+* A local function may not shadow another local function in the same block; shadowing an outer local function across nested blocks follows normal scope shadowing (`lang.md` §4.8)
 
 #### Non-closure rule (same default as lambdas)
 
