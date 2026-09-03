@@ -141,7 +141,7 @@ Heap allocation is **never implicit**.
 Example:
 
 ```bestie
-own user = User().new()
+own user = User.new()
 ```
 
 ---
@@ -266,7 +266,7 @@ All forms are equivalent.
 Example:
 
 ```bestie
-val own user = User().new()
+val own user = User.new()
 ```
 
 Rules:
@@ -298,7 +298,7 @@ This guarantee applies to code that stays within `own` accounting. Explicit low-
 Ownership may be transferred via `move`:
 
 ```bestie
-own a = User().new()
+own a = User.new()
 own b = move a
 ```
 
@@ -352,7 +352,7 @@ Copy is allowed only when `T` is copyable: primitives, `value class`, `data clas
 
 ```bestie
 fun translate(p: Point): Point {          // Point is a value class — copied
-    return Point(p.x + 1, p.y)
+    return Point.new(p.x + 1, p.y)
 }
 ```
 
@@ -365,7 +365,7 @@ Ownership enters the function. The caller’s binding is invalid after the call 
 ```bestie
 fun process(own data: Data) { ... }
 
-val own d = Data().new()
+val own d = Data.new()
 process(move d)
 ```
 
@@ -384,7 +384,7 @@ fun nameOf(u: ptr<const User>): str {
     return u.val.name
 }
 
-val own c = Counter(n: 0).new()
+val own c = Counter.new(n: 0)
 bump(c.address())
 ```
 
@@ -404,7 +404,7 @@ When the function produces a heap `class`, ownership is transferred to the calle
 
 ```bestie
 fun createUser(): own User {
-    return User().new()
+    return User.new()
 }
 ```
 
@@ -484,19 +484,19 @@ There is no RAII-style auto-drop at scope exit. The programmer must explicitly c
 
 ```bestie
 fun bad() {
-    val own u = User().new()
+    val own u = User.new()
     // ❌ compile error: ownership of 'u' is not discharged before scope exits
 }
 
 fun good() {
-    val own u = User().new()
+    val own u = User.new()
     u.freeDeep()    // ✅ explicit discharge
 }
 ```
 
 **Exception — construction failure cleanup:**
 
-The one case where the compiler inserts cleanup automatically is fallible `init()` failure (see oop.md section 11.6). When a fallible `init()` returns an error, the compiler emits field-drop logic in reverse initialization order before returning the error to the caller. This is not silent: it is a specified protocol that is deterministic and part of the two-phase construction contract. The programmer declares the failure path with `! ErrorSet`; the compiler handles the cleanup mechanics for the already-initialized fields. This is not RAII — it is a well-defined, bounded exception to the no-implicit-cleanup rule, scoped entirely to the construction failure path.
+The one case where the compiler inserts cleanup automatically is fallible `init()` failure (see oop.md section 11.6). When a fallible `init()` returns an error, the compiler emits field-drop logic in reverse initialization order before returning the error to the caller. This is not silent: it is a specified protocol that is deterministic and part of the construction contract. The programmer declares the failure path with `! ErrorSet`; the compiler handles the cleanup mechanics for the already-initialized fields. This is not RAII — it is a well-defined, bounded exception to the no-implicit-cleanup rule, scoped entirely to the construction failure path.
 
 ---
 
@@ -563,21 +563,83 @@ A `val T` binding designates **writable storage**, so its address is a mutable `
 
 ---
 
-### 8.4 Dereferencing Rules
+### 8.4 Dereferencing and Pointer Const-ness
 
-Bestie has **no implicit dereferencing**.
-
-```bestie
-val v = p.val
-p.val = 42
-```
-
-Const correctness is enforced:
+Bestie has **no implicit dereferencing**. The pointee is always `p.val`. The address the pointer holds is `p.addr` (§8.4.2).
 
 ```bestie
-ptr<const T>  // read-only
-ptr<T>        // mutable
+val v = p.val      // pointee
+p.val = 42         // write through (requires a writable pointee)
 ```
+
+#### 8.4.1 Two axes — the C pointer-const matrix, in Bestie
+
+C splits const across the pointer and the pointee (`int *`, `int * const`, `const int *`, `const int * const`). Bestie uses the two axes it already has. It does **not** invent a third spelling such as `const ptr<T>`:
+
+| Axis | Bestie | What it freezes |
+| ---- | ------ | --------------- |
+| **Binding** | `var` / `val` / `const` | Can this **name** be rebound to a different address? |
+| **Pointee** | `ptr<T>` / `ptr<const T>` | Can you **write through** the pointer? |
+
+`val` / `var` / `const` on the binding is C's `* const` (the pointer variable). `const` inside `ptr<…>` is C's `const T *` (the memory pointed at).
+
+| C | Bestie | Rebind `p`? | Write `p.val`? |
+| - | ------ | ----------- | -------------- |
+| `int * p` | `var p: ptr<int>` | yes | yes |
+| `int * const p` | `val p: ptr<int>` | no | yes |
+| `const int * p` | `var p: ptr<const int>` | yes | no |
+| `const int * const p` | `val p: ptr<const int>` | no | no |
+
+A `const` binding of a pointer is a compile-time-constant address (`const p: ptr<int> = …`) and therefore also non-rebindable; `.address()` of that binding yields `ptr<const ptr<int>>` (§8.3, §8.6).
+
+```bestie
+var p: ptr<int> = x.address()
+p = y.address()     // ✅ rebind — var
+p.val = 1           // ✅ write through — ptr<int>
+
+val q: ptr<int> = x.address()
+q = y.address()     // ❌ val binding cannot be rebound
+q.val = 1           // ✅ pointee is still writable
+
+var r: ptr<const int> = x.address()
+r = y.address()     // ✅ rebind
+r.val = 1           // ❌ ptr<const int> is read-through only
+
+val s: ptr<const int> = x.address()
+s = y.address()     // ❌
+s.val = 1           // ❌
+```
+
+Dropping pointee `const` (`ptr<const T>` → `ptr<T>`) requires `@trusted`. Adding `const` is always allowed (§8.8). Nested pointers apply `const` at each level independently (§8.6).
+
+`@immutable val p: ptr<T>` still only freezes the **binding**. It does not make the pointee read-only — that is `ptr<const T>`. See `immutability.md` §8.
+
+#### 8.4.2 The address word — `p.addr` and `p.toStr()`
+
+`.val` is the pointee. It is not the address. In C, printing `p` prints the address and `*p` prints the value. Bestie keeps that split explicit:
+
+| Expression | Meaning | Type |
+| ---------- | ------- | ---- |
+| `p.val` | pointee (C `*p`) | `T` |
+| `p.addr` | the address `p` holds (C's pointer value) | `uint` |
+| `p.toStr()` | that address as text | `str` |
+| `"${p}"` | interpolation uses `toStr()` — the address, not the pointee | `str` |
+| `p.address()` | pointer **to `p`'s own slot** (C `&p`) | `ptr<ptr<T>>` |
+
+`uint` is pointer-sized (`uintptr_t` — `lang.md` §5.1). `p.addr` is the raw address word: usable in hex logs, FFI, and integer address math. It does not dereference and does not allocate.
+
+```bestie
+var x: int = 7
+val p: ptr<int> = x.address()
+
+p.val          // 7
+p.addr         // e.g. 0x7ffc0100 as uint
+p.toStr()      // "0x7ffc0100"  (0x prefix, hex, width = target.bits)
+```
+
+`p.addr` and `p.toStr()` are valid on both `ptr<T>` and `ptr<const T>` — reading the address is not a write through the pointer.
+
+Do not confuse `p.addr` with `p.address()`: one is the word stored in `p`; the other is a pointer to that word.
 
 ---
 
@@ -702,18 +764,18 @@ Rules:
 ```bestie
 class Server { var port: int; val name: str }
 
-val own s = Server(port: 8080, name: "prod").new()
+val own s = Server.new(port: 8080, name: "prod")
 val pp: ptr<int> = s.port.address()      // interior pointer at the port field's offset
 pp.val = 9090                             // ✅ port is var
 ```
 
 Rules:
 
-* The result points at the field's storage slot, at its compile-time-known offset within the object.
+* The result points at the field's storage slot, at the **compiler-chosen** offset of that field within the packed object (§18.1). The offset is compile-time known for a given compiler and type; it is **not** the source declaration index.
 * Const-ness follows the same two-axis rule as any other address: the **binding** axis sets the pointer's base const-ness (§10.1.2) and the **field**'s own `val`/`var` governs write-through (§10.1.3). A pointer to a `val` field rejects writes even when the pointer is non-const; a pointer derived from a `const` binding is `ptr<const _>`.
 * An interior pointer is valid only while the enclosing object is alive and not moved. If the object is freed or moved, the interior pointer dangles — programmer responsibility, identical to the ephemeral-address rule for value types (§10.1.2, §10.1.5).
 * Interior pointers into a `value class` or other stack/inline value are ephemeral and must not be returned, stored, or sent across threads (§10.1.5).
-* Pointer arithmetic from an interior pointer can walk adjacent fields; the compiler accepts compile-time-provable in-bounds offsets and rejects provable out-of-bounds (§8.5). Everything else is the programmer's responsibility.
+* Pointer arithmetic from an interior pointer walks **in-memory** adjacency after packing, not source order. The compiler accepts compile-time-provable in-bounds offsets and rejects provable out-of-bounds (§8.5). Everything else is the programmer's responsibility.
 
 ---
 
@@ -725,6 +787,8 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 | --------- | ------ | ------- | ----- |
 | `p.val` | `T` | §8.4 | Dereference (read). No implicit deref. On `ptr<const T>`, read-only. |
 | `p.val = x` | — | §8.4 | Dereference (write). Forbidden on `ptr<const T>` and on `val` fields (§10.1.3). |
+| `p.addr` | `uint` | §8.4.2 | The address word `p` holds. Not a dereference. Valid on `ptr<const T>`. |
+| `p.toStr()` | `str` | §8.4.2 | Hex address (`0x…`), width = `target.bits`. Interpolation of `p` uses this. |
 | `p.address()` | `ptr<ptr<T>>` | §8.6 | Address of the pointer's own storage slot. Const-ness per binding (§10.1.2). |
 | `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic; strides by `sizeof(T)`. Provable OOB is a compile error. |
 | `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
@@ -770,7 +834,7 @@ User-defined classes and structs:
 * Are fully addressable
 
 ```bestie
-val own u = User().new()
+val own u = User.new()
 val p = u.address()   // ptr<User>
 ```
 
@@ -893,7 +957,7 @@ The const-ness of the returned pointer reflects whether the target may be mutate
 
 ```bestie
 // class — own binding → mutable pointer
-val own user = User().new()
+val own user = User.new()
 val p1 = user.address()          // ptr<User>
 
 // class — const own is not a thing; use ptr<const User> to pass read-only
@@ -902,11 +966,11 @@ fun inspect(u: ptr<const User>) {
 }
 
 // data class — always const regardless of binding
-var dt: DateTime = DateTime(...).new()
+var dt: DateTime = DateTime.new(...)
 val p4 = dt.address()            // ptr<const DateTime>  — var binding but data class is immutable
 
 // value class — var binding → mutable pointer
-var pt: Point = Point(1, 2).new()
+var pt: Point = Point.new(1, 2)
 val p5 = pt.address()            // ptr<Point>
 ```
 
@@ -928,7 +992,7 @@ class Server {
     val name: str        // immutable field
 }
 
-val own s = Server(port: 8080, name: "prod").new()
+val own s = Server.new(port: 8080, name: "prod")
 val p: ptr<Server> = s.address()
 
 p.val.port = 9090    // ✅ allowed — port is var
@@ -947,10 +1011,10 @@ p2.val.port = 9090   // ❌ compile-time error — ptr<const T> forbids all writ
 **`data class` through `ptr<T>`:** Because all `data class` fields are implicitly `val`, even a `ptr<DataClass>` (non-const) cannot mutate any field — all field assignments are rejected at compile time. The const-ness of the pointer is effectively irrelevant for data classes; both `ptr<T>` and `ptr<const T>` give read-only access.
 
 ```bestie
-var dt: DateTime = DateTime(...).new()
+var dt: DateTime = DateTime.new(...)
 val p: ptr<DateTime> = dt.address()    // ptr<DateTime>, not ptr<const DateTime>
 
-p.val.date = Date(...).new()      // ❌ compile-time error — date is val in data class
+p.val.date = Date.new(...)      // ❌ compile-time error — date is val in data class
 ```
 
 **`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is raw, low-level code) but is the programmer's exclusive responsibility.
@@ -966,14 +1030,14 @@ Protocols are **zero-cost compile-time abstractions**. They have no memory footp
 A variable declared as a protocol type stores the concrete object directly, with the concrete object's layout. The protocol type is a compile-time view — not a separate allocation, not a fat pointer.
 
 ```bestie
-val p: Printable = Circle(radius: 5).new()
+val p: Printable = Circle.new(radius: 5)
 // p stores a Circle — layout is Circle's layout
 // no boxing, no fat pointer, no vtable in p itself
 ```
 
 The concrete type must be statically known at the point of assignment. This means:
 
-* `val p: Printable = Circle().new()` — ✅ concrete type is known at compile time
+* `val p: Printable = Circle.new()` — ✅ concrete type is known at compile time
 * `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `@virtual` instead
 
 `.address()` on a protocol-typed variable resolves to the concrete type's pointer:
@@ -1217,7 +1281,7 @@ Explicitly rejected designs:
 
 ## 18. Object and Tag Layout
 
-This section defines the concrete in-memory layout for every class kind. These rules are stable and must be honored by the IR and codegen stages.
+This section defines the concrete in-memory layout for every class kind. IR and codegen must honor it.
 
 ---
 
@@ -1225,22 +1289,24 @@ This section defines the concrete in-memory layout for every class kind. These r
 
 No object header. No type tag. No vtable pointer.
 
-Fields are laid out in **declaration order**. The compiler may reorder fields for alignment padding reduction, provided it does so consistently and the result is observable only through `ptr<T>` field-offset arithmetic (which is always a programmer responsibility).
+**The compiler always builds the best layout it can.** Source declaration order is not the in-memory order. Fields are reordered and packed to minimize size and padding (C's `char, int, char` wasting a word vs `char, char, int` is a 1970s tax Bestie does not pay). Named field access, `init` assignment, and `.address()` on a field use the packed offsets — the programmer never writes those offsets.
 
 ```
-[ field_0 | field_1 | ... | field_n ]
+[ packed fields — compiler-chosen order, minimum padding ]
 ```
 
-`value class` follows the same rule. It is always inlined at the point of use — stack, or inline within an enclosing object — and is never heap-allocated through `new()`.
+There is no `@layout(stable)`, no `@stable`, and no core annotation that freezes declaration order. Matching a C struct's declared layout is an FFI concern (`bestie.api.foreign` `@repr(C)`), not a language mode.
+
+`value class` follows the same packing rule. It is always inlined at the point of use — stack, or inline within an enclosing object — and is never heap-allocated through `new()`.
 
 ---
 
 ### 18.2 `open class` with `@virtual` — Vtable Layout
 
-An object in a live `@virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before all user-declared fields.
+An object in a live `@virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before the packed user fields.
 
 ```
-[ vtable_ptr | field_0 | field_1 | ... ]
+[ vtable_ptr | packed user fields ]
 ```
 
 The vtable is a read-only, statically allocated table of function pointers. Each `@virtual` method on the class occupies one slot, in declaration order. Slots are inherited from parent classes in the order they appear in the parent's vtable, followed by the subclass's own `@virtual` methods.
@@ -1264,7 +1330,7 @@ Tag size: the smallest unsigned integer that can distinguish all permitted types
 | > 65535 | `uint32` (rare) |
 
 ```
-[ tag: uint8 | padding | field_0 | field_1 | ... ]
+[ tag: uint8 | padding | packed user fields ]
 ```
 
 Tag values are compiler-assigned. The base type's tag = 0 if it is concrete; otherwise tags start at 0 for the first permitted subtype. The assignment is deterministic: permitted types in declaration order receive consecutive tag values starting at 0.
@@ -1324,10 +1390,10 @@ The niche optimization is invisible to user code. `T ?` always behaves as a two-
 
 ### 18.7 Layout Stability Guarantees
 
-* Field order (after compiler reordering) is stable across recompilations of the same source
+* For a given compiler version and target, the same type always receives the same packed layout
 * Vtable slot indices are stable within a compilation unit
 * Tag values for sealed hierarchies and enums are stable within a compilation unit
-* Cross-module ABI stability requires `@stable` annotation (not yet defined — tracked for a future spec revision)
+* There is **no** core annotation that pins declaration-order layout. C ABI matching belongs in `bestie.api.foreign` (`@repr(C)`), not in the language
 
 ---
 

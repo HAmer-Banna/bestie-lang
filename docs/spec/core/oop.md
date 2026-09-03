@@ -288,7 +288,7 @@ Partial implementation with shared logic
 
 * May declare `init()` with shared initialization logic
 * `abstract class` `init()` is only reachable via `super.init(...)` from a concrete subclass
-* Constructing an abstract class (`T(...).new()`) is a compile-time error — instantiation is forbidden
+* Constructing an abstract class (`T.new(...)`) is a compile-time error — instantiation is forbidden
 
 ---
 
@@ -426,8 +426,8 @@ Casting in Bestie is **explicit, directional, and binding-aware**.
 Allowed when moving **from concrete to abstraction**.
 
 ```bestie
-val s: Shape = Circle().new()
-val p: Printable = Circle().new()
+val s: Shape = Circle.new()
+val p: Printable = Circle.new()
 ```
 
 * Always safe
@@ -457,7 +457,7 @@ Rules:
 ### 5.3 Class ↔ Protocol Casting
 
 ```bestie
-val p: Printable = Circle().new()
+val p: Printable = Circle.new()
 val c: Circle = p as Circle
 ```
 
@@ -691,26 +691,38 @@ class Temperature {
 
 ## 11. Construction & Destruction Rules (`init` / `deinit`)
 
-### 11.1 Two-Phase Construction Model
+### 11.1 Construction Call Site — `Type.new(...)`
 
-Construction is written as two explicit, chained steps — **nothing is called implicitly**:
+The only way to construct a value at a call site is **`Type.new(...)`**. Arguments, if any, go on `.new`. There is no separate `Type(...)` expression and no `Type.init(...)` at the call site.
 
 ```bestie
-Connection("localhost", 9000).new()
+User.new()
+User.new(id: 1, name: "alice")
+Connection.new("localhost", 9000)
 ```
 
-1. **`Type(args)` — the initializer expression.** Selects an `init(...)` overload declared on the type (§11.5) and binds its arguments. The call site does **not** write `.init` — `Type(...)` *is* the init selection. It is a **compile-time construction expression, not a value**: it cannot be bound to a variable, stored in a field, passed to a function, or returned. Its only valid continuation is a materialization verb.
-2. **`.new()` — materialization.** Takes **no arguments**. It allocates storage (heap for reference classes, yielding an `own Type`; stack/inline for `value` and `data` classes) and then runs the construction work: the prologue (§11.3), the `super.init(...)` chain, and field initialization (§11.2).
+Internally the language still has two phases; the call site writes one verb:
 
-Both steps together form **one atomic construction** from the caller's perspective. A partially-constructed object is **never observable** by user code — because `Type(args)` is not itself an object, there is no uninitialized instance to observe. The caller receives either a fully-initialized object or an error (§11.6).
+1. **`init(...)` — declaration and internal delegation.** Written only inside the type: the `init(...)` overloads, `super.init(...)`, and `this.init(...)` (§11.3, §11.5). `init` is never part of the external call.
+2. **`.new(...)` — materialization.** Selects the matching `init(...)` overload, allocates storage (heap for reference classes, yielding an `own Type`; stack/inline for `value` and `data` classes), then runs the prologue, the `super.init(...)` chain, and field initialization (§11.2).
 
-`init` remains the **declaration** keyword inside the class body, and `super.init(...)` / `this.init(...)` remain the **internal** delegation forms (§11.3, §11.5). Only the external call site omits the word `init`, to avoid redundant verbosity.
+The two phases are **one atomic construction**. A partially-constructed object is never observable. The caller receives a fully-initialized object or an error (§11.6).
 
-Neither step is implicit: `Type(...)` selects the initializer and supplies its arguments; `.new()` allocates and runs it. Writing bare `Type.new()` is a compile-time error (no initializer expression to run), and `Type(...)` without a trailing `.new()` is an incomplete expression and is likewise rejected. The lifecycle verbs `new()`, `free()`, and `freeDeep()` **all take no arguments** — arguments belong exclusively to the initializer expression / `init(...)` body.
+`new` without arguments is valid when the selected `init` has no required parameters (`User.new()`). `new` with arguments is the usual form (`User.new(id: 1)`).
 
-Construction may be restricted per class via `@noNew` / `@noInit` (§11.8).
+**Rejected at the call site:**
 
-> **Why `Type(args)` then `.new()`, not `.new(args)`:** arguments attach to the initializer — the phase that consumes them — while `new` (allocation) stays argument-free. The reverse chaining (`new().init(...)` or `new(args)`) is deliberately **not** offered: it would either expose the raw, uninitialized allocation as a usable value, or conflate allocation with initialization.
+```bestie
+User()                         // ❌ not a constructor
+User(id: 1).new()              // ❌ Type(args) is not an expression
+User.init(id: 1)               // ❌ init is not callable from outside
+User.init(id: 1).new()         // ❌ verbose form, not in the language
+User.new().init(id: 1)         // ❌ would expose an uninitialized object
+```
+
+`free()` and `freeDeep()` still take **no arguments**. Arguments belong only to `.new(...)`.
+
+Construction may be restricted per class via `@noNew` / `@noInit` (§11.8). Types that are factory-only (`thread.of`, `fiber.of`) reject `.new` entirely — that is a type rule, not a second construction syntax.
 
 ---
 
@@ -789,7 +801,7 @@ data class Point {
     y: int
 }
 // compiler generates: init(x: int, y: int)
-// called as: Point(x: 3, y: 4).new()
+// called as: Point.new(x: 3, y: 4)
 ```
 
 Rules:
@@ -848,7 +860,7 @@ class Connection {
     }
 }
 
-val conn = Connection("localhost", 9000).new() catch |err| { ... }
+val conn = Connection.new("localhost", 9000) catch |err| { ... }
 ```
 
 Rules:
@@ -889,8 +901,8 @@ Rules:
 
 | Annotation | Effect |
 | ------------ | ------- |
-| `@noNew` | Prevents the `.new()` materialization verb at external call sites. Forces use of a factory function. The class may still be materialized internally by a factory. |
-| `@noInit` | Suppresses the compiler-generated memberwise initializer and forbids `Type(...)` at external call sites. Used for types built entirely via static factory methods or FFI. |
+| `@noNew` | Prevents `Type.new(...)` at external call sites. Forces use of a factory function. The class may still be materialized internally by a factory. |
+| `@noInit` | Suppresses the compiler-generated memberwise initializer and forbids `Type.new(...)` at external call sites. Used for types built entirely via static factory methods or FFI. |
 | `@noConstruct` | Combines `@noNew` and `@noInit`. No user-visible construction path exists. Useful for singleton types, opaque handles, and types managed entirely by a runtime or external system. |
 
 ```bestie
@@ -901,9 +913,9 @@ class DbHandle {
 
 fun openDb(dsn: str): DbHandle ! DbError {
     ...
-    return DbHandle(conn).new()    // permitted inside the module
+    return DbHandle.new(conn)    // permitted inside the module
 }
-// DbHandle(...).new() at an external call site → compile-time error
+// DbHandle.new(...) at an external call site → compile-time error
 ```
 
 ---
@@ -922,7 +934,7 @@ class Outer {
     inner: Inner
 
     init() {
-        this.inner = Inner(val: 42).new()    // outer explicitly constructs inner
+        this.inner = Inner.new(val: 42)    // outer explicitly constructs inner
     }
 }
 ```
@@ -1015,7 +1027,7 @@ class Connection {
     }
 }
 
-val own c = Connection("localhost").new() catch |e| { ... }
+val own c = Connection.new("localhost") catch |e| { ... }
 c.free()    // runs c.deinit(), then releases c's storage
 ```
 

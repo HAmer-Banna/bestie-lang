@@ -113,9 +113,9 @@ struct Point {
 }
 ```
 
-* Layout is deterministic
-* No padding surprises
-* Must be explicitly marked if ABI-stable
+Bestie types in ordinary code are **always packed by the compiler** (`core/memory.md` §18.1). Declaration order is not the ABI.
+
+To match a C header's declared layout and padding, mark the foreign type `@repr(C)` — that is an FFI contract, not a core language mode. There is no `@layout(stable)` / `@stable` in core.
 
 ```bestie
 @repr(C)

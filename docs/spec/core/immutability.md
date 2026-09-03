@@ -217,13 +217,23 @@ See `std-lib/collections.md` §4.4 for full examples.
 
 ---
 
-## 8. `ptr<T>` — The Exception
+## 8. `ptr<T>` — Two Axes, Not an Exception
 
-`ptr<T>` is Bestie's raw, low-level pointer (`@trusted` territory) and does not follow the normal immutability model.
+`ptr<T>` uses the same two immutability axes as the rest of Bestie. They map onto C's four pointer-const forms (`memory.md` §8.4.1):
 
-* `val p: ptr<T>` — the pointer cannot be rebound, but writing through it (`p[0] = v`) is still permitted
-* `@immutable val p: ptr<T>` — prevents rebinding, but does **not** prevent writes through the pointer. Pointer writes bypass the language-level immutability model
-* There is no `const T*` analogue in the surface language — pointer target immutability is managed through the `@trusted` discipline in `memory.md`
+* **Binding** (`var` / `val` / `const`) — can this name be rebound to another address? (`int * const`)
+* **Pointee** (`ptr<T>` / `ptr<const T>`) — can you write through the pointer? (`const int *`)
+
+| Declaration | Rebind `p`? | Write `p.val`? |
+| ----------- | ----------- | -------------- |
+| `var p: ptr<T>` | yes | yes |
+| `val p: ptr<T>` | no | yes |
+| `var p: ptr<const T>` | yes | no |
+| `val p: ptr<const T>` | no | no |
+
+* `@immutable val p: ptr<T>` freezes the **binding** only. It does **not** freeze the pointee — write `ptr<const T>` for that
+* The address word is `p.addr` (`uint`); `p.toStr()` / `"${p}"` print that address, not `p.val` (`memory.md` §8.4.2)
+* Index writes (`p[0] = v`) follow the same pointee rule as `p.val = v`
 
 ---
 
@@ -263,7 +273,8 @@ val o : int ? = option.Present(1)
 | `map<K,V>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ✅ literal only |
 | `deque<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
 | `heap<T>` | std-lib class | ❌ | ❌ (binding only) | ✅ new-object model | ✅ hard freeze | ❌ |
-| `ptr<T>` | raw low-level built-in | ❌ | ❌ | ❌ | ⚠️ binding only | ❌ |
+| `ptr<T>` | raw low-level built-in | ❌ | ❌ (`val` = no rebind only) | ❌ | ⚠️ binding only; use `ptr<const T>` for read-through | ❌ |
+| `ptr<const T>` | raw pointer-to-const | pointee: ✅ | binding: depends | ❌ | redundant for the pointee | ❌ |
 | `T ?` / `option<T>` | core syntax / std-lib name | variant: ✅ / contents: depends | depends on T | ❌ | ✅ freezes both layers | ❌ |
 | `T ! E` / `result<T,E>` | core syntax / std-lib name | variant: ✅ / contents: depends | depends on T, E | ❌ | ✅ freezes both layers | ❌ |
 

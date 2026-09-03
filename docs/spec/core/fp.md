@@ -871,7 +871,7 @@ The behavior depends on the type of the bound object.
 **Value types** (`data class`, `value class`, `enum`, primitives) — copy:
 
 ```bestie
-val p = Point(x = 1, y = 2)
+val p = Point.new(x = 1, y = 2)
 val f: fn() -> int = p::getX    // ✅ p is copied into f
 ```
 

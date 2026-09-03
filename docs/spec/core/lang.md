@@ -640,7 +640,7 @@ After construction, the range is a fact the compiler uses: one check at the cons
 
 ### 6.3 Compact Representation Guarantee
 
-The compiler is **obligated** to use the minimum valid representation for every type — enum tags, niches, sealed-class tags, `bool`, `char`. You do not opt in. The exception is `@layout(stable)` for FFI: layout is then exactly as declared.
+The compiler is **obligated** to use the minimum valid representation for every type — enum tags, niches, sealed-class tags, `bool`, `char`, and packed class fields. You do not opt in. There is no `@layout` / `@stable` escape hatch in core; FFI that must match a C header uses `bestie.api.foreign` (`@repr(C)`).
 
 How it packs, which niches exist, and what that does to the object file: `docs/compiler/compiler-architecture.md` (layout compaction).
 
@@ -930,11 +930,7 @@ val x = switch (v) {
 
 ## 13. Loops
 
-Supports:
-
-* `for`
-* `for in`
-* `while`
+Bestie has three loop forms: `for`, `for in`, and `while`. All three are **statements** — a loop is never an expression and never produces a value.
 
 ```bestie
 for (i = 0; i < 10; i += 1) {
@@ -951,6 +947,112 @@ while (i < 10) {
     i += 1
 }
 ```
+
+### 13.1 `break` — Leave the Loop
+
+`break` ends the innermost enclosing loop immediately. Execution resumes at the first statement after that loop.
+
+```bestie
+for (item in items) {
+    if (item.isPoisoned()) {
+        break            // stop scanning entirely
+    }
+    process(item)
+}
+```
+
+### 13.2 `continue` — Next Iteration
+
+`continue` skips the rest of the current iteration and advances the innermost enclosing loop.
+
+| Loop form | `continue` jumps to |
+| --------- | ------------------- |
+| `for (init; cond; update)` | the **update** clause, then the condition |
+| `for (x in xs)` | the next element |
+| `while (cond)` | the condition |
+
+In a C-style `for`, the update clause **always** runs — `continue` cannot skip `i += 1` and cannot produce an accidental infinite loop.
+
+```bestie
+for (i = 0; i < 10; i += 1) {
+    if (i % 2 == 0) {
+        continue         // i += 1 still runs
+    }
+    work(i)
+}
+```
+
+### 13.3 Labeled Loops
+
+A loop may carry a **label** so that `break` / `continue` can target an enclosing loop instead of the innermost one.
+
+```bestie
+outer: for (row in rows) {
+    for (cell in row) {
+        if (cell.isEmpty()) {
+            continue outer     // next row
+        }
+        if (cell.isFatal()) {
+            break outer        // leave both loops
+        }
+        process(cell)
+    }
+}
+```
+
+Rules:
+
+* A label is written `name:` immediately before `for`, `for in`, or `while`
+* Labels attach **only to loops**. Labeling a bare block, an `if`, or a `switch` is a compile-time error — Bestie has no `goto` and no forward jump
+* Label names live in their own namespace; a label never collides with a binding, type, or function of the same name
+* `break name` / `continue name` must appear lexically inside the loop labeled `name`
+* A label may not shadow an enclosing label of the same name
+* An unused label is a compile-time error
+
+The alternative to labels is a flag variable or an extracted function. Both read worse and neither is cheaper: `break outer` lowers to the same single jump.
+
+### 13.4 `break` Is Not a `switch` Terminator
+
+Bestie's `switch` has **no fallthrough** (§12), so `break` is never needed to end a case. Inside a loop, a `break` written in a `switch` case therefore targets the **loop**:
+
+```bestie
+for (msg in queue) {
+    switch (msg.kind) {
+        case Kind.Data  => handle(msg)
+        case Kind.Close => break      // exits the for loop, not the switch
+    }
+}
+```
+
+This differs deliberately from C, Java, and C#, where the same code would only leave the `switch`. `break` has exactly one meaning in Bestie: leave a loop.
+
+### 13.5 Interaction with `defer` and Ownership
+
+`break` and `continue` are ordinary scope exits. Everything that happens on a normal exit still happens:
+
+* Pending `defer` statements execute in LIFO order (§23) for every scope being left — `continue` runs the current iteration's defers; `break` runs the defers of every block it exits, innermost first
+* Ownership accounting (`memory.md` §7) treats the `break` / `continue` path exactly like a `return` path: an `own` value that is still live when control leaves its scope must already have been discharged, or the compiler reports a leak
+
+```bestie
+for (path in paths) {
+    val f = try file.open(path)
+    defer f.close()          // runs on the continue path too
+    if (f.isEmpty()) {
+        continue
+    }
+    process(f)
+}
+```
+
+### 13.6 Rules
+
+* `break` and `continue` are **statements**, never expressions — they carry no value, and no loop yields one
+* `break` / `continue` outside any loop is a compile-time error
+* The unlabeled forms bind to the **innermost enclosing loop**
+* Neither crosses a function boundary: a local `fun` or a lambda body declared inside a loop cannot `break` or `continue` that loop
+* Neither may appear in a `defer` body (§23.4)
+* Statements following `break` / `continue` in the same block are unreachable and are a **compile-time error**
+* Both lower to a single direct jump — no runtime cost, no allocation
 
 ---
 
@@ -1157,10 +1259,12 @@ for (item in items) {
 }
 ```
 
+This includes iterations cut short by `continue`, and the final iteration when a `break` leaves the loop (§13.5).
+
 ### 23.4 Rules
 
 * `defer` executes at the end of its **enclosing scope block**, not the function
-* `defer` body cannot use `return` or `try`
+* `defer` body cannot use `return`, `try`, `break`, or `continue` — a deferred statement runs *during* a scope exit and may not start another one
 * `defer` captures the variables it references **by binding** at declaration time
 * Multiple defers in one scope execute **LIFO**
 * Compile-time lowered — no runtime mechanism

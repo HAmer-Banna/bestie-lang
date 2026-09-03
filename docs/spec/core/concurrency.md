@@ -82,7 +82,7 @@ No inheritance, reflection, or dynamic creation is allowed for the core thread t
 ### 4.1 Forbidden
 
 ```bestie
-val own u = User().new()
+val own u = User.new()
 thread.of(() => use(u))    // ❌ compile error: implicit ownership sharing
 ```
 
@@ -91,7 +91,7 @@ thread.of(() => use(u))    // ❌ compile error: implicit ownership sharing
 Ownership may be moved into a thread explicitly. The source binding becomes invalid immediately.
 
 ```bestie
-val own u = User().new()
+val own u = User.new()
 thread.of(move u, (own user: User) => use(user))   // ✅
 
 use(u)    // ❌ compile error: moved value
