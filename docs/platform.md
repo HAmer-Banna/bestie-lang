@@ -72,7 +72,7 @@ core → std-lib → std-api → (optional std-framework)
 | **Std-api** | **Talking to the outside**: OS, files, console, HTTP, FFI, MMIO | Allowed to evolve with platforms |
 | **Std-framework** | Bestie in the real world (optional; third-party install is fine) | Most likely to change |
 
-Direction of dependency is always **core → lib → api** (then optional framework). A higher layer does not redefine a lower-layer name. If a helper in lib and a type in api would collide, **lib wins**; api picks another name.
+Layers are ordered by **change appetite**, not by dependency direction: core may name a lib or api type, but core alone defines what its own syntax *means* (see §12). A higher layer does not redefine a lower-layer name. If a helper in lib and a type in api would collide, **lib wins**; api picks another name.
 
 This split exists so Bestie does not repeat Java module headaches, Python 2→3, or JavaScript `==` vs `===`. Core stays small so it can stay stable. Std-lib is not "outside the language."
 
@@ -259,6 +259,32 @@ Bestie v<lang>.<compiler>.<std-lib>.<std-api>
 
 Major version increases only when **core semantics change**.
 
+### Enforcement
+
+Version numbers are a compiler-checked contract, not documentation. A project declares the floor it targets:
+
+```toml
+[requirements]
+lang = "1.0"
+api  = "2.4"
+lib  = "1.2"
+```
+
+Two annotations make that checkable (`core/annotations.md`):
+
+* `@since(version)` — the layer version a symbol first appeared in. Using a symbol newer than the declared floor is a compile-time error.
+* `@deprecated(reason, replacement, since, removedIn)` — warns at every use site, and becomes an error once the declared version reaches `removedIn`.
+
+### What may be retired, by layer
+
+| Layer | Deprecation policy |
+| ----- | ------------------ |
+| **Core** | Effectively never. Removing core syntax is a `lang` major bump and a language break |
+| **Std-lib** | Conservative, with a stated `removedIn` — **except** symbols cited by core (§12), which cannot be deprecated at all |
+| **Std-api** | Freely, with a stated `removedIn`, as platforms change |
+
+This is the operational form of the cite/delegate rule in §12: citation is what moves a std-lib symbol from the "retirable" column to the "permanent" one, and `core/lang.md` §27 is the authoritative list of which ones have moved.
+
 ---
 
 ## 7. Binary Model
@@ -380,17 +406,41 @@ postgres_driver = "0.9.0"
 
 ## 12. Architectural Guarantee
 
-Bestie enforces strict layering:
+Bestie layers by **change appetite**, not by dependency direction:
 
 ```
-core → std-lib → std-api → std-framework
+core → std-lib → std-api
 ```
 
-* Lower layers never depend on higher layers
-* Core remains sealed
+Core is allowed to name types that live in a higher layer, the same way C's
+`sizeof` yields a `size_t` that is declared in `stddef.h`. What core must never
+do is hand a higher layer the **meaning of its own syntax**.
+
+### Cite, don't delegate
+
+* **Citing is allowed.** Core may refer to a lib or api name in a signature, an
+  example, or a constraint (`array<T>.toList(): list<T>`, `range<T>` requiring
+  `Comparable`). This does not make lib part of core.
+* **Delegating is forbidden.** The meaning of a keyword, an operator, or a
+  statement form is always defined in core. Core says what `a + b` lowers to and
+  what `for (x in xs)` requires; lib supplies the protocols that satisfy it.
+* **A cited name is frozen.** Once core names a lib symbol, that symbol's name
+  and shape are part of the language contract and cannot be renamed or removed
+  — exactly as `size_t` and `FILE` are permanently fixed by the C standard
+  citing them. Everything lib does *not* export to core stays freely
+  deprecatable.
+
+This is what makes the split load-bearing: `ptr<T>` and `Iterator.next()` are
+stable because core depends on them by name, while `Arena` can be dropped in a
+later release because nothing in core mentions it.
+
+### Remaining invariants
+
+* Core remains sealed — its syntax and semantics change only under §6 versioning
 * Performance guarantees originate from core
 * Higher layers cannot weaken core ownership/safety semantics
 * Higher layers may trade performance for ergonomics
+* When a lib helper and an api type would collide on a name, **lib wins**
 
 This separation ensures:
 

@@ -185,6 +185,8 @@ The key distinction: `array<T>` is **static** (fixed capacity, panics on overflo
 
 ### 3.1 Defaults
 
+**This package owns these defaults.** `core/lang.md` §5.4 fixes only that an unannotated `{k: v, ...}` literal is a `map<K,V>` and that `K` must satisfy the cited `hash()`; which representation backs it is decided here, so a new variation can be added without a language change.
+
 * `list<T>` → array-backed resizable
 * `set<T>` → hash
 * `map<K,V>` → hash
@@ -530,12 +532,27 @@ Conversions between collections are **explicit method calls**.
 No implicit coercion between collection types ever occurs.
 Every conversion method allocates a new collection.
 
+**Conversions *from* a core type are extension functions declared here, not core methods.** `array<T>` and `slice<T>` are core types (`core/types.md` §5–6), but a method that returns a `list<T>` or a `set<T>` belongs to the layer that owns `list` and `set` — otherwise core's surface is pinned to this package's type names. This mirrors the split core already applies to `str`: core has `byteSize()` and `chars()`; `substring()` and `toInt()` are extensions in `bestie.lib.strings`.
+
+```bestie
+import bestie.lib.collections
+
+val arr : array<int>[] = {1, 2, 3}
+val ls = arr.toList()        // extension declared here
+val xs = arr.toSet()         // extension declared here
+```
+
+Extension functions are statically resolved and monomorphized (`core/fp.md` §11.2) — calling `arr.toList()` costs exactly what a built-in method would.
+
 ### 9.1 Conversion Table
+
+Rows marked **ext** are extension functions on a core type, declared in this package. The rest are ordinary methods on this package's own types.
 
 | Source | Method | Target | Notes |
 | ------ | ------ | ------ | ----- |
-| `array<T>` | `toList()` | `list<T>` | New array-backed list |
-| `array<T>` | `toSet()` | `set<T>` | New hash set; deduplicates |
+| `array<T>` | `toList()` **ext** | `list<T>` | New array-backed list |
+| `array<T>` | `toSet()` **ext** | `set<T>` | New hash set; deduplicates |
+| `slice<T>` | `toList()` **ext** | `list<T>` | New owned list; O(n) copy |
 | `list<T>` | `toArray()` | `array<T>` | New array with capacity = `size()` |
 | `list<T>` | `toSet()` | `set<T>` | New hash set; deduplicates |
 | `set<T>` | `toList()` | `list<T>` | New list in iteration order |

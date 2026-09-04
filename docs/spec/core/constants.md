@@ -28,7 +28,7 @@ All fields are resolved at compile time to string or integer constants. Because 
 
 ### 1.1 Custom Flags
 
-Custom flags are declared in the build configuration (`bestie-project.toml`) and accessed via `target.flag`:
+Custom flags are declared by the toolchain's build configuration and accessed via `target.flag`:
 
 ```bestie
 when (target.flag("ENABLE_SIMD")) {
@@ -49,7 +49,7 @@ Flags that are not declared are `false` by default — **no runtime check, no li
 | `build.mode`  | `str`  | `"debug"`, `"release"`  |
 | `build.debug` | `bool` | `true` in debug builds  |
 
-`build.mode` is set in `bestie-project.toml` and is the same switch that governs signed-overflow trapping (`core/lang.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:
+`build.mode` is selected by the toolchain and is the same switch that governs signed-overflow trapping (`core/lang.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:
 
 ```bestie
 when (build.debug) {

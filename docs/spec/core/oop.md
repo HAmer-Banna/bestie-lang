@@ -205,6 +205,64 @@ enum Status<T> {
 * Tag-only enums lower to compact integer tags
 * Always thread-safe
 
+#### Explicit Discriminants
+
+A tag-only `enum` may pin each variant's integer value. This is required whenever the value crosses a boundary Bestie does not control — a C header, a wire format, an on-disk record, a hardware register:
+
+```bestie
+enum Errno as int32 {
+    Ok            = 0,
+    NotFound      = 2,
+    PermissionDenied = 13,
+    Interrupted   = 4
+}
+
+enum HttpStatus as uint16 {
+    Ok       = 200,
+    NotFound = 404,
+    Teapot   = 418
+}
+```
+
+Rules:
+
+* `as T` names the underlying integer type. Without it the compiler chooses the smallest type that fits (`memory.md` §18.4) and no discriminant may be written.
+* With `as T`, every value must be a compile-time constant in `T`'s range, and every variant must have one — partial assignment is a compile-time error, because implicit "continue from the last one" is exactly the C rule that makes reordering a silent break.
+* Values need not be contiguous or ascending. **Duplicates are a compile-time error** — two names for one value would break exhaustive `switch` and round-tripping.
+* `e as T` yields the discriminant. The reverse is checked and fallible: `try (n as Errno)` returns `! RangeError` for an unlisted value. There is no unchecked integer-to-enum conversion outside `@trusted`.
+* Explicit discriminants apply to **tag-only** enums. A payload variant has no single integer value; for a tagged union with a fixed wire tag, model the tag as its own `enum as T` field.
+* The written values are part of the type's contract. Reordering variants does not change them — that is the point.
+
+Without `as T`, tag values are compiler-assigned and stable only within a compilation unit (`memory.md` §18.7); do not persist or transmit them.
+
+#### Enum Members
+
+An `enum` may declare `const` values and methods, since neither introduces mutable state:
+
+```bestie
+enum Direction {
+    North, South, East, West
+
+    const COUNT: int = 4
+
+    fun opposite(): Direction = switch (this) {
+        case Direction.North => Direction.South
+        case Direction.South => Direction.North
+        case Direction.East  => Direction.West
+        case Direction.West  => Direction.East
+    }
+}
+```
+
+Rules:
+
+* Methods are statically dispatched, follow ordinary method rules, and may not be `@virtual`
+* Fields are forbidden — a `const` is a compile-time value in the type's namespace, not per-instance storage
+* `this` is the enum value; for a payload variant, match on it to reach the payload
+* Type-level members (`static`) follow section 13
+
+There is deliberately no built-in `values()`, `name()`, or `ordinal()`. Each would either require runtime metadata (which core does not emit) or bake a reflection-shaped API into a sealed layer. An exhaustive `switch` covers the cases `name()` is normally used for, and `enum ... as T` covers `ordinal()`. A `values()`-style listing over a closed set is a `bestie.lib` concern.
+
 ---
 
 ### 3.4 class
@@ -576,14 +634,38 @@ Inheritance in Bestie is explicit:
 | `public`    | Visible outside the module (exported API)         |
 | `internal`    | Visible anywhere within the same module (default) |
 | `protected` | Visible to subclasses only                        |
-| `private`   | Visible inside the declaring type only            |
+| `private`   | Visible inside the declaring type — or, at top level, inside the declaring **file** |
 
 **Rules:**
 
 * `internal` is the default — no modifier means `internal`
-* Top-level declarations cannot be `private`
 * `protected` applies only within inheritance hierarchies
 * Inner declarations cannot widen visibility beyond their enclosing declaration
+
+**`private` at top level is file-private.**
+
+`private` always means "the smallest enclosing declaration." Inside a type that is the type; at top level there is no enclosing type, so the smallest enclosing declaration is the **file**:
+
+```bestie
+private class JsonWriter impl Serializer {   // usable only in this file
+    fun write(v: Value): str { ... }
+}
+
+public fun encode(v: Value): str {
+    return JsonWriter.new().write(v)          // fine — same file
+}
+```
+
+This is the mechanism behind the "file-private helper" idiom used in section 4.3 and `core/fp.md` §16.1: a multi-method protocol is implemented by a named class that never becomes part of the module's surface.
+
+The file is already a meaningful scope in Bestie — `sealed` declarations are file-scoped (section 12), and a sealed hierarchy's permitted types must all live in one file. Top-level `private` uses the same boundary.
+
+Rules:
+
+* A top-level `private` declaration is visible only within its `.bst` file, regardless of package or module
+* It can never be exported (`modules-and-packaging.md` §7.2)
+* It does not participate in a module's `exports` list, and listing it is a compile-time error
+* Two files in the same module may each declare a `private` symbol of the same name without collision
 
 ---
 
@@ -810,6 +892,21 @@ Rules:
 * For a derived class with no explicit `init()`, the compiler generates a memberwise init that calls `super.init(...)` for the base fields first, then initializes derived fields, in declaration order.
 * `data class` and `value class` always receive a compiler-generated memberwise init unless `@noInit` suppresses it.
 * If a field has no default value and no `init()` is declared, the field **must** appear as a parameter in the generated init — there is no zero-initialization of arbitrary types.
+
+**No header constructor.** Bestie has no primary-constructor syntax — a class never declares parameters on its own declaration line:
+
+```bestie
+class UserService(val db: Database, val logger: Logger)   // ❌ not Bestie
+
+class UserService {                                        // ✅
+    val ref db: Database
+    val ref logger: Logger
+}
+// generated: init(db: Database, logger: Logger)
+// called as: UserService.new(db: theDb, logger: theLogger)
+```
+
+The generated memberwise initializer already provides everything a header constructor would, from a declaration that also states each field's ownership qualifier (`memory.md` §10.1.1) — which a parameter list has no natural place for. Adding a second spelling for the same construction would mean two places to look for a field list, and Bestie keeps one spelling per idea.
 
 ---
 
@@ -1126,7 +1223,54 @@ Rules:
 
 ---
 
-## 13. Thread Safety Guarantees
+## 13. Type-Level Members (`static`)
+
+A `static` member belongs to the **type**, not to an instance. It is the mechanism behind `thread.of(...)`, `Channel<T>.of(16)`, `int32.MAX`, and every factory the standard library exposes.
+
+```bestie
+class Connection {
+    val host: str
+
+    static const DEFAULT_PORT: int = 5432
+
+    static fun open(host: str): own Connection ! ConnError {
+        return Connection.new(host)
+    }
+}
+
+val port = Connection.DEFAULT_PORT
+val own c = try Connection.open("db.local")
+```
+
+**Rules:**
+
+* `static` applies to `fun` and `const`. There is **no static `var`** — mutable global state is not created by a keyword. A process-wide mutable value needs `threadlocal` (`concurrency.md` §7) or an explicit atomic/lock from `bestie.lib.concurrency`.
+* A `static fun` has no `this` and cannot call instance methods or read fields. Access is always qualified by the type: `Connection.open(...)`, never through an instance.
+* `static` members are **not inherited into a subclass's namespace** and are never `@virtual`. `Base.make()` and `Derived.make()` are unrelated declarations; there is no static dispatch surprise because there is no static dispatch at all — the call is resolved to one function at compile time.
+* Visibility modifiers apply normally. A `private static fun` is reachable only inside the declaring type (or file, for a top-level type — section 7).
+* Every class kind may declare them: `class`, `open class`, `abstract class`, `data class`, `value class`, `enum`, and `protocol`. On a `protocol`, a `static fun` must have a body — a protocol has no instances and cannot require a type-level member of its implementors.
+* A `static const` follows `lang.md` §4.1: inlined as an immediate, zero bytes of data unless its address is taken.
+* Lowered to a plain mangled function or a `.rodata` constant. There is no per-type object, no class metadata, and no initialization order problem — a `static const` is compile-time evaluated, so there is nothing to run at startup.
+
+**Why this is the factory mechanism.** `@noNew` (section 11.8) forbids `Type.new(...)` at external call sites and directs callers to a factory; `static fun` is where that factory lives. `thread` and `fiber` are exactly this shape — construction is refused, and `of` is a type-level function:
+
+```bestie
+@noNew
+class DbHandle {
+    init(conn: RawConn) { ... }
+
+    static fun open(dsn: str): own DbHandle ! DbError { ... }
+}
+
+val own h = try DbHandle.open("postgres://...")   // ✅
+val own g = DbHandle.new(conn)                    // ❌ @noNew
+```
+
+**What `static` is not.** It is not a companion object, not a namespace for free functions, and not a singleton mechanism. A function that needs no type at all should be a top-level `fun` — Bestie has no rule forcing functions into classes. Bestie has no language-level singleton (section 15); `bestie.lib.patterns` provides `Lazy` / `Once` for that.
+
+---
+
+## 14. Thread Safety Guarantees
 
 Thread safety comes from the **type**, not the binding. `val` makes a binding immutable — it does not make the value deeply immutable or safe to share across threads.
 
@@ -1154,19 +1298,19 @@ User responsibility:
 
 ---
 
-## 14. What Bestie Deliberately Avoids
+## 15. What Bestie Deliberately Avoids
 
 * Implicit virtual methods
 * Multiple inheritance
 * General-purpose runtime RTTI APIs
 * Reflection-based dispatch
 * Fragile base classes
-* Language-level singleton types
+* Language-level singleton types (section 13 explains what `static` does and does not give you)
 * Anonymous classes / inline object expressions (use a named class or a lambda — see section 4.3)
 
 ---
 
-## 15. Summary
+## 16. Summary
 
 Bestie OOP is a **compiler-driven object model** with:
 

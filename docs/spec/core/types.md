@@ -107,19 +107,16 @@ Signed integers support:
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
 | `toStr()` | `str` | Decimal text by default |
-| `abs()` | same type | Absolute value |
-| `isZero()` | `bool` | Fast zero test |
-| `sign()` | `int8` | `-1`, `0`, or `1` |
-| `countOnes()` | `int` | Population count |
-| `leadingZeros()` | `int` | Bit width dependent |
-| `trailingZeros()` | `int` | Bit width dependent |
+| `toInt8()` … `toFloat64()` | target type | Explicit conversion (§2.1) |
+
+Arithmetic and bit helpers (`abs`, `sign`, `isZero`, `countOnes`, `leadingZeros`, `trailingZeros`, …) are extension functions in `bestie.lib.math` — see §2.7.
 
 Example:
 
 ```bestie
 val n: int = -42
-val s = n.toStr()
-val a = n.abs()
+val s = n.toStr()          // core
+val big = n.toInt64()      // core
 ```
 
 ---
@@ -151,19 +148,15 @@ Unsigned integers support:
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
 | `toStr()` | `str` | Decimal text by default |
-| `isZero()` | `bool` | Fast zero test |
-| `countOnes()` | `int` | Population count |
-| `leadingZeros()` | `int` | Bit width dependent |
-| `trailingZeros()` | `int` | Bit width dependent |
+| `toUInt8()` … `toFloat64()` | target type | Explicit conversion (§2.1) |
+
+Bit helpers live in `bestie.lib.math` — see §2.7.
 
 Example:
 
 ```bestie
-val mask: uint32 = 0xFF00_FF00
-val bits = mask.countOnes()
-
 val raw: byte = 0x41
-val text = raw.toStr()
+val text = raw.toStr()     // core
 ```
 
 ---
@@ -191,16 +184,14 @@ Floating-point values support:
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
 | `toStr()` | `str` | Explicit textual conversion |
-| `abs()` | same type | Absolute value |
-| `floor()` | same type | Rounds toward negative infinity |
-| `ceil()` | same type | Rounds toward positive infinity |
-| `round()` | same type | Rounds to nearest |
-| `trunc()` | same type | Drops fractional part |
+| `toFloat32()` / `toFloat64()` / `toInt*()` | target type | Explicit conversion (§2.1) |
 | `isNaN()` | `bool` | IEEE 754 NaN check |
 | `isInfinite()` | `bool` | Positive or negative infinity |
 | `isFinite()` | `bool` | True when neither NaN nor infinity |
 
-Higher-level math such as `sqrt`, `pow`, trigonometry, and linear algebra remains in `bestie.lib.math`.
+The three classification predicates stay in core because `core/constants.md` §3.2 makes them normative: `T.NAN` is never equal to itself, so `.isNaN()` — not `== float64.NAN` — is the *only* correct test, and core must supply the operation it mandates.
+
+Rounding and sign helpers (`abs`, `floor`, `ceil`, `round`, `trunc`) are extension functions in `bestie.lib.math` — see §2.7 — alongside `sqrt`, `pow`, trigonometry, and linear algebra.
 
 ---
 
@@ -249,9 +240,33 @@ It is not a UTF-16 code unit and not a byte.
 | ------ | ------- | ----- |
 | `toStr()` | `str` | Single-character string |
 | `toInt32()` | `int32` | Unicode scalar value |
-| `isAscii()` | `bool` | `0..=127` only |
 
-Text-shaping behavior such as locale-aware casing, normalization, and segmentation belongs in `std-lib`.
+Classification (`isAscii`, `isDigit`, `isLetter`, …) is provided by `bestie.lib.strings`. Text-shaping behavior such as locale-aware casing, normalization, and segmentation belongs there too.
+
+---
+
+### 2.7 Numeric Helpers Live in `bestie.lib.math`
+
+Core keeps exactly two things on a numeric primitive:
+
+* **Operators** — `+`, `-`, `*`, `/`, `%`, comparisons, bitwise, compound assignment. The compiler lowers these directly (`lang.md` §15).
+* **Explicit conversions** — `toStr()`, `toInt64()`, `toFloat32()`, and the rest of §2.1. These are semantic: they are the method spelling of the `as` casting rules, and core owns casting.
+
+Everything else — `abs`, `sign`, `isZero`, `countOnes`, `leadingZeros`, `trailingZeros`, `floor`, `ceil`, `round`, `trunc` — is an **extension function** in `bestie.lib.math`:
+
+```bestie
+import bestie.lib.math
+
+val n: int = -42
+val a = n.abs()                    // lib extension, reads as a method
+val bits = 0xFF00_FF00.countOnes() // lib extension
+```
+
+This is the same split core already applies to `str` (§3): core `str` has `byteSize()`, `char(i)`, and `chars()`; `substring`, `split`, `trim`, and `toInt()` are lib extensions.
+
+**Why:** these helpers are the part of the numeric surface that will keep growing — `rotateLeft`, `nextPowerOfTwo`, `copySign`, `clamp`, `saturatingAbs`. A programmer who does not know Bestie has `countOnes` has learned nothing wrong about the language; a programmer who does not know Bestie has `data class` has. Freezing the growable half into core would mean every future addition is a core release, for no gain: an extension function is statically resolved and monomorphized, so `n.abs()` compiles to exactly the same instruction either way (`fp.md` §11.2).
+
+The **operators** are the part that must never move, and they stay.
 
 ---
 
@@ -459,10 +474,19 @@ A slice is governed by borrow rules — see §6 for the full semantics. Out-of-r
 | `capacity()` | `int` | Fixed maximum number of elements |
 | `isEmpty()` | `bool` | True when no elements have been added |
 | `isFull()` | `bool` | True when `size() == capacity()` |
-| `toList()` | `list<T>` | New array-backed list containing all current elements |
-| `toSet()` | `set<T>` | New hash set containing all current elements (deduplicates) |
 
 Accessing a nonexistent index and adding beyond capacity are both **panics** — they represent violated invariants, not recoverable failures. See `exceptions.md`.
+
+**Conversions to std-lib collections** (`toList()`, `toSet()`) are **extension functions** in `bestie.lib.collections`, not core methods — the same split core already applies to `str` (§3: parsing and text operations are lib extensions). They read as methods at the call site and cost nothing extra:
+
+```bestie
+import bestie.lib.collections
+
+val ls = arr.toList()   // list<int>
+val xs = arr.toSet()    // set<int>, deduplicated
+```
+
+Core owns `array<T>`'s storage, indexing, and slicing. Everything that produces a *different* collection belongs to the layer that owns that collection — see `std-lib/collections.md` §9.
 
 ### Iteration
 
@@ -641,7 +665,8 @@ Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. W
 | `size()` | `int` | Number of elements in the view |
 | `isEmpty()` | `bool` | True when `size() == 0` |
 | `toArray()` | `array<T>` | New owned array (O(n) copy — explicit) |
-| `toList()` | `list<T>` | New owned list (O(n) copy — explicit) |
+
+`toList()` is an extension function in `bestie.lib.collections`, for the same reason as on `array<T>` above.
 
 A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing, and re-slicing all behave exactly as they do on `array<T>`. Element access is a single contiguous load — pointer arithmetic, no indirection.
 
@@ -662,6 +687,8 @@ A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing,
 
 A `slice<var T>` is exclusive: while it is alive, no other access to the overlapped region is permitted. A read `slice<T>` may coexist with other read views of the same region.
 
+> **Why `slice<var T>` and not `slice<const T>`.** `ptr<T>` and `slice<T>` mark write-through on opposite defaults, and that is deliberate rather than an inconsistency. A `ptr<T>` exists to reach and change memory, so mutability is its default and `const` is the restriction (`memory.md` §8.4.1 — this also mirrors C's four pointer forms exactly, which is the point of that spelling). A `slice<T>` exists to *look at* a run of elements, so read-only is its default and `var` is the escalation. Each type's default is the one it is for, and the marker is always the departure from that default. Both use a qualifier Bestie already has; neither introduces a third spelling.
+
 ### Immutable Sources
 
 Slicing immutable storage is always safe and never requires a copy:
@@ -673,7 +700,7 @@ Slicing immutable storage is always safe and never requires a copy:
 
 `slice<T>` has **value-class semantics** — no object header, no vtable, no identity, no heap. It is a fat pointer (base + length) passed in registers. This is what keeps slicing zero-cost: taking a slice is two register writes, and indexing through it is the same single load as indexing the underlying array.
 
-> What slicing does **not** do: it never copies, never allocates, and never owns. To obtain an owned, escapable copy, call `.toArray()` or `.toList()` explicitly. Only contiguous sources produce a `slice<T>`; non-contiguous collections are covered in `std-lib/collections.md`.
+> What slicing does **not** do: it never copies, never allocates, and never owns. To obtain an owned, escapable copy, call `.toArray()` explicitly (or `.toList()`, with `bestie.lib.collections` imported). Only contiguous sources produce a `slice<T>`; non-contiguous collections are covered in `std-lib/collections.md`.
 
 ---
 
@@ -833,7 +860,20 @@ The named type `result<T, E>`, its constructors (`Ok` / `Err`), and any helper m
 
 Function signatures should use `T ! E`. Do not invent a second error API.
 
-A function may not return both `?` and `!` on the same slot (`T ? ! E` is rejected). Absence and failure are different: use `T ?` for “no value”, `T ! E` for “this failed”.
+A function may not use `?` and `!` interchangeably for the same idea. Absence and failure are different: use `T ?` for “no value”, `T ! E` for “this failed”. Writing one where the other is meant — `parse(s: str): int ?`, hiding *why* it failed — is the mistake this rule exists to prevent.
+
+#### Stacking `?` and `!` — open question
+
+Whether `T ? ! E` is a legal return type is **not yet settled**, and the two readings differ:
+
+* **Rejected** (the rule as previously written): a function returns absence *or* failure, never both. Simple, and it forces an author to decide which concept they actually mean.
+* **Permitted**: the value slot holds `T ?` and the error slot holds `E`. These are already separate registers in the `!` ABI (`exceptions.md` §3.6), so the form costs nothing and describes a shape that genuinely occurs — an operation that can legitimately produce nothing *and* can legitimately fail.
+
+The case that forces the question is a **fallible iterator**. `bestie.api.fs`'s `DirIterator.next()` must express three outcomes: the next entry, a clean end of directory, and a read error. Collapsing any two of them loses information — making end-of-directory an error variant is wrong, and dropping the error is worse. Lookups over fallible storage (a cache, a database, a memory-mapped table) have the same shape.
+
+The workarounds available under the strict reading are all worse: an `End` error variant misrepresents normal termination; a separate `hasNext()` requires lookahead and races; a stateful `error()` checked after the loop is the `feof`/`ferror` model Bestie otherwise rejects. The `for/in` contract (`lang.md` §13) also requires `next(): T ?`, so a fallible iterator has no conforming shape at all today.
+
+Until this is decided, `std-api/fs.md` writes `Path ? ! FsError` and this is the only place in the standard library that does. Resolving it one way or the other is a core change under `platform.md` §6.
 
 ---
 
@@ -845,7 +885,7 @@ Bestie's core type surface is intentionally compact:
 * `bool`, `char`, and `str` expose explicit core operations only
 * `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms. Named `option<T>` / `result<T, E>` live in `bestie.lib.utilities`
 * Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
-* `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()` / `.toList()`)
+* `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()`; `.toList()` via `bestie.lib.collections`)
 * Conversions are explicit
 * `ptr<T>` remains isolated in `memory.md`
 * `list<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`

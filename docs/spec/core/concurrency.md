@@ -52,9 +52,10 @@ val t = thread.of(() => work())
 | ---------------------- | --------------------------------------------------------- |
 | `join()`               | Waits until the thread finishes                           |
 | `isAlive(): bool`      | Checks if the thread is still running                     |
-| `priority(level: int)` | Suggests execution priority (optional, platform-specific) |
 | `id(): int`            | Returns thread identifier                                 |
 | `interrupt()`          | Signals cancellation — must be handled explicitly in body |
+
+This is the whole core surface: **spawn, observe, join, signal**. Scheduling policy — priority, affinity, stack size, naming — is platform-specific and lives in `bestie.api.os`, which is the layer allowed to track what each OS actually offers. `interrupt()` stays because it is the primitive `bestie.lib.concurrency`'s `CancellationToken` is built on.
 
 ---
 
@@ -235,7 +236,69 @@ There is no ceremony. `counter` is a variable. The compiler routes reads and wri
 
 ---
 
-## 8. What Core Does Not Include
+## 8. Memory Model
+
+Whether two threads may touch the same memory, and what each is guaranteed to see, is a **language** question: no library can define it, because the answer constrains what the optimizer and the CPU are allowed to reorder. Core defines it here. `bestie.lib.concurrency` supplies the `atomic<T>` and `Lock` types that make use of it.
+
+### 8.1 Data Race
+
+A **data race** occurs when two threads access the same memory location, at least one access is a write, the accesses are not ordered by a happens-before edge (§8.2), and neither is an atomic operation.
+
+**A data race is undefined behavior.** It is the one place in Bestie where the compiler will not save you, and it is reachable only through `ptr<T>` — the constructs that carry ownership (`own`, `ref` fields, moves) cannot produce one, because `own` cannot be implicitly shared (§4) and the compiler rejects the attempt.
+
+This is the same deal as the rest of the `ptr` axis (`memory.md` §15): the boundary is explicit in source, and past it the invariant is yours.
+
+### 8.2 Happens-Before
+
+Core guarantees the following edges. Everything written before the edge is visible to everything sequenced after it, with no explicit fence:
+
+| Edge | Guarantee |
+| ---- | --------- |
+| **Program order** | Within one thread, effects appear in source order |
+| **Spawn** | Everything the parent did before `thread.of(...)` happens-before the thread body begins |
+| **Join** | Everything the thread body did happens-before `t.join()` returns |
+| **Move** | A `move` across a spawn boundary carries the moved object's full prior state; the receiver observes it completely initialized |
+| **Transitivity** | If A happens-before B and B happens-before C, then A happens-before C |
+
+These edges are what make the ownership rules sound: transferring an `own` value into a thread needs no synchronization because the spawn edge already orders it.
+
+Fibers run on a host `thread` and add no edges of their own — two fibers on the same scheduler are ordered by that thread's program order (`std-lib/concurrency.md` §3).
+
+### 8.3 Atomic Ordering
+
+An atomic operation carries an **ordering** that says which non-atomic accesses around it are constrained. Core fixes the vocabulary and the meanings; `bestie.lib.concurrency` provides `atomic<T>`, whose operations take one of these:
+
+| Ordering | Meaning |
+| -------- | ------- |
+| `relaxed` | Atomic with respect to this location only. No ordering of other accesses. Safe for counters whose value is read later under some other edge |
+| `acquire` | On a load: no subsequent access in this thread may be reordered before it. Pairs with a `release` store to give a happens-before edge |
+| `release` | On a store: no prior access in this thread may be reordered after it. Pairs with an `acquire` load |
+| `acqRel` | On a read-modify-write: `acquire` on the read, `release` on the write |
+| `seqCst` | As above, plus a single total order over all `seqCst` operations that every thread agrees on |
+
+**A `release` store observed by an `acquire` load of the same location creates a happens-before edge** between the storing and loading threads. This is the primitive every lock, channel, and lock-free structure is built from.
+
+Bestie has **no default ordering**. `atomic<T>` operations name theirs, because a silently-`seqCst` default is a hidden cost on architectures where it means a fence, and a silently-`relaxed` default is a hidden bug. This is the same rule as everywhere else in the language: the cost is written down.
+
+Atomic operations are never data races, whatever their ordering.
+
+### 8.4 What Core Guarantees About Layout
+
+* An access to a value of a primitive type, a `ptr<T>`, or any type at most one machine word wide and naturally aligned is a **single memory access**. The compiler will not split it into narrower accesses, and will not fabricate a write to a location the program did not write.
+* Distinct fields of an object are distinct memory locations. Writing one field never writes another, so two threads touching two different fields of the same object do not race — field packing (`memory.md` §18.1) never merges independent fields into one access.
+* Adjacent `bool` fields are byte-sized, not bit-packed, precisely so that this holds (`docs/compiler/compiler-architecture.md`).
+* Values wider than a machine word have no atomicity guarantee. Sharing one across threads requires a `Lock`, or ownership transfer.
+
+### 8.5 What Core Does Not Guarantee
+
+* That a `ptr<T>` shared across threads is race-free — that is programmer-owned (§5, `memory.md` §14)
+* Any ordering between accesses to *different* locations, absent an edge from §8.2 or a `release`/`acquire` pair
+* Progress. A spin loop with no atomic operation and no yield may be optimized as the compiler sees fit; use `atomic<T>` or a `Lock`
+* Anything about memory the program did not allocate — MMIO has its own rules (`std-api/memory.md` §5), and volatile semantics are **not** implied by any ordering above
+
+---
+
+## 9. What Core Does Not Include
 
 Core provides `thread` and `threadlocal`. Everything else is **`bestie.lib.concurrency`**, built on top:
 
@@ -251,7 +314,7 @@ Actors, structured concurrency, and reactive pipelines belong in frameworks or a
 
 ---
 
-## 9. Summary
+## 10. Summary
 
 | Need | Use |
 | ---- | --- |

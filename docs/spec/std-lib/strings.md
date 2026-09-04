@@ -167,6 +167,29 @@ fun str.charCount(): int                    // number of Unicode scalars (O(n))
 
 ---
 
+## 8a. `char` Classification
+
+Core `char` keeps only conversions — `toStr()` and `toInt32()` (`core/types.md` §2.6). Classification predicates are extensions declared here, for the same reason `str` parsing is: the set grows, and none of it is knowledge a programmer must have to know what Bestie is.
+
+| Extension | Returns | Notes |
+| --------- | ------- | ----- |
+| `isAscii()` | `bool` | Scalar value in `0..=127` |
+| `isDigit()` | `bool` | ASCII `0`–`9` |
+| `isLetter()` | `bool` | Unicode letter category |
+| `isAlphanumeric()` | `bool` | Letter or digit |
+| `isWhitespace()` | `bool` | Unicode whitespace property |
+| `isUpper()` / `isLower()` | `bool` | Unicode case category |
+| `toUpper()` / `toLower()` | `char` | Unicode default case mapping (§7); no locale |
+
+```bestie
+import bestie.lib.strings
+
+val c: char = 'A'
+val ok = c.isAscii()
+```
+
+---
+
 ## 9. Relationship to Core and `StringBuilder`
 
 | Concern | Where |

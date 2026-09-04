@@ -140,6 +140,67 @@ SIMD or hardware acceleration may apply inside the implementation; it is not exp
 
 ---
 
+## 4a. Numeric Primitive Extensions
+
+Core keeps only **operators** and **explicit conversions** on numeric primitives (`core/types.md` §2.7). Everything else in the numeric surface lives here, as **extension functions** — so it reads as a method at the call site while remaining freely extensible:
+
+```bestie
+import bestie.lib.math
+
+val n: int = -42
+val a = n.abs()
+val bits = mask.countOnes()
+val f = (2.7).floor()
+```
+
+### 4a.1 Integer extensions
+
+Available on every signed and unsigned integer type (`int8`…`int64`, `int`, `uint8`…`uint64`, `uint`, `byte`) unless noted.
+
+| Extension | Returns | Notes |
+| --------- | ------- | ----- |
+| `abs()` | same type | Signed types only. `int8.MIN.abs()` overflows — traps in debug, wraps in release (`core/lang.md` §22.2); use `absChecked()` for a `! OverflowError`. |
+| `absChecked()` | same type `! OverflowError` | Signed types only |
+| `sign()` | `int8` | `-1`, `0`, or `1`. Signed types only |
+| `isZero()` | `bool` | Fast zero test |
+| `countOnes()` | `int` | Population count |
+| `countZeros()` | `int` | Width minus `countOnes()` |
+| `leadingZeros()` | `int` | Bit-width dependent |
+| `trailingZeros()` | `int` | Bit-width dependent |
+| `rotateLeft(n: int)` | same type | Bitwise rotation |
+| `rotateRight(n: int)` | same type | Bitwise rotation |
+| `isPowerOfTwo()` | `bool` | Unsigned types only |
+| `nextPowerOfTwo()` | same type | Unsigned types only; saturates at `T.MAX` |
+
+### 4a.2 Floating-point extensions
+
+Available on `float32` and `float64`.
+
+| Extension | Returns | Notes |
+| --------- | ------- | ----- |
+| `abs()` | same type | Clears the sign bit; total |
+| `floor()` | same type | Toward negative infinity |
+| `ceil()` | same type | Toward positive infinity |
+| `round()` | same type | Nearest, halfway away from zero |
+| `trunc()` | same type | Drops the fractional part |
+| `fract()` | same type | `x - x.trunc()` |
+| `signum()` | same type | `-1.0`, `0.0`, `1.0`, or NaN |
+| `copySign(to: T)` | same type | IEEE 754 `copysign` |
+
+`isNaN()`, `isInfinite()`, and `isFinite()` stay in **core** (`core/types.md` §2.4): `core/constants.md` makes `.isNaN()` the mandated way to test `T.NAN`, so core must supply it.
+
+### 4a.3 Cost
+
+Extension functions are statically resolved and monomorphized (`core/fp.md` §11.2). `n.abs()` compiles to the same instruction sequence it would as a built-in method — there is no dispatch, no wrapper, and no allocation. The only difference is which layer may change it.
+
+### 4a.4 Why these are here and not in core
+
+This set is the part of the numeric surface that keeps growing. `rotateLeft`, `nextPowerOfTwo`, and `copySign` in the tables above are all additions core could not have made without a language release. Not knowing that Bestie has `countOnes` teaches a programmer nothing wrong about the language; not knowing it has `data class` does.
+
+Core keeps the operators, because those must mean the same thing in Bestie 1 and Bestie 10.
+
+---
+
 ## 5. Operators vs Functions
 
 Core math favors **explicit functions** over overloaded operators.

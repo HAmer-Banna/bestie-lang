@@ -275,7 +275,7 @@ A panic represents a **violated invariant**. The program cannot recover meaningf
 | `release`  | Terminate immediately (minimal overhead)  |
 | `safe`     | Trap with message (release speed + checks)|
 
-Build mode is set in `bestie-project.toml`.
+Build mode is selected by the toolchain; see `core/lang.md` §22.2.
 
 ### 4.3 Explicit Panic
 
@@ -294,7 +294,7 @@ Assertions are active in `debug` and `safe` builds, elided in `release`.
 
 ---
 
-## 4. Resource Cleanup — `defer`
+## 5. Resource Cleanup — `defer`
 
 `defer` replaces `finally` — and works for all scope exits, not just error paths.
 
@@ -310,7 +310,7 @@ fun readConfig(path: str): str ! IoError {
 
 ---
 
-## 5. Integration with Core Return Types
+## 6. Integration with Core Return Types
 
 | Mechanism | When to use | Layer |
 | --------- | ----------- | ----- |
@@ -328,7 +328,7 @@ See `types.md` §8.3 and §8.4, and `std-lib/util.md`.
 
 ---
 
-## 6. Compiler Enforcement
+## 7. Compiler Enforcement
 
 1. `!` error sets are **closed** — only declared variants are valid.
 2. `try` requires the enclosing function to also declare `!`.
@@ -342,7 +342,7 @@ See `types.md` §8.3 and §8.4, and `std-lib/util.md`.
 
 ---
 
-## 7. What Bestie Deliberately Avoids
+## 8. What Bestie Deliberately Avoids
 
 * `throw` and exception hierarchies
 * Exception-style runtime catching
@@ -353,7 +353,7 @@ See `types.md` §8.3 and §8.4, and `std-lib/util.md`.
 
 ---
 
-## 8. Summary
+## 9. Summary
 
 * `!` handles all recoverable failures — explicit, typed, zero-cost, compile-time checked.
 * Panics handle all invariant violations — uncatchable, terminate.

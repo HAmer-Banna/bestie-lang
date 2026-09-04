@@ -109,9 +109,9 @@ Factory and query functions (free functions, pure):
 ```bestie
 fun Path.of(text: str): Path
 fun join(base: Path, child: str): Path
-fun parent(p: Path): Path | Root          // Root if p has no parent
-fun fileName(p: Path): str | Empty         // Empty for the root path
-fun extension(p: Path): str | Empty
+fun parent(p: Path): Path ?               // absent if p has no parent
+fun fileName(p: Path): str ?               // absent for the root path
+fun extension(p: Path): str ?
 fun isAbsolute(p: Path): bool
 fun normalize(p: Path): Path               // lexical only — no disk access
 ```
@@ -264,7 +264,7 @@ large directories do not force an allocation.
 
 ```bestie
 class DirIterator {
-    fun next(): Path | End ! FsError
+    fun next(): Path ? ! FsError
     fun close(): void
 }
 
@@ -287,6 +287,7 @@ loop {
 Rules:
 
 * `DirIterator` owns an OS handle and must be closed
+* `next()` returns absent at end of directory and `! FsError` on a read failure — the two outcomes are genuinely different and both must be expressible. This is the one place in the standard library that needs `T ? ! E`, a form `core/types.md` §8.4 currently rejects; see the note there.
 * Iteration order is **not** guaranteed across platforms
 * Entries are returned as `Path`; call `stat` if metadata is needed
 

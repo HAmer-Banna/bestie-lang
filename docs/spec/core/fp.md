@@ -144,7 +144,7 @@ fun process(items: list<int>): int {
     }
 
     var total = 0
-    for item in items {
+    for (item in items) {
         total += clamp(item)
     }
     return total
@@ -800,7 +800,7 @@ Variadic parameters are declared with `...` after the element type.
 ```bestie
 fun sum(val xs: int...): int {
     var total = 0
-    for x in xs {
+    for (x in xs) {
         total += x
     }
     return total
@@ -811,7 +811,7 @@ Mutable varargs allow modification of elements inside the function body:
 
 ```bestie
 fun normalize(var xs: float64...): void {
-    for i in 0..xs.size {
+    for (i in 0..xs.size()) {
         xs[i] = xs[i] / 100.0
     }
 }

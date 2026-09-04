@@ -79,7 +79,17 @@ val f = fiber.of(() => compute())
 
 * `await()` calls on other fibers
 * Explicit `fiber.yield()`
-* Blocking I/O calls (the scheduler parks the fiber and resumes when ready)
+* Blocking I/O calls, when the call site cooperates (see below)
+
+**The I/O parking contract.** A fiber can only be parked on a blocking call if the code performing that call tells the scheduler. This package therefore publishes a hook:
+
+```bestie
+fun parkUntilReady(handle: int, interest: Readiness): void
+```
+
+`bestie.api.io`, `bestie.api.fs`, and `bestie.api.network` call it in place of blocking the OS thread when a scheduler is present, and block normally when one is not. That is the whole dependency: std-lib publishes the hook, std-api honors it, and neither imports the other's types.
+
+A blocking call that does **not** honor the contract — FFI, a third-party binding, a syscall made directly — blocks the entire host thread and every fiber on it. This is not detectable at compile time. Use a dedicated `thread` for such work.
 
 There is no preemptive scheduling of fibers. Execution is deterministic within a scheduler.
 
@@ -164,15 +174,43 @@ atomic<T>
 
 Rules:
 
-* `T` must be a primitive value type
+* `T` must be a primitive value type at most one machine word wide
 * Operations are explicit
-* No implicit memory ordering
+* **Every operation names its ordering** — there is no default
 * No hidden fences
 
+### 5.1 Ordering
+
+The ordering vocabulary and its guarantees are defined in **`core/concurrency.md` §8.3** — what an ordering means constrains the optimizer and the CPU, so it is language semantics, not a library choice. This package supplies the type that uses it.
+
 ```bestie
+import bestie.lib.concurrency.atomic
+import bestie.lib.concurrency.Ordering
+
 val counter = atomic<int>.of(0)
-counter.increment()
+
+counter.add(1, Ordering.relaxed)          // just count
+val n = counter.load(Ordering.acquire)    // pairs with a release store
+counter.store(n, Ordering.release)
 ```
+
+| Method | Notes |
+| ------ | ----- |
+| `load(o: Ordering): T` | `o` is `relaxed`, `acquire`, or `seqCst` |
+| `store(v: T, o: Ordering): void` | `o` is `relaxed`, `release`, or `seqCst` |
+| `add(v: T, o: Ordering): T` · `sub` | Read-modify-write; returns the previous value |
+| `exchange(v: T, o: Ordering): T` | Unconditional swap; returns the previous value |
+| `compareExchange(expected: T, desired: T, success: Ordering, failure: Ordering): T ?` | Present with the previous value on success, absent on failure |
+
+```bestie
+enum Ordering {
+    relaxed, acquire, release, acqRel, seqCst
+}
+```
+
+Passing an ordering the operation cannot accept — `acquire` on a store, `release` on a load — is a compile-time error, not a silent upgrade.
+
+**There is no `increment()` convenience.** It would have to pick an ordering on the caller's behalf, and that is exactly the hidden cost Bestie refuses. Write `counter.add(1, Ordering.relaxed)` and mean it.
 
 Atomics are library types, not keywords. They compile to CPU atomic instructions; they do not require `bestie.api.os`.
 

@@ -106,8 +106,8 @@ Rules:
 Stateless utilities:
 
 ```bestie
-fun getEnv(key: str): str | NotFound
-fun setEnv(key: str, value: str): void
+fun getEnv(key: str): str ?
+fun setEnv(key: str, value: str): void ! OsError
 ```
 
 No global mutable environment abstraction.
@@ -134,12 +134,12 @@ Platform-specific signals may be conditionally available.
 ### 6.2 Signal Handling
 
 ```bestie
-fun onSignal(sig: Signal, handler: fun(Signal): void): void
+fun onSignal(sig: Signal, handler: (Signal) -> void): void
 ```
 
 Rules:
 
-* Handlers are non-capturing lambdas
+* Handlers are non-capturing lambdas (`core/fp.md` §7.2) — a capturing `[x]` lambda is rejected here
 * Execution context is explicit
 * No async magic
 
@@ -174,6 +174,36 @@ class ResourceLimit {
 fun getLimit(kind: ResourceKind): ResourceLimit
 fun setLimit(kind: ResourceKind, limit: ResourceLimit): void
 ```
+
+---
+
+## 8a. Thread Scheduling
+
+Core `thread` (`core/concurrency.md` §2) provides spawn, `join`, `isAlive`, `id`, and `interrupt` — the portable surface that means the same thing everywhere. **Scheduling policy is platform-specific and lives here**, because this is the layer allowed to change as operating systems do.
+
+```bestie
+import bestie.api.os
+
+fun setPriority(t: thread, level: Priority): void ! OsError
+fun getPriority(t: thread): Priority ! OsError
+fun setAffinity(t: thread, cpus: set<int>): void ! OsError
+fun setName(t: thread, name: str): void ! OsError
+```
+
+```bestie
+enum Priority {
+    Idle, Low, Normal, High, Realtime
+}
+```
+
+Rules:
+
+* Every call is fallible — an OS may refuse a priority, ignore affinity, or cap a name's length. Failures are `! OsError`, never silent no-ops.
+* `Priority` is an intent, not a guarantee. The mapping to OS values is platform-defined and documented per target.
+* `Realtime` typically requires elevated privileges and fails with `OsError.PermissionDenied` otherwise.
+* Affinity and naming are unavailable on some targets; those return `OsError.Unsupported` rather than pretending to succeed.
+
+None of this changes core `thread` semantics — ownership, the spawn-boundary rules, and panic behavior are unaffected.
 
 ---
 

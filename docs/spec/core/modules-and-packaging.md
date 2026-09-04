@@ -244,9 +244,11 @@ Bestie supports four visibility levels:
 | `public`    | Visible outside the module (exported API)          |
 | `internal`    | Visible anywhere within the same module (default)  |
 | `protected` | Visible to subclasses only                         |
-| `private`   | Visible inside the declaring type only             |
+| `private`   | Visible inside the declaring type — or, at top level, inside the declaring **file** |
 
 `internal` is the default visibility when no modifier is written. Any file within the same module can access an `internal` symbol, regardless of which package it belongs to — packages are namespaces only and never gate visibility.
+
+A top-level `private` declaration is **file-private**: visible only within its own `.bst` file, never exported, and unable to collide with a same-named `private` symbol in another file. See `core/oop.md` §7.
 
 ---
 
@@ -278,11 +280,13 @@ Example:
 ```bestie
 public fun parseUrl(input: str): Url { ... }
 
-public data class Url(
-    val scheme: str,
-    val host: str
-)
+public data class Url {
+    scheme: str
+    host: str
+}
 ```
+
+Fields are declared in the body; the compiler generates the memberwise initializer (`oop.md` §11.4). There is no header-constructor form.
 
 ---
 
@@ -290,7 +294,7 @@ public data class Url(
 
 The following can never be exported:
 
-* `private` members
+* `private` members, including file-private top-level declarations
 * `internal` members
 * Local classes
 * Local functions

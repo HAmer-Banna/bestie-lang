@@ -209,7 +209,7 @@ fun nextInt(rng: Rng, low: int64, high: int64): int64       // [low, high)
 fun nextFloat(rng: Rng): float64                            // [0.0, 1.0)
 fun nextBool(rng: Rng): bool
 fun shuffle<T>(rng: Rng, items: list<T>): void              // in-place Fisher–Yates
-fun choice<T>(rng: Rng, items: list<T>): T | Empty          // Empty if list is empty
+fun choice<T>(rng: Rng, items: list<T>): T ?                // absent if the list is empty
 ```
 
 Rules:

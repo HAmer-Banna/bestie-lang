@@ -132,7 +132,7 @@ Properties:
 
 ```bestie
 class HttpServer {
-    fun serve(handler: fun(HttpRequest): HttpResponse): void
+    fun serve(handler: (HttpRequest) -> HttpResponse): void
 }
 ```
 

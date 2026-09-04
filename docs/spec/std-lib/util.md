@@ -111,10 +111,7 @@ If a type uses `impl Equable`, the `==` operator is lowered to:
 lhs.equal(rhs)
 ```
 
-If `Equable` is not implemented:
-
-* Value types fall back to compiler-generated structural comparison
-* Reference types fall back to identity comparison
+If `Equable` is not implemented, core supplies the default: structural comparison for value types, identity comparison for reference types. The full per-kind table is in `core/lang.md` §15.4 — equality is core semantics, so this protocol overrides a defined default rather than filling a gap.
 
 No dynamic dispatch is introduced.
 
@@ -171,6 +168,10 @@ Bestie supports operator overloading through **explicit protocols**. The compile
 
 All operator protocols are resolved at compile time. Using an operator on a type that does not implement the corresponding protocol is a **compile-time error**.
 
+> **Core owns the lowering; this package owns the protocols.** The authoritative table of which operator lowers to which method is `core/lang.md` §15.3 — an operator's meaning is language syntax and cannot be redefined here. This package declares the protocols that supply those methods, and a type opts in by implementing one.
+>
+> Consequently the method names below — `add`, `sub`, `mul`, `div`, `mod`, `neg`, the `*Assign` forms, `get`, `set`, `equal`, `compareTo`, `hash` — are **cited symbols** (`core/lang.md` §27) and are frozen. New protocols and new members may be added here freely; these names may not be renamed or removed.
+
 ---
 
 ### 6.1 Arithmetic Operators
@@ -224,7 +225,9 @@ protocol IndexAssignable<I, T> {
 
 ### 6.3 Lowering Rules
 
-The compiler lowers operator syntax to protocol calls at compile time:
+The lowering table is **normative in `core/lang.md` §15.3**, which also covers the compound-assignment forms, the comparison lowering through `compareTo`, and the operators that are deliberately *not* overloadable (bitwise, logical, and the overflow-explicit `+%` / `+|` / `+!` family).
+
+Summarized here for convenience:
 
 | Syntax   | Lowered to          |
 | -------- | ------------------- |
@@ -238,7 +241,7 @@ The compiler lowers operator syntax to protocol calls at compile time:
 | `a[i]`   | `a.get(i)`          |
 | `a[i]=v` | `a.set(i, v)`       |
 
-`==` and `!=` are lowered via `Equable`. `<`, `>`, `<=`, `>=` are lowered via `Comparable`.
+`==` and `!=` lower via `Equable`; `<`, `>`, `<=`, `>=` lower via `Comparable`. When a type implements neither, core supplies a default: structural comparison for value types, identity for reference types (`core/lang.md` §15.4).
 
 ---
 

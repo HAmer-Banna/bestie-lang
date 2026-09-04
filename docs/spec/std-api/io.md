@@ -114,8 +114,8 @@ Rules:
 ### 5.1 Reading
 
 ```bestie
-fun read(): byte[] | IOError
-fun readExact(n: int): byte[] | IOError
+fun read(): list<byte> ! IoError
+fun readExact(n: int): list<byte> ! IoError
 ```
 
 Rules:
@@ -129,9 +129,11 @@ Rules:
 ### 5.2 Writing
 
 ```bestie
-fun write(data: byte[]): void | IOError
-fun flush(): void | IOError
+fun write(data: slice<byte>): void ! IoError
+fun flush(): void ! IoError
 ```
+
+`write` takes a `slice<byte>` — a borrowed, zero-copy view (`core/types.md` §6), so passing a buffer never duplicates it. Reads return an owned `list<byte>`; the length is not known in advance, so a fixed-capacity `array<byte>` cannot express the result.
 
 No implicit flushing occurs.
 
@@ -208,10 +210,12 @@ This keeps:
 All I/O functions return **typed errors**:
 
 ```bestie
-ReadError
-WriteError
-IOError
+errors ReadError  { Eof, Interrupted, Closed }
+errors WriteError { Closed, NoSpace, Interrupted }
+errors IoError = ReadError | WriteError
 ```
+
+Error sets compose per `core/exceptions.md` §3.1, so a function declaring `! IoError` accepts `try` on anything returning `! ReadError` or `! WriteError` with no conversion.
 
 Rules:
 

@@ -41,6 +41,9 @@ protocol Iterator<T> {
 }
 ```
 
+> **`next()` is a cited symbol.** `core/lang.md` §13 defines the `for/in` desugaring in terms of a `next()` returning `T ?` (the core spelling of `option<T>`), and §27 lists it as frozen. It may not be renamed or have its shape changed while `for/in` exists. The rest of this protocol, and everything else in this package, evolves under normal std-lib rules.
+
+
 ### Semantics
 
 * `next()` returns:
@@ -68,6 +71,9 @@ protocol Iterable<T> {
     fun iterator(): Iterator<T>
 }
 ```
+
+> **`iterator()` is a cited symbol** — see the note under `Iterator<T>` above and `core/lang.md` §27. A type does not have to implement this protocol to work with `for/in`; core requires only the *shape* (`fun iterator()` whose result has `fun next(): T ?`). Implementing `Iterable<T>` is the conventional way to have that shape, and is what every std-lib collection does.
+
 
 ### Semantics
 

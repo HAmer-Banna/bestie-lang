@@ -80,6 +80,131 @@ Higher layers provide **convenience and extensibility**.
 
 ---
 
+### 3.1 Lexical Structure
+
+This section defines how source text becomes tokens. Everything here is fixed for the life of the language.
+
+#### 3.1.1 Source Files
+
+* A source file is **UTF-8** encoded, with no byte-order mark. A BOM is a compile-time error, not silently skipped.
+* The extension is `.bst` (`modules-and-packaging.md` §2).
+* Line endings may be `LF` or `CRLF`; both are read as one line terminator. Emitted diagnostics always count lines the same way.
+
+#### 3.1.2 Comments
+
+| Form | Meaning |
+| ---- | ------- |
+| `// text` | Line comment — runs to the end of the line |
+| `/* text */` | Block comment — **nests**, so `/* a /* b */ c */` is one complete comment |
+| `/// text` | Documentation comment on the following declaration |
+| `/** text */` | Block documentation comment on the following declaration |
+
+```bestie
+// a line comment
+
+/// The number of retries before the connection is abandoned.
+/// Applies per host, not per request.
+const MAX_RETRIES: int = 3
+
+/*  Block comments nest, so this
+    /* including this inner one */
+    is a single comment and code below stays commented out.  */
+```
+
+Block comments nest so that commenting out a region containing comments works. An unterminated block comment is a compile-time error.
+
+Documentation comments attach to the **immediately following** declaration; one that precedes no declaration is a compile-time error. They are consumed by `bestie doc` and are not otherwise part of program semantics. Comments are never tokens: they cannot appear inside a string literal, and a `//` inside a string is ordinary text.
+
+#### 3.1.3 Identifiers
+
+An identifier starts with a Unicode letter or `_`, followed by any number of Unicode letters, digits, or `_`.
+
+* Identifiers are **case-sensitive**.
+* A bare `_` is not an identifier — it is the discard pattern (§4.6).
+* Identifiers are compared by exact code points. Bestie does **not** apply Unicode normalization, so two identifiers that render identically but differ in code points are different identifiers; the compiler warns when a file contains such a pair.
+* There is no length limit and no sigil or prefix convention carrying meaning.
+
+#### 3.1.4 Reserved Words
+
+Reserved in every position. None may be used as an identifier:
+
+```
+and         as          break       case        catch       class
+const       continue    data        defer       deinit      else
+enum        errors      ext         false       for         foreign
+fun         if          impl        import      in          init
+is          move        not         or          own         package
+permits     private     protected   public      protocol    ref
+return      sealed      super       switch      this        threadlocal
+true        try         type        val         value       var
+when        while       _
+```
+
+**Contextual keywords** have meaning only in one position and remain usable as identifiers elsewhere: `get` and `set` (property accessors, `oop.md` §10), `internal` (visibility), and `fn` (the optional function-type prefix, `fp.md` §6.1).
+
+Built-in **type names** — `int`, `uint`, `float`, `bool`, `char`, `str`, `byte`, `array`, `slice`, `range`, `tuple`, `ptr`, `thread` — are ordinary identifiers bound by the prelude, not reserved words. Shadowing one is legal and warned about, in exactly the way shadowing any prelude name is (§4.8.3).
+
+#### 3.1.5 Statement Termination
+
+A statement ends at a **newline**. The semicolon `;` is an optional separator for writing more than one statement on a single line:
+
+```bestie
+val a = 1
+val b = 2
+
+if (ready) { start(); log("started") }    // ; separates, does not terminate
+```
+
+A trailing `;` at the end of a line is legal but not idiomatic, and `bestie fmt` removes it. A line ending with an open delimiter (`(`, `[`, `{`) or a binary operator continues onto the next line, so an expression may be wrapped freely.
+
+#### 3.1.6 String Literals
+
+A `str` literal is enclosed in double quotes and is UTF-8 (`types.md` §3).
+
+| Escape | Meaning |
+| ------ | ------- |
+| `\n` `\r` `\t` `\0` | Newline, carriage return, tab, NUL |
+| `\\` | Backslash |
+| `\"` | Double quote |
+| `\'` | Single quote |
+| `\$` | A literal `$` — suppresses interpolation |
+| `\u{...}` | Unicode scalar by hex code point, 1–6 digits (`\u{41}`, `\u{1F600}`) |
+
+Any other `\x` sequence is a compile-time error — there are no silently-ignored escapes.
+
+```bestie
+val path = "C:\\config\\app.toml"
+val money = "\$${amount}"           // literal $, then an interpolated value
+```
+
+**Raw strings** are delimited by `"""`. They span lines, process **no** escapes, and perform **no** interpolation — the text between the delimiters is exactly the value:
+
+```bestie
+val pattern = """\d+\.\d+"""        // backslashes are literal
+val help = """
+Usage: app [options]
+  -v   verbose ${not interpolated}
+"""
+```
+
+A raw string cannot contain `"""`. When the opening delimiter is followed immediately by a newline, that first newline is not part of the value; the closing delimiter's own line and its leading indentation are likewise excluded, and that indentation is stripped from every line.
+
+#### 3.1.7 Character Literals
+
+A `char` literal is enclosed in single quotes and holds exactly **one Unicode scalar** (`types.md` §2.6):
+
+```bestie
+val a = 'A'
+val nl = '\n'
+val emoji = '\u{1F600}'
+```
+
+The same escape table applies, except `\$` which is meaningless outside interpolation. A literal containing zero scalars, more than one scalar, or a surrogate code point is a compile-time error. `'ab'` is an error, not a truncation.
+
+Numeric literal forms are in §8; interpolation is in §10.
+
+---
+
 ## 4. Variables and Bindings
 
 Bestie provides three binding forms.
@@ -482,9 +607,11 @@ Bestie uses the **binding's declared type** to resolve what a `{...}` or `{k: v,
 | Literal form | Inferred type | Example |
 | ------------ | ------------- | ------- |
 | `{v, v, ...}` | `array<T>` | `val s = {1, 2, 3}` → `array<int>` |
-| `{k: v, k: v, ...}` | `map<K,V>.hash` | `val m = {1: "a", 2: "b"}` → `map<int,str>.hash` |
+| `{k: v, k: v, ...}` | the default `map<K,V>` | `val m = {1: "a", 2: "b"}` → `map<int,str>` |
 
 `{1, 2, 3}` without a type annotation is always an `array<int>`, never a `list` or `set`. This is intentional: the default is the most efficient, lowest-overhead form.
+
+A key-value literal infers `map<K,V>` in its **default representation**. Core fixes that the type is `map<K,V>` and that `K` must satisfy the cited `hash()` (§27); *which* representation is the default, and what other representations exist, is `bestie.lib.collections`' decision — see `std-lib/collections.md` §3.1. Core does not name the variation menu, so lib can extend it without a language change.
 
 #### Explicit disambiguation
 
@@ -496,8 +623,8 @@ val b : list<int>    = {1, 2, 3}        // list<int>    — explicit
 val c : set<int>     = {1, 2, 3}        // set<int>     — explicit (deduplicates)
 val d : deque<int>   = {1, 2, 3}        // deque<int>   — explicit
 
-val e = {1: "a", 2: "b"}               // map<int,str>.hash — default
-val f : map<int,str>.linked = {1: "a"} // map<int,str>.linked — explicit variation
+val e = {1: "a", 2: "b"}               // map<int,str> — default representation
+val f : map<int,str>.linked = {1: "a"} // explicit variation (see std-lib/collections.md)
 ```
 
 The annotation drives the entire resolution — no ambiguity, no implicit coercion between types.
@@ -514,7 +641,7 @@ val h : list<int>.linked  = {1, 2, 3}           // linked list from literal
 #### Rules
 
 * Without a type annotation, `{v, ...}` **always** resolves to `array<T>` — never `list`, `set`, or `deque`
-* Without a type annotation, `{k: v, ...}` **always** resolves to `map<K,V>.hash`
+* Without a type annotation, `{k: v, ...}` **always** resolves to `map<K,V>` in its default representation
 * The compiler never silently picks a different collection type from a literal — it either uses the annotation or the default
 * A mismatched annotation is a compile-time error: `val x : set<str> = {"a": 1}` is rejected because a map literal cannot satisfy a `set<str>` type
 * Multi-dimensional array literals follow the same rule: `{{1,2},{3,4}}` without annotation infers `array<array<int>>`
@@ -948,6 +1075,46 @@ while (i < 10) {
 }
 ```
 
+#### What `for/in` requires
+
+`for (x in xs)` is core syntax, so core defines what `xs` must provide. The loop compiles when `xs` satisfies **one** of the following, checked in this order:
+
+1. **A compiler-known core sequence** — `array<T>`, `slice<T>`, `range<T>`, or a `str` iteration method (`chars()`, `bytes()`). The loop lowers to a direct index or pointer walk with no call. This is the zero-cost path and needs no protocol.
+2. **A type exposing `iterator()`** — any type with a method
+
+   ```bestie
+   fun iterator(): I
+   ```
+
+   where `I` has
+
+   ```bestie
+   fun next(): T ?
+   ```
+
+   The loop desugars to:
+
+   ```bestie
+   // for (x in xs) { body }   ⇒
+   val it = xs.iterator()
+   while (true) {
+       val x = it.next() else { break }
+       body
+   }
+   ```
+
+   `next()` returning absent (`T ?`, §21) ends the loop, via the `else` unwrap of `fp.md` §3.3. Because the desugaring is a static call on a concrete type, it is monomorphized and inlined like any other method — there is no dynamic dispatch and no allocation. This is the specified lowering, not a form you write by hand.
+
+Anything else is a compile-time error:
+
+```
+error: 'Foo' is not iterable — 'for/in' requires a 'fun iterator()' whose result has 'fun next(): T ?'
+```
+
+**Where the protocols live.** The named protocols `Iterable<T>` and `Iterator<T>` are declared in `bestie.lib.patterns`, and every std-lib collection implements them. Core does not need that import to compile a `for` loop — it requires the *shape* above, and a lib protocol is one way to have it. But because core names `iterator()` and `next()` here, **those two method names are frozen**: they are part of the language contract and cannot be renamed or removed while the loop keyword exists (see §27). Everything else about `Iterable` / `Iterator` remains lib's to evolve.
+
+This is the general rule for core: core defines what its syntax *means*, lib supplies types that satisfy it.
+
 ### 13.1 `break` — Leave the Loop
 
 `break` ends the innermost enclosing loop immediately. Execution resumes at the first statement after that loop.
@@ -1068,25 +1235,140 @@ for (path in paths) {
 
 Logical operators are words. Bitwise operators are symbols. One spelling each — the same choice as `ptr` / `.address()` over `&` / `*`.
 
-### Logical
+Core owns the operator **inventory**, **precedence**, and **lowering**. Which types opt in to an overloadable operator is a library concern (§15.3).
 
-* `and`, `or`, `not`
+### 15.1 Inventory
 
-`not` is boolean negation. `!` is **not** boolean not: it is the error-union operator (`T ! E`) and the overflow-trap suffix (`+!`, `-!`, `*!`). `&&` and `||` are not in the language.
+| Group | Operators | Notes |
+| ----- | --------- | ----- |
+| Arithmetic | `+` `-` `*` `/` `%` | `%` on integers only |
+| Unary | `-x` `~x` `not x` | Negate, bitwise complement, boolean not |
+| Overflow-explicit | `+%` `-%` `*%` · `+\|` `-\|` `*\|` · `+!` `-!` `*!` | Wrap / saturate / trap — §22.3 |
+| Comparison | `<` `<=` `>` `>=` | Total order required |
+| Equality | `==` `!=` | §15.4 |
+| Logical | `and` `or` `not` | Words, not symbols. Short-circuiting |
+| Bitwise | `&` `\|` `^` `~` `<<` `>>` | Integers only; **not** overloadable |
+| Assignment | `=` · `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` | Statement, never an expression |
+| Range | `..` `..=` | §9 |
+| Access | `.` `[]` `()` `::` | Member, index, call, method reference |
+| Type | `as` `is` | Cast (§6), runtime type test |
+| Error / absence | `try` `catch` `else` | §21, `exceptions.md` |
+
+`not` is boolean negation. `!` is **not** boolean not: it is the error-union operator (`T ! E`) and the overflow-trap suffix (`+!`). `&&` and `||` are not in the language.
 
 ```bestie
 if (ready and not failed) { ... }
 ```
 
-### Bitwise
+**Assignment is a statement.** `a = b` yields no value, so `if (x = 5)` is a compile-time error rather than a classic C bug. Compound assignment follows the same rule.
 
-* `&`, `|`, `^`, `~`, `<<`, `>>`
+### 15.2 Precedence and Associativity
 
-### Introspection and Identity
+Highest binding first. Operators in the same row have equal precedence.
 
-* `is` — runtime type test (instanceof-equivalent): `x is T` yields `bool`. Meaningful for `@virtual` and sealed hierarchies; statically resolved (and warned as redundant) when the type is known at compile time. See `core/oop.md` §5.5.
+| # | Operators | Associativity |
+| - | --------- | ------------- |
+| 1 | `.` `[]` `()` `::` | left |
+| 2 | `as` | left |
+| 3 | `-x` `~x` `not x` · `try` | right (prefix) |
+| 4 | `*` `/` `%` `*%` `*\|` `*!` | left |
+| 5 | `+` `-` `+%` `-%` `+\|` `-\|` `+!` `-!` | left |
+| 6 | `<<` `>>` | left |
+| 7 | `&` | left |
+| 8 | `^` | left |
+| 9 | `\|` | left |
+| 10 | `..` `..=` | none (non-associative) |
+| 11 | `<` `<=` `>` `>=` · `is` | none (non-associative) |
+| 12 | `==` `!=` | none (non-associative) |
+| 13 | `and` | left |
+| 14 | `or` | left |
+| 15 | `catch` `else` | left |
+| 16 | `=` `+=` `-=` … | right (statement) |
+
+Notes:
+
+* **Comparison and equality are non-associative.** `a < b < c` is a compile-time error, not a silently wrong `(a < b) < c`. The same applies to `a == b == c` and `0..5..10`.
+* **`as` binds tighter than arithmetic**, so `x + 10.0 as Meters` is `x + (10.0 as Meters)`.
+* **`try` binds to the following postfix expression**, so `try f(x) + 1` is `(try f(x)) + 1`.
+* **Bitwise operators bind tighter than comparison** — unlike C, where `a & b == c` means `a & (b == c)`. In Bestie it means `(a & b) == c`, which is what the code looks like it says.
+* Parentheses always override. The formatter (`bestie fmt`) does not insert or remove them.
+
+### 15.3 Operator Lowering
+
+An operator on a user-defined type lowers to a **method call**, resolved statically at compile time. There is no dynamic dispatch, no vtable, and no boxing — the call is monomorphized and inlined like any other.
+
+| Expression | Lowers to |
+| ---------- | --------- |
+| `a + b` | `a.add(b)` |
+| `a - b` | `a.sub(b)` |
+| `a * b` | `a.mul(b)` |
+| `a / b` | `a.div(b)` |
+| `a % b` | `a.mod(b)` |
+| `-a` | `a.neg()` |
+| `a += b` | `a.addAssign(b)` |
+| `a -= b` | `a.subAssign(b)` |
+| `a *= b` | `a.mulAssign(b)` |
+| `a /= b` | `a.divAssign(b)` |
+| `a %= b` | `a.modAssign(b)` |
+| `a[i]` | `a.get(i)` |
+| `a[i] = v` | `a.set(i, v)` |
+| `a == b` | `a.equal(b)` |
+| `a != b` | `not a.equal(b)` |
+| `a < b` | `a.compareTo(b) < 0` |
+| `a <= b` | `a.compareTo(b) <= 0` |
+| `a > b` | `a.compareTo(b) > 0` |
+| `a >= b` | `a.compareTo(b) >= 0` |
+
+Rules:
+
+* **Primitives never lower.** On `int`, `float64`, `char`, `bool`, `ptr<T>`, and `str`, every operator in §15.1 is emitted directly as machine instructions. The table applies only to user-defined types.
+* **Bitwise and logical operators are not overloadable.** The bitwise set is defined on machine integers; `and` / `or` / `not` are boolean control flow whose short-circuiting a method call cannot express. There is no lowering row for them and no protocol to implement.
+* **Overflow-explicit operators are not overloadable.** `+%` / `+\|` / `+!` describe machine-integer behavior; on a user-defined type they are a compile-time error.
+* Using an operator on a type that provides no matching method is a compile-time error, never a fallback.
+* Newtypes (`type X as Y`, §6.1) inherit `Y`'s operators, including whatever `Y` lowers to.
+
+**Where the protocols live.** The protocols that declare these methods — `Addable`, `Subtractable`, `Multipliable`, `Divisible`, `Modulable`, `Negatable`, `Indexable`, `IndexAssignable`, `Equable`, `Comparable` — are in `bestie.lib.utilities`, and a type opts in by implementing them. Core defines only the mapping above. Because core names these methods, **`add`, `sub`, `mul`, `div`, `mod`, `neg`, the `*Assign` forms, `get`, `set`, `equal`, and `compareTo` are frozen** (§27); the protocols themselves stay lib's to extend.
+
+### 15.4 Equality
+
+`==` compares **values**. What that means depends on the kind of type, and core fixes it:
+
+| Kind | `a == b` means |
+| ---- | -------------- |
+| Primitives (`int`, `float64`, `char`, `bool`, …) | Numeric / bit equality. `float64.NAN == float64.NAN` is `false` — use `.isNaN()` |
+| `str` | Byte-for-byte content equality |
+| `tuple` | Field-by-field, in order |
+| `value class`, `data class` | **Structural** — compiler-generated, field by field, recursively |
+| `enum` | Same variant, and payloads equal structurally |
+| `class`, `open class`, `abstract class` | **Identity** — the same object, i.e. the same address |
+| `ptr<T>` | Address equality; the pointee is never read (`memory.md` §8.7) |
+| Any type with `impl Equable` | `a.equal(b)` — the manual implementation wins |
+
+This is what backs the claim in `oop.md` §3.1 that a `data class` has structural equality: the compiler derives it, and no import is required.
+
+```bestie
+data class Point { x: int, y: int }
+class Node { val id: int }
+
+Point.new(x: 1, y: 2) == Point.new(x: 1, y: 2)   // true  — structural
+Node.new(id: 1)       == Node.new(id: 1)         // false — two distinct objects
+```
+
+There is **no separate identity operator** (`===`). The kind of the type already decides which comparison you get, and a `class` is exactly the kind that has identity. To compare two `class` values by content, implement `Equable` and say so in the type.
+
+A derived structural `==` requires every field to be comparable; a field whose type is a `class` compares by identity, and that propagates outward. Deriving `==` on a type holding a `ptr<T>` compares addresses.
+
+### 15.5 Introspection and Identity
+
+* `is` — runtime type test (instanceof-equivalent): `x is T` yields `bool`. Meaningful for `\|virtual` and sealed hierarchies; statically resolved (and warned as redundant) when the type is known at compile time. See `core/oop.md` §5.5.
 * `typeOf(x)` — compile-time type query
-* `sizeOf(T)` — compile-time size query
+* `sizeOf(T)` — compile-time size in bytes
+* `alignOf(T)` — compile-time alignment requirement in bytes
+* `offsetOf(T, field)` — compile-time byte offset of a field within `T`'s packed layout (`memory.md` §18.1)
+
+All five are resolved by the compiler and emit no code. `sizeOf`, `alignOf`, and `offsetOf` are valid in `const` initializers and `when` conditions (§25.2).
+
+`offsetOf` reports the **compiler-chosen** offset, not the source declaration index — fields are reordered and packed (`memory.md` §18.1). It is the supported way to compute a field address without hand-arithmetic, and it is what allocators, MMIO regions, and `@repr(C)` interop need.
 
 No hidden operator behavior.
 
@@ -1186,7 +1468,7 @@ val y = x + 1   // release: y = -128
                 // debug:   runtime trap
 ```
 
-Build mode is set in `bestie-project.toml`. No per-expression overhead in release.
+Build mode is one of `debug`, `release`, or `safe` (`exceptions.md` §4.2). Core defines what each mode means; the toolchain decides which one is active for a given build — see `std-tools` and `modules-and-packaging.md` §3.2 for how a project selects it. No per-expression overhead in release.
 
 ### 22.3 Explicit Overflow Operators
 
@@ -1557,3 +1839,58 @@ The warning is advisory, not an error: a runtime `switch` over `target.os` is st
 * Backward compatibility is mandatory
 * Experimental features require flags
 * Higher layers evolve independently
+
+---
+
+## 27. Cited Symbols (Frozen Names)
+
+Core may **name** a type or method that is declared in `bestie.lib` or `bestie.api` — the same way C's `sizeof` yields a `size_t` that is declared in `stddef.h`. Doing so does not move that symbol into core, and it does not make the package part of core.
+
+What it does do is **freeze the name**. A symbol that a normative core rule depends on cannot be renamed or removed while that rule exists, because renaming it would change what a keyword or an operator means. This is the mechanism behind `platform.md` §12: citation is what separates the parts of std-lib that are permanent from the parts that are freely deprecatable.
+
+### 27.1 The list
+
+| Cited symbol | Cited by | Declared in |
+| ------------ | -------- | ----------- |
+| `iterator()` | §13 — `for/in` desugaring | `bestie.lib.patterns` (`Iterable<T>`) |
+| `next(): T ?` | §13 — `for/in` desugaring | `bestie.lib.patterns` (`Iterator<T>`) |
+| `add` `sub` `mul` `div` `mod` `neg` | §15.3 — operator lowering | `bestie.lib.utilities` |
+| `addAssign` `subAssign` `mulAssign` `divAssign` `modAssign` | §15.3 — compound assignment lowering | `bestie.lib.utilities` |
+| `get(index)` / `set(index, value)` | §15.3 — `a[i]` and `a[i] = v` | `bestie.lib.utilities` |
+| `equal(other): bool` | §15.3, §15.4 — `==` and `!=` | `bestie.lib.utilities` (`Equable<T>`) |
+| `compareTo(other): int` | §15.3 — `<` `<=` `>` `>=`; §9.4 — `range<T>` bounds | `bestie.lib.utilities` (`Comparable<T>`) |
+| `hash(): int` | §5.4 — default `map` literal inference | `bestie.lib.utilities` (`Hashable<T>`) |
+| `list<T>` | §5.3, §5.4 — literal type annotation | `bestie.lib.collections` |
+| `map<K,V>` | §5.3, §5.4 — default inference for `{k: v}` literals | `bestie.lib.collections` |
+| `option<T>` · `Present` / `Not_Present` | §21, §24.2 — the named form of `T ?` | `bestie.lib.utilities` |
+| `result<T,E>` · `Ok` / `Err` | §21, §24.2 — the named form of `T ! E` | `bestie.lib.utilities` |
+
+### 27.2 What freezing does and does not mean
+
+**Frozen:**
+
+* The symbol's **name** and the **shape core relies on** — a parameter list, a return type, a method's meaning.
+* Removing it, renaming it, or changing that shape is a **language break**, subject to §6 versioning in `platform.md`, not to the owning package's evolution rules.
+
+**Not frozen:**
+
+* Everything else about the declaring protocol or type. `Iterable<T>` may gain methods; `list<T>` may gain variations and operations; `Comparable<T>` may grow helpers. Additive change is always allowed.
+* Any symbol **not** on this list. `Arena`, `FixedBuffer`, `matrix<T>`, `StringBuilder`, `Channel<T>`, every algorithm and every codec — none is cited by a core rule, so all of them may be deprecated and removed under the ordinary std-lib policy.
+
+That asymmetry is the point. `ptr<T>` and `Iterator.next()` are permanent because core depends on them by name. `Arena` is not, and can be dropped in a later release without touching the language.
+
+### 27.3 Changing the list
+
+* **Adding a citation** is a core change: it converts a previously deprecatable symbol into a permanent one, and requires a `lang` version bump.
+* **Removing a citation** is also a core change, but it *un-freezes* the symbol — after which the owning package may deprecate it normally.
+* An **illustrative mention** is not a citation. A protocol that appears only in an example (`fun <T impl Serializable> …`) is not frozen; only symbols this table lists are. When a core rule starts depending on a symbol, it must be added here in the same change.
+
+### 27.4 Compiler obligation
+
+The compiler resolves every cited symbol from the declaring package with no import required at the use site: `for (x in xs)` compiles without `import bestie.lib.patterns`, and `a + b` compiles without `import bestie.lib.utilities`. The import is needed only to name the protocol yourself — for example to write `impl Addable<Vec2>`.
+
+A cited symbol that is missing or has the wrong shape is a **toolchain error**, not a user error:
+
+```
+error: standard library is incompatible — 'Iterator.next' not found or has an unexpected signature
+```

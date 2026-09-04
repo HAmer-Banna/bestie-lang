@@ -57,13 +57,14 @@ Examples:
 Foreign functions are declared explicitly:
 
 ```bestie
-foreign fun strlen(ptr<char>): int
+foreign fun strlen(s: ptr<const char>): int
 ```
 
 Rules:
 
 * No implementation body
-* Signature must be fully explicit
+* Signature must be fully explicit — every parameter is **named and typed**, exactly as in an ordinary `fun` declaration (`core/fp.md` §2.1). C header style, where a parameter may be a bare type, is not accepted
+* A parameter the callee does not write is declared `ptr<const T>`, matching the C `const` qualifier (`core/memory.md` §8.4.1)
 * ABI defaults to C unless specified
 * Nullability must be expressed explicitly
 
@@ -106,21 +107,21 @@ Supported ABI tags:
 
 ### 5.2 Struct Mapping
 
-```bestie
-struct Point {
-    x: int
-    y: int
-}
-```
+Bestie has no `struct` keyword — a C-ABI aggregate is a **`value class`** (`core/oop.md` §3.2): no identity, no vtable, copy-by-value, laid out inline.
 
 Bestie types in ordinary code are **always packed by the compiler** (`core/memory.md` §18.1). Declaration order is not the ABI.
 
-To match a C header's declared layout and padding, mark the foreign type `@repr(C)` — that is an FFI contract, not a core language mode. There is no `@layout(stable)` / `@stable` in core.
+To match a C header's declared layout and padding, mark the type `@repr(C)` — that is an FFI contract, not a core language mode. There is no `@layout(stable)` / `@stable` in core.
 
 ```bestie
 @repr(C)
-struct Point { ... }
+value class Point {
+    x: int32
+    y: int32
+}
 ```
+
+Under `@repr(C)` the compiler emits fields in **declaration order** with C's padding and alignment rules, suppressing the reordering it would otherwise perform. Prefer fixed-width types (`int32`, `uint64`) over `int` / `uint` in a `@repr(C)` type unless the C header genuinely uses `intptr_t` / `size_t`.
 
 ---
 
@@ -180,9 +181,11 @@ Callbacks are supported **without environment closures**. Only non-capturing cal
 
 ```bestie
 foreign fun registerHandler(
-    handler: fun(int): void
+    handler: (int) -> void
 ): void
 ```
+
+The function-type spelling is core's (`core/fp.md` §6) — `(P) -> R`, optionally written `fn(P) -> R`. There is no separate FFI syntax for it.
 
 Rules:
 
