@@ -68,7 +68,7 @@ core → std-lib → std-api → (optional std-framework)
 | Layer | Role | Change appetite |
 | ----- | ---- | --------------- |
 | **Core** | Language **structure**: `class`, `fun`, `if`, `own`/`ref`/`ptr`, `thread`, syntax `T ?` / `T ! E` | Almost never. A break here is a language break. |
-| **Std-lib** | **Helpers** still in the language: `option`, `result`, collections, `map`/`filter`/`fold`, fibers | Conservative, but allowed to evolve |
+| **Std-lib** | **Helpers** still in the language: collections, `Iterable`/`Comparable`, `map`/`filter`/`fold`, fibers | Conservative, but allowed to evolve |
 | **Std-api** | **Talking to the outside**: OS, files, console, HTTP, FFI, MMIO | Allowed to evolve with platforms |
 | **Std-framework** | Bestie in the real world (optional; third-party install is fine) | Most likely to change |
 
@@ -129,7 +129,7 @@ Provides **high-level utilities** without system dependency.
 - Closed but not sealed
 - Evolves conservatively
 - Purely library-level (no OS/file/network runtime). `concurrency` may include a fiber scheduler, linked only when `fiber` is used.
-- Foundational abstractions use lowercase (`option`, `result`, `set`, `map`)
+- Foundational abstractions use lowercase (`set`, `map`, `list`, `deque`, `heap`)
 - Nominal concrete types use PascalCase (`StringBuilder`, `Date`, `Command`)
 - Requires `import`
 - Imported via:

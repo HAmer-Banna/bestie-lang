@@ -132,7 +132,7 @@ core → std-lib → std-api → (optional std-framework)
 ```
 
 - **Core** — language structure (syntax, types, ownership, `thread`)
-- **Std-lib** — helpers (`option`, collections, `map`/`filter`, fibers)
+- **Std-lib** — helpers (collections, `Iterable`/`Comparable`, `map`/`filter`, fibers)
 - **Std-api** — talking to the outside (OS, files, console, HTTP, FFI)
 - **Std-framework** — optional real-world stacks
 

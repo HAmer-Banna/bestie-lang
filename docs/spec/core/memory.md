@@ -429,7 +429,7 @@ student.free()
 
 `free()`:
 
-* If the object's class declares a `deinit()` (see oop.md §11.12), runs `deinit()` **first**, before releasing any storage
+* If the object's class declares a `deinit()` (see oop.md §11.11), runs `deinit()` **first**, before releasing any storage
 * Frees **only the object itself**
 * Does **not** recurse into owned fields
 * Is valid only when all direct `own` fields have already had their ownership obligations discharged
@@ -445,7 +445,7 @@ student.freeDeep()
 
 `freeDeep()`, in order:
 
-* Runs the object's `deinit()` first, if one is declared (see oop.md §11.12)
+* Runs the object's `deinit()` first, if one is declared (see oop.md §11.11)
 * Recursively frees all `own` fields, in **reverse** declaration order
 * Skips all `ref` fields
 * Releases the object's own storage last
@@ -502,7 +502,7 @@ The one case where the compiler inserts cleanup automatically is fallible `init(
 
 ### 7.5 Destruction Hook (`deinit`) — Explicit, Not RAII
 
-A class may declare a `deinit()` cleanup hook (see oop.md §11.12) for teardown that field drops alone cannot express — closing a socket, releasing an FFI handle, or `c.free()`-ing a `ptr<T>` field (§10.1.1, which today leaves this to an unspecified "`release()` or similar" convention).
+A class may declare a `deinit()` cleanup hook (see oop.md §11.11) for teardown that field drops alone cannot express — closing a socket, releasing an FFI handle, or `c.free()`-ing a `ptr<T>` field (§10.1.1).
 
 `deinit()` does **not** reintroduce RAII:
 

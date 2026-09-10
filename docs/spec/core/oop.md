@@ -587,7 +587,7 @@ fun describe(s: Shape): str {
 **Rules:**
 
 * `is` respects the hierarchy: `child is Base` is `true` when `child`'s runtime type derives from `Base` (matching `instanceof` semantics).
-* Negation uses the standard logical operators: `not (s is Circle)` or `!(s is Circle)`.
+* Negation uses `not`: `not (s is Circle)`. `!` is not boolean negation in Bestie — it is the error-union operator and the overflow-trap suffix (`lang.md` §15.1).
 * `is` against an unrelated type that can never match is a **compile-time error**, not a runtime `false` (e.g. `circle is String` where the types share no hierarchy).
 * For sealed hierarchies, prefer exhaustive `switch`/pattern matching (section 12) over chains of `is`; the compiler can then verify all cases are handled.
 * `is` introduces no late binding and no reflection — it is purely a type-tag / metadata comparison resolved by the compiler.
@@ -1291,6 +1291,9 @@ User responsibility:
 * Fragile base classes
 * Language-level singleton types, and any `static` keyword (section 13)
 * Anonymous classes / inline object expressions (use a named class or a lambda — see section 4.3)
+* Header constructors — a class never declares parameters on its own declaration line (section 11.4)
+* Member hiding — a subclass may not redeclare an inherited field or non-`virtual` method (section 6)
+* Construction-control annotations — visibility on `init` does the job (section 11.8)
 
 ---
 

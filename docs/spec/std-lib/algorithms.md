@@ -113,7 +113,7 @@ Use when:
 fun <T impl Comparable> binarySearch(
     data: list<T>,
     target: T
-): option<int>
+): int ?
 ```
 
 Rules:
