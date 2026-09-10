@@ -51,7 +51,7 @@ It allows fast allocation and bulk deallocation with well-defined lifetime seman
 ### Construction
 
 ```bestie
-val arena = Arena.of(1, MB)
+val arena = Arena.new(1, MB)
 ```
 
 * `size: int` — numeric size
@@ -97,7 +97,7 @@ It is useful when memory limits must be strict and known in advance.
 ### Construction
 
 ```bestie
-val fixed = FixedBuffer.of(4, KB)
+val fixed = FixedBuffer.new(4, KB)
 ```
 
 ### Allocation
@@ -136,8 +136,8 @@ It is intended for leak tracking, double-free detection, and usage reporting in 
 ### Construction
 
 ```bestie
-val arena = Arena.of(1, MB)
-val debug = Debug.of(arena)
+val arena = Arena.new(1, MB)
+val debug = Debug.new(arena)
 ```
 
 ### Diagnostics

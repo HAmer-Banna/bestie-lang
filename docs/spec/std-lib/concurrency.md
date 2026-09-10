@@ -18,7 +18,7 @@ import bestie.lib.concurrency
 2. **No alternative concurrency models** — no async/await, no futures, no virtual threads
 3. **Explicit over implicit** — no hidden scheduler on programs that do not import this package
 4. **Zero magic** — a fiber scheduler exists only in binaries that use `fiber`
-5. **Same ownership rules as `thread`** — `fiber.of` is compiler-known; illegal sharing is a compile-time error
+5. **Same ownership rules as `thread`** — `fiber.new` is compiler-known; illegal sharing is a compile-time error
 
 If a problem can be solved with `thread` plus channels or locks, **do not invent a new abstraction**.
 
@@ -56,14 +56,14 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 * Does **not** run in parallel with other `fiber` instances on the same scheduler
 * Deterministic lifecycle within one scheduler
 
-A program that never calls `fiber.of` does not include the scheduler.
+A program that never calls `fiber.new` does not include the scheduler.
 
-**Factory creation** — same shape as `thread.of`. There is no `.start { }` block form.
+**Construction** — same shape as `thread.new`. There is no `.start { }` block form.
 
 ```bestie
 import bestie.lib.concurrency.fiber
 
-val f = fiber.of(() => compute())
+val f = fiber.new(() => compute())
 ```
 
 **Available methods:**
@@ -95,25 +95,25 @@ There is no preemptive scheduling of fibers. Execution is deterministic within a
 
 ### 3.1 Class Rules
 
-`fiber` is a closed class, not inheritable, not a value class, created **only** via `fiber.of`.
+`fiber` is a closed class, not inheritable, not a value class, created **only** via `fiber.new`.
 
 ```bestie
 fiber.new()       // ❌ forbidden
-fiber.of(...)     // ✅
+fiber.new(...)     // ✅
 ```
 
 ### 3.2 Ownership, panic, and bodies
 
 The same rules as core `thread`:
 
-* Implicit `own` sharing into `fiber.of` is a compile-time error
+* Implicit `own` sharing into `fiber.new` is a compile-time error
 * `move` into the fiber body is allowed
 * `ref` cannot cross the spawn boundary
 * Immutable values may be shared
 * Body returns `void`
 * A panic inside a fiber **terminates the entire program** (same as `thread`)
 
-`fiber.of` is **compiler-known**: the frontend applies the same spawn-site ownership analysis as `thread.of`. It is still a library type — it is not a keyword.
+`fiber.new` is **compiler-known**: the frontend applies the same spawn-site ownership analysis as `thread.new`. It is still a library type — it is not a keyword.
 
 ### 3.3 Parallel vs concurrent
 
@@ -136,13 +136,13 @@ Fibers share the `threadlocal` copy of the OS thread they run on. See `core/conc
 `Channel<T>` is bounded, explicit message passing between `thread`s and/or `fiber`s.
 
 ```bestie
-val ch = Channel<int>.of(16)          // capacity 16
-val sync = Channel<str>.of(0)         // rendezvous: send waits for receive
+val ch = Channel<int>.new(16)          // capacity 16
+val sync = Channel<str>.new(0)         // rendezvous: send waits for receive
 ```
 
 | Method | Description |
 | ------ | ----------- |
-| `Channel<T>.of(capacity: int)` | Create; `capacity == 0` is rendezvous |
+| `Channel<T>.new(capacity: int)` | Create; `capacity == 0` is rendezvous |
 | `send(value: T): void ! ChannelError` | Blocks if full; error if closed |
 | `receive(): T ! ChannelError` | Blocks if empty; error if closed and drained |
 | `close(): void` | Further sends fail; remaining values may still be received |
@@ -187,7 +187,7 @@ The ordering vocabulary and its guarantees are defined in **`core/concurrency.md
 import bestie.lib.concurrency.atomic
 import bestie.lib.concurrency.Ordering
 
-val counter = atomic<int>.of(0)
+val counter = atomic<int>.new(0)
 
 counter.add(1, Ordering.relaxed)          // just count
 val n = counter.load(Ordering.acquire)    // pairs with a release store
@@ -221,7 +221,7 @@ Atomics are library types, not keywords. They compile to CPU atomic instructions
 Locks exist **only when mutation must be shared** and ownership transfer is impractical. They are a last resort.
 
 ```bestie
-val lock = Lock.of()
+val lock = Lock.new()
 lock.acquire()
 updateSharedState()
 lock.release()

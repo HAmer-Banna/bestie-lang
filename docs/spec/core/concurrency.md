@@ -40,10 +40,10 @@ Cooperative fibers, channels, atomics, and locks live in **`bestie.lib.concurren
 * Fully deterministic lifecycle
 * Runs in parallel on separate cores — **parallelism is explicit and guaranteed**
 
-**Factory creation:**
+**Construction:**
 
 ```bestie
-val t = thread.of(() => work())
+val t = thread.new(() => work())
 ```
 
 **Available methods:**
@@ -71,7 +71,7 @@ This is the whole core surface: **spawn, observe, join, signal**. Scheduling pol
 ```bestie
 thread.new()      // ❌ forbidden
 thread.init()     // ❌ forbidden
-thread.of(...)    // ✅
+thread.new(...)    // ✅
 ```
 
 No inheritance, reflection, or dynamic creation is allowed for the core thread type.
@@ -84,7 +84,7 @@ No inheritance, reflection, or dynamic creation is allowed for the core thread t
 
 ```bestie
 val own u = User.new()
-thread.of(() => use(u))    // ❌ compile error: implicit ownership sharing
+thread.new(() => use(u))    // ❌ compile error: implicit ownership sharing
 ```
 
 ### 4.2 Explicit Ownership Transfer
@@ -93,7 +93,7 @@ Ownership may be moved into a thread explicitly. The source binding becomes inva
 
 ```bestie
 val own u = User.new()
-thread.of(move u, (own user: User) => use(user))   // ✅
+thread.new(move u, (own user: User) => use(user))   // ✅
 
 use(u)    // ❌ compile error: moved value
 ```
@@ -145,7 +145,7 @@ thread.new(() => process(frozen))   // ✅ safe
 > If `own` sharing rules compile, ownership accounting is safe by construction.
 > `ptr`-based sharing remains explicit programmer responsibility.
 
-The same ownership rules apply to compiler-known spawn points in `bestie.lib.concurrency` (`fiber.of`). See that package.
+The same ownership rules apply to compiler-known spawn points in `bestie.lib.concurrency` (`fiber.new`). See that package.
 
 ---
 
@@ -158,7 +158,7 @@ A panic represents a violated invariant — the program is in an invalid state. 
 There is no mechanism to catch or isolate a thread panic at the core level.
 
 ```bestie
-val t = thread.of(() => {
+val t = thread.new(() => {
     panic("something is wrong")   // entire program terminates
 })
 t.join()
@@ -169,7 +169,7 @@ t.join()
 Core thread bodies return `void`. There is no return value from a thread at the core level.
 
 ```bestie
-thread.of(() => doWork())       // void body
+thread.new(() => doWork())       // void body
 ```
 
 ### Communicating Results and Errors
@@ -179,8 +179,8 @@ To get results or typed errors (`!`) back from a worker thread, use **channels**
 ```bestie
 import bestie.lib.concurrency.Channel
 
-val ch = Channel<int ! WorkError>.of(1)
-thread.of(move ch, (ch) => {
+val ch = Channel<int ! WorkError>.new(1)
+thread.new(move ch, (ch) => {
     val outcome = try compute()
     ch.send(outcome)
 })
@@ -264,7 +264,7 @@ Core guarantees the following edges. Everything written before the edge is visib
 | Edge | Guarantee |
 | ---- | --------- |
 | **Program order** | Within one thread, effects appear in source order |
-| **Spawn** | Everything the parent did before `thread.of(...)` happens-before the thread body begins |
+| **Spawn** | Everything the parent did before `thread.new(...)` happens-before the thread body begins |
 | **Join** | Everything the thread body did happens-before `t.join()` returns |
 | **Move** | A `move` across a spawn boundary carries the moved object's full prior state; the receiver observes it completely initialized |
 | **Transitivity** | If A happens-before B and B happens-before C, then A happens-before C |

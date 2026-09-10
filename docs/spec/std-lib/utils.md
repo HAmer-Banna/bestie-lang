@@ -1,8 +1,10 @@
-# Bestie Standard Library — Utility Package
+# Bestie Standard Library — Utilities (`bestie.lib.utils`)
 
-This document defines the **utility package** of the Bestie standard library. These types form the foundation for error modeling and structural interoperability. All utilities are explicit, predictable, and compiler-verifiable.
+This document defines the **utils package** of the Bestie standard library. It holds the protocols that core cites by name — iteration, equality, ordering, hashing, and the operator protocols — together with the small concrete utilities that do not belong to any other package.
 
-Bestie uses lowercase for foundational library types such as `option<T>` and `result<T,E>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
+Every symbol core depends on lives here, which is what makes `core/lang.md` §27's citation table point at a single package.
+
+Bestie uses lowercase for foundational library types such as `set<T>` and `map<K,V>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
 
 ---
 
@@ -55,30 +57,65 @@ val s = sb.toStr()
 
 ---
 
-## 2. option<T> and result<T, E>
+## 2. Iterator and Iterable
 
-`option<T>` and `result<T, E>` are **standard-library names** for the types spelled `T ?` and `T ! E` in core. They are part of the language. They are not core. Core keeps the syntax sealed; this package owns the names, constructors, and any helpers so those can evolve. See `platform.md`.
+These two protocols are the ones `for/in` is defined against. `core/lang.md` §13 states the loop's desugaring in terms of `iterator()` and `next()`, and §27 lists both as **frozen**: they may not be renamed, nor have the shape core relies on changed, while the loop keyword exists. Everything else about them evolves under normal std-lib rules.
 
-Canonical core syntax: `core/types.md` §8.3–8.4, `core/fp.md` §3, `core/exceptions.md` §5.
+### 2.1 `Iterator<T>`
 
-Requires `import bestie.lib.utilities` (or a more specific import of `option` / `result`). Signatures, `if-let`, bare `return`, and `try`/`catch` need no import.
+Explicit, pull-based iteration.
 
 ```bestie
-import bestie.lib.utilities.option
-import bestie.lib.utilities.result
-
-enum option<T> {
-    Present(T)
-    Not_Present
-}
-
-enum result<T, E> {
-    Ok(T)
-    Err(E)
+protocol Iterator<T> {
+    fun next(): T ?
 }
 ```
 
-`int ?` is the same representation as `option<int>`. `int ! ParseError` is the same representation as `result<int, ParseError>`. Prefer `fun f(): User ?` and `fun parse(s: str): int ! ParseError` at function boundaries. Use the names when matching or when a named type reads better.
+Semantics:
+
+* `next()` returns the next element, or **absent** when iteration is complete
+* Iterators are **stateful**
+* No implicit allocation, and no hidden invalidation rules
+
+Rules:
+
+* An iterator may own or borrow its data source
+* Thread safety depends on the underlying object
+* Iterators are not restartable unless explicitly documented
+
+### 2.2 `Iterable<T>`
+
+Things that can produce an iterator.
+
+```bestie
+protocol Iterable<T> {
+    fun iterator(): Iterator<T>
+}
+```
+
+Semantics:
+
+* `iterator()` creates fresh iteration state
+* No requirement for heap allocation
+* Multiple iterators may coexist if the implementation allows it
+
+A type does **not** have to implement this protocol to work with `for/in`: core requires only the *shape* — a `fun iterator()` whose result has a `fun next(): T ?`. Implementing `Iterable<T>` is the conventional way to have that shape, and is what core `array<T>`, `slice<T>`, `range<T>`, and every std-lib collection do.
+
+### 2.3 Why this is the constraint for generic collection code
+
+Collection variations are invariant (`std-lib/collections.md` §3.3), so a function that names `list<int>` accepts array-backed lists and nothing else. Generic code takes `Iterable<T>` instead:
+
+```bestie
+fun <C impl Iterable<int>> sum(xs: C): int {
+    var t = 0
+    for (x in xs) { t += x }
+    return t
+}
+```
+
+This is looser *and* more capable than a concrete parameter: it accepts every list variation plus `array<int>`, `slice<int>`, `set<int>`, and `range<int>`. It is fully monomorphized, so each instantiation compiles to the same code a hand-written loop would.
+
+Name a concrete type only where the cost is part of the contract — `fun binarySearch(xs: list<int>, target: int): int ?` says array-backed because O(log n) depends on it.
 
 ---
 
@@ -361,10 +398,10 @@ For an immutable value type such as `str`, `val b = a`, `copy(a)`, and `deepCopy
 * **Laziness is preserved.** Copying an object that has not yet computed a cached or lazily-initialized field copies the *uncomputed* state; it does not force materialization.
 * **No surprise side effects.** Duplication cannot run arbitrary user code through accessor methods.
 
-This matters for indirection patterns such as `Proxy<T>` (`patterns.md` §5): copying a proxy copies its stored indirection state per the field rules above — it does **not** call `get()` and does **not** resolve the proxied target. Whether the target is duplicated depends solely on how the proxy holds it:
+This matters for any hand-written indirection type — a lazy handle, a cache entry, a wrapper around a `ptr<T>`. Copying one copies its stored state per the field rules above; it does **not** call an accessor and does **not** resolve whatever the indirection points at. Whether the target is duplicated depends solely on how the field is qualified:
 
-* proxy holds the target as an `own` field → `deepCopy` duplicates the target; `copy` is forbidden
-* proxy holds it as `ref` / `ptr<T>` → both `copy` and `deepCopy` alias the same target (the target's lifetime remains the programmer's responsibility)
+* target held as an `own` field → `deepCopy` duplicates it; `copy` is forbidden
+* target held as `ref` / `ptr<T>` → both `copy` and `deepCopy` alias the same target (its lifetime remains the programmer's responsibility)
 
 A type that genuinely needs copy to resolve or transform a field must `impl Copyable` / `DeepCopyable` **manually** and do so explicitly.
 
@@ -375,8 +412,7 @@ A type that genuinely needs copy to resolve or transform a field must `impl Copy
 The utility package provides:
 
 * Canonical utility for efficient string construction (`StringBuilder`)
-* Explicit absence modeling (`option`)
-* Typed failure (`result`)
+* Iteration contracts (`Iterator`, `Iterable`) — cited by core's `for/in`
 * Structural equality (`Equable`)
 * Ordering contracts (`Comparable`)
 * Hash-based identity (`Hashable`)

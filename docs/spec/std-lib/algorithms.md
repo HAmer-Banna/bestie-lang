@@ -39,12 +39,14 @@ They are reusable, composable, and predictable.
 * Transformation
 * Iteration helpers
 
-These algorithms operate on:
+### How these signatures are written
 
-* `Iterable<T>`
-* `Iterator<T>`
-* Std-lib collections (`set`, `map`, `deque`, `heap`)
-* Core `list<T>`
+Collection variations are invariant (`collections.md` §3.3), so a parameter naming `list<T>` accepts array-backed lists and nothing else. Every algorithm here therefore falls into one of two shapes:
+
+* **Read-only traversal** takes a generic parameter constrained by `Iterable<T>` — `fun f<C impl Iterable<T>>(xs: C)`. This accepts every collection variation, plus core `array<T>`, `slice<T>`, and `range<T>`. It is fully monomorphized, so each instantiation compiles to what a hand-written loop would.
+* **In-place reordering and indexed access** names a concrete type, because the cost is part of the contract. `binarySearch` says `list<T>` precisely because O(log n) depends on array-backed indexing; the same signature over `list<T>.linked` would be O(n log n) with nothing in the source saying so.
+
+In-place algorithms take `ptr<list<T>>`, not `list<T>`: `list<T>` is a `class` and classes are not copyable across a call (`core/memory.md` §6.1). Pointing is how a callee mutates the caller's object.
 
 ---
 
@@ -53,7 +55,7 @@ These algorithms operate on:
 ### 3.1 `sort`
 
 ```bestie
-fun sort<T impl Comparable>(data: var list<T>)
+fun sort<T impl Comparable>(data: ptr<list<T>>)
 ```
 
 Purpose:
@@ -70,7 +72,7 @@ Properties:
 Example:
 
 ```bestie
-var nums = list<int>.of(4, 1, 3)
+var nums = list<int>.new(4, 1, 3)
 sort(nums)
 ```
 
@@ -83,7 +85,7 @@ Use when:
 ### 3.2 `stableSort`
 
 ```bestie
-fun stableSort<T impl Comparable>(data: var list<T>)
+fun stableSort<T impl Comparable>(data: ptr<list<T>>)
 ```
 
 Purpose:
@@ -178,7 +180,7 @@ Guarantees:
 
 ```bestie
 fun partition<T>(
-    data: var list<T>,
+    data: ptr<list<T>>,
     predicate: fn(T) -> bool
 ): int
 ```
@@ -209,8 +211,8 @@ val idx = partition(nums, x => x % 2 == 0)
 ### 7.1 `fold`
 
 ```bestie
-fun fold<T, R>(
-    data: Iterable<T>,
+fun fold<C impl Iterable<T>, T, R>(
+    data: C,
     initial: R,
     op: fn(R, T) -> R
 ): R
@@ -239,9 +241,9 @@ Rules:
 ### 8.1 `zip`
 
 ```bestie
-fun zip<A, B>(
-    a: Iterable<A>,
-    b: Iterable<B>
+fun zip<CA impl Iterable<A>, CB impl Iterable<B>, A, B>(
+    a: CA,
+    b: CB
 ): Iterator<(A, B)>
 ```
 

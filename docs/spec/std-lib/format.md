@@ -265,7 +265,7 @@ Rationale:
 
 * A type is **auto-serializable** (compiler-derivable `Serializer<T>` / `Parser<T>`) when every serialized field is itself serializable — i.e. value fields and `own` fields of serializable types. `data class`es are the common case and derive trivially.
 * `ref` and `ptr<T>` fields are **skipped**. If a type cannot be validly reconstructed without them, the compiler cannot derive a `Parser` for it — the programmer must supply a **custom `Parser<T>`** (§9) that re-establishes those links after the owned fields are built.
-* There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`util.md` §7). Capability is always a real method, never an empty tag.
+* There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`utils.md` §7). Capability is always a real method, never an empty tag.
 
 ### 11.3 Containers
 
@@ -285,7 +285,7 @@ Immutable data (`data class`, `str`, `const` values) serializes and deserializes
 
 ### 11.5 Relationship to `copy` / `deepCopy`
 
-A serialize → deserialize round-trip is closely related to `deepCopy` (`util.md` §7):
+A serialize → deserialize round-trip is closely related to `deepCopy` (`utils.md` §7):
 
 * Both produce a **fully owned, independent** graph of the value-and-`own` portion.
 * Both **do not follow `ptr<T>`** — raw pointers are outside the managed graph.
@@ -312,7 +312,7 @@ Deserialization in Bestie treats input as **untrusted data, never as instruction
 * If a constructor rejects the parsed values (precondition fails), deserialization fails with a typed `ParseError` (`InvalidType` / a validation variant) — it never yields a half-built or invalid object.
 * `data class`es are pure data with a total constructor, so they deserialize directly. Types with **non-trivial invariants** must expose a constructor/factory that validates, or provide a custom `Parser<T>` (§9) that calls it; the compiler will not derive a `Parser` that skips validation.
 
-> Contrast with `deepCopy` (`util.md` §7.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
+> Contrast with `deepCopy` (`utils.md` §7.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
 
 ### 11.8 Excluding Fields (`@transient`)
 

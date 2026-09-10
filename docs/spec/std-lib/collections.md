@@ -38,18 +38,20 @@ The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for bo
 
 ## 1. Supported Collections
 
-| Collection | Variations                        | Default       |
-| ---------- | --------------------------------- | ------------- |
-| `list<T>`  | linked (more sequence types TBD)  | array-backed  |
-| `set<T>`   | hash, tree, linked                | hash          |
-| `map<K,V>` | hash, tree, linked                | hash          |
-| `deque<T>` | queue, stack                      | as-is         |
-| `heap<T>`  | max, min                          | ❌ none        |
+| Collection | Representation | API restriction | Default |
+| ---------- | -------------- | --------------- | ------- |
+| `list<T>`  | `linked`       | —               | array-backed |
+| `set<T>`   | `hash` `tree` `linked` | —      | `hash`  |
+| `map<K,V>` | `hash` `tree` `linked` | —      | `hash`  |
+| `deque<T>` | —              | `queue` `stack` | full deque |
+| `heap<T>`  | —              | —               | ❌ `max` or `min` required |
+
+Every family also takes the `immutable` variation (§4).
 
 All collections are **generic** (`<T>`).
-All variations are **explicit** and **compile-time validated**.
+All variations are **explicit**, **compile-time validated**, and **part of the type** (§3.3).
 
-Collection family names stay lowercase across Bestie so they remain aligned with core `array<T>` and std-lib names such as `option<T>` and `result<T,E>`.
+Collection family names stay lowercase across Bestie so they remain aligned with core `array<T>`, `slice<T>`, and `range<T>`.
 
 `list<T>` is the primary dynamic collection. Its default (no variation keyword) is an array-backed resizable list. The `linked` variation selects a linked-list representation. Additional sequence variations may be introduced in future versions.
 
@@ -57,63 +59,38 @@ Collection family names stay lowercase across Bestie so they remain aligned with
 
 ## 2. Construction Model
 
-Collections are created using **builders**, **`of()` construction**, **size annotations**, or **literals**, depending on intent.
-
-There is no hidden allocation strategy.
-Growth/reallocation behavior is defined by the selected collection variation.
-
----
-
-### 2.1 Builder Construction
+Every collection is constructed with **`.new(...)`**, the one construction verb in the language (`core/oop.md` §11.1). There is no `.new(...)` and no `.new(...)`.
 
 ```bestie
-val ys = set<int>.tree.build().add(1).add(2)
-val zs = map<int,str>.hash.build().put(1,"a").put(2,"b")
-val dq = deque<int>.queue.build()
+val ls = list<int>.new()                    // empty array-backed list
+val ys = list<int>.new(1, 2, 3, 4, 5)       // from explicit values (varargs init)
+val ll = list<int>.linked.new()             // empty linked list
+val xs = set<int>.tree.new(1, 2)            // tree-backed set with two elements
+val zs = map<int,str>.new()                 // hash-backed, empty
+val dq = deque<int>.queue.new(1, 2, 3)      // FIFO-restricted deque
 ```
+
+A variation is selected by naming it before `.new`, and the variation is part of the **type** — `list<int>.linked` is a type, writable in a signature or an annotation (§3.3).
 
 Rules:
 
-* Builders are explicit
-* Builder chains are resolved at compile time
+* Construction is explicit; element values are visible at the call site
 * Allocation strategy is known before code generation
+* Growth and reallocation behavior is defined by the selected variation
+* There is no hidden allocation strategy and no second construction verb
 
----
+### 2.1 Literals
 
-### 2.2 `of()` Construction
-
-Collections may also be created directly from explicit values:
-
-```bestie
-val xs = set<int>.of(1, 2, 3)
-val ys = deque<int>.queue.of(1, 2, 3)
-```
-
-Rules:
-
-* `of()` is explicit construction, not hidden conversion
-* Element values are visible at the call site
-* The backing variation remains explicit when the collection family requires it
-
----
-
-### 2.3 `list<T>` Construction
-
-`list<T>` is a dynamic collection and is part of `bestie.lib.collections`.
+A collection literal is written with a type annotation naming the target type (`core/lang.md` §5.4):
 
 ```bestie
-val xs = list<int>.build()               // empty array-backed dynamic list
-val ys = list<int>.of(1, 2, 3, 4, 5)    // from explicit values
-val ls : list<int> = {1, 2, 3}          // list literal
-val ll = list<int>.linked.build()        // empty linked-list variant
+val ls : list<int>          = {1, 2, 3}
+val xs : set<int>           = {1, 2, 3}      // deduplicates
+val ll : list<int>.linked   = {1, 2, 3}
+val m  : map<int,str>       = {1: "a", 2: "b"}
 ```
 
-Rules:
-
-* `list<T>.build()` with no variation produces an array-backed resizable list
-* `list<T>.linked.build()` produces a linked-list backed list
-* `of()` is explicit construction; element values are visible at the call site
-* List literals `{...}` are valid when the target type is `list<T>`
+Without an annotation, `{v, ...}` is an `array<T>` and `{k: v, ...}` is a `map<K,V>` — core fixes both defaults.
 
 ---
 
@@ -157,7 +134,9 @@ Indexing, negative indexing, and slicing share one convention with core `array<T
 | _(none)_  | Array-backed resizable list — default |
 | `linked`  | Doubly-linked list representation |
 
-Future sequence variations may be introduced under the same builder-chain model.
+`linked` is not here for nostalgia. An array-backed list **reallocates as it grows, invalidating every `ptr<T>` and `ref` field pointing into it**; a linked list gives stable element addresses for the life of each node. In a garbage-collected language that distinction does not exist, which is why linked lists read as a mistake there. In Bestie it is the reason the variation exists — alongside O(1) splice and insertion at a known position. Choose array-backed unless you need one of those.
+
+Future sequence variations may be introduced under the same model.
 
 ### 2a.4 Shared Interface with `array<T>`
 
@@ -181,76 +160,84 @@ The key distinction: `array<T>` is **static** (fixed capacity, panics on overflo
 
 ---
 
-## 3. Defaults and Variations
+## 3. Variations
 
-### 3.1 Defaults
+### 3.1 The four kinds
+
+A variation narrows a collection family to a concrete type. They are not all the same kind of thing:
+
+| Kind | Variations | Changes |
+| ---- | ---------- | ------- |
+| **Representation** | `list.linked` · `set.hash` `set.tree` `set.linked` · `map.hash` `map.tree` `map.linked` | Cost, not API |
+| **API restriction** | `deque.queue` · `deque.stack` | A narrower API, same representation |
+| **Mandatory discriminator** | `heap.max` · `heap.min` | Ordering; there is no bare `heap<T>` |
+| **Mutability** | `.immutable` | Removes the mutation API (§4) |
+
+### 3.2 Defaults
 
 **This package owns these defaults.** `core/lang.md` §5.4 fixes only that an unannotated `{k: v, ...}` literal is a `map<K,V>` and that `K` must satisfy the cited `hash()`; which representation backs it is decided here, so a new variation can be added without a language change.
 
-* `list<T>` → array-backed resizable
-* `set<T>` → hash
-* `map<K,V>` → hash
-* `deque<T>` → must explicitly choose queue or stack behavior
-* `heap<T>` → **must specify `max` or `min`**
+| Family | Default |
+| ------ | ------- |
+| `list<T>` | array-backed resizable |
+| `set<T>` | hash |
+| `map<K,V>` | hash |
+| `deque<T>` | full deque — `addFirst` / `addLast` / `removeFirst` / `removeLast` |
+| `heap<T>` | **none** — `max` or `min` must be named |
+
+`deque<T>.queue` restricts the API to `addLast` / `removeFirst`; `deque<T>.stack` restricts it to `addLast` / `removeLast`. The bare form is not "unrestricted queue-or-stack" — it is the full double-ended collection, and the two named variations are deliberate narrowings that make misuse a compile-time error.
+
+### 3.3 Variations are types, and they are invariant
+
+A variation is written in type position, and **a variation does not convert to its family type or to any sibling**:
 
 ```bestie
-val ls = list<int>.build()                  // array-backed dynamic list
-val xs = set<int>.build()                   // hash-backed
-val ys = map<int,str>.build()               // hash-backed
-val dq = deque<int>.queue.build()           // queue
+val ll : list<int>.linked = {1, 2, 3}
+
+fun sum(xs: list<int>): int          // array-backed lists only
+sum(ll)                              // ❌ list<int>.linked is not list<int>
+```
+
+This is deliberate, and it is what lets a signature promise a cost. `fun binarySearch(xs: list<int>, target: int): int ?` is O(log n) because the parameter type says array-backed; if `list<int>.linked` converted, the same signature would be O(n log n) with nothing in the source saying so. Erasing variations would also force the family type's API down to the intersection of every representation — and `list<T>.linked` supports no slicing at all (§8a.5), so `list<int>` would lose `[lo..hi]` entirely.
+
+**Write generic collection code against a protocol instead**, which is both looser and more useful:
+
+```bestie
+fun <C impl Iterable<int>> sum(xs: C): int {
+    var t = 0
+    for (x in xs) { t += x }
+    return t
+}
+```
+
+That accepts every list variation — and `array<int>`, `slice<int>`, `set<int>`, and `range<int>` besides, none of which a concrete `list<int>` parameter could ever take. `Iterable<T>` is declared in `bestie.lib.utils` and is cited by core (`core/lang.md` §27). Name a concrete variation only where the cost is part of the contract.
+
+### 3.4 Conflicting variations
+
+Naming two variations from the same kind is a **compile-time error**, not a last-one-wins race:
+
+```bestie
+set<int>.hash.tree.new()      // ❌ two representations named
+map<int,str>.linked.hash.new()  // ❌
+```
+
+Variations from *different* kinds compose, in any order:
+
+```bestie
+val q : deque<int>.queue.immutable = ...   // ✅ restriction + mutability
 ```
 
 ---
 
-### 3.2 Conflicting Variations
+## 4. Immutability
 
-If multiple variations from the **same category** are chained, the **last one wins**.
+`immutable` is the only semantic variation. There is no `copyOnWrite` and no `concurrent`.
 
-```bestie
-val x = set<int>.hash.tree.build()         // tree
-val y = map<int,str>.linked.hash.build()   // hash
-```
+**`copyOnWrite` is not implementable here.** Copy-on-write needs refcounting to detect that storage is shared before mutating it. `own` guarantees exactly one owner, so there is never a second owner to detect — the copy would be either always taken or never needed, and neither is copy-on-write.
 
-Conflicts across incompatible categories are **compile-time errors**.
+**`concurrent` is not a variation.** A thread-safe map is a different algorithm — striped locks or a lock-free structure — not a representation of a hash map, and per-operation locking makes compound operations (`if (not m.has(k)) { m.put(k, v) }`) look safe while they still race. Shared mutation is served by `Lock` and `Channel<T>` in `bestie.lib.concurrency`, where the reader is already thinking about threads. Shared *reading* is served by `freeze()` below, which needs no lock at all.
 
----
-
-## 4. Immutability and Concurrency
-
-Collections support explicit mutation and concurrency semantics.
-Bestie targets deterministic memory layout for collections **whenever the chosen representation permits it**.
-
-### 4.1 Mutation Semantics
-
-* `mutable` — default
-* `immutable` — value-based, mutation creates a new collection
-* `copyOnWrite` — lazy copying on mutation
-
-### 4.2 Concurrency Semantics
-
-* `concurrent` — thread-safe mutable access with defined guarantees
-
-### 4.3 Resolution Rules
-
-* `immutable` **dominates all other mutation or concurrency modifiers**
-* `concurrent` has no effect on immutable collections
-* `copyOnWrite` is ignored if `immutable` is present
-
-```bestie
-set<int>.concurrent.copyOnWrite.immutable.build()
-```
-
-Resolves to:
-
-```text
-immutable set
-```
-
-Optional compiler warnings may be emitted for redundant modifiers.
-
----
-
-### 4.4 What `immutable` Means Here
+### 4.1 What `immutable` Means Here
 
 `immutable` is a **variation**, selected in type position like any other:
 
@@ -344,17 +331,18 @@ const ys : map<str,int> = {"x": 1}
 Invalid:
 
 ```bestie
-const a = set<int>.build()        // ❌ runtime allocation
-const b = map<str,int>.build()    // ❌ runtime allocation
+const a = set<int>.new()          // ❌ runtime allocation
+const b = map<str,int>.new()      // ❌ runtime allocation
 ```
 
 `const` collections:
 
-* Are fully immutable
+* Are fully immutable — the mutation API is unavailable, as with the `immutable` variation
 * Have no heap allocation
 * Reside in read-only memory
-* Cannot be mutated
 * Preserve immutability when copied
+
+A `const set` or `const map` obliges the compiler to build the hash table (or tree) at compile time and emit it into `.rodata`, which fixes that representation into the binary. That is a real code-generation obligation, not a free annotation — see `docs/compiler/compiler-architecture.md`.
 
 ---
 
@@ -408,7 +396,7 @@ All collections and `array<T>` (core) implement `Iterable<T>`. The `for/in` loop
 val arr  : array<int>[]  = {1, 2, 3}
 val ls   : list<int>     = {4, 5, 6}
 val xs   : set<str>      = {"a", "b", "c"}
-val dq   : deque<int>    = deque<int>.queue.of(7, 8, 9)
+val dq   : deque<int>.queue = deque<int>.queue.new(7, 8, 9)
 
 for (n in arr) { print(n.toStr()) }
 for (n in ls)  { print(n.toStr()) }
@@ -474,7 +462,7 @@ ls[-2]    // 30
 For a `deque<T>`, end indexing is defined in terms of the existing peek methods — same element, different empty-behavior:
 
 ```bestie
-val dq : deque<int> = deque<int>.queue.of(10, 20, 30)
+val dq : deque<int>.queue = deque<int>.queue.new(10, 20, 30)
 
 dq[-1]            // 30  — equivalent element to dq.peekLast()
 dq[0]             // 10  — equivalent element to dq.peekFirst()
@@ -557,6 +545,7 @@ Rows marked **ext** are extension functions on a core type, declared in this pac
 | `map<K,V>` | `keys()` | `set<K>` | Live key set view |
 | `map<K,V>` | `values()` | `list<V>` | Values in iteration order |
 | `map<K,V>` | `entries()` | `list<(K,V)>` | Key-value pairs in iteration order |
+| any `C` | `freeze()` | `C.immutable` | **Consumes ownership** — see §9.4. No copy |
 
 ### 9.2 Examples
 
@@ -603,6 +592,32 @@ val values : list<int> = scores.values()   // [92, 85]
 * `toSet()` on a source with duplicates silently deduplicates — the resulting set contains only unique elements
 * `toArray()` on a `list<T>` produces an array with `capacity == size()` — the array is full immediately; `add()` would panic unless the caller uses a larger array instead
 * `keys()`, `values()`, and `entries()` on a `map` produce views that reflect the current state of the map at the time of the call
+
+---
+
+### 9.4 `freeze()` — the one bridge into `immutable`
+
+`list<int>` and `list<int>.immutable` are distinct, invariant types (§3.3), so neither converts to the other implicitly. `freeze()` is the only bridge, and it **consumes ownership**:
+
+```bestie
+fun freeze(own xs: list<int>): own list<int>.immutable
+```
+
+```bestie
+val own ls = list<int>.new()
+ls.add(1)
+ls.add(2)
+
+val own frozen = move ls.freeze()   // list<int>.immutable
+ls.add(3)                           // ❌ ls was moved
+frozen.add(3)                       // ❌ 'add' is not available
+```
+
+Why ownership must be consumed: a plain `list<int>` → `list<int>.immutable` conversion would leave the caller holding a mutable alias to the same storage, so "immutable" would mean only *"I will not mutate it"* — useless for the thread-safety guarantee that is the point (`core/oop.md` §14). Because `move` invalidates the source, no mutable path survives the call, and the result is safe to share across threads with no lock.
+
+`freeze()` performs **no copy and no allocation**. The storage is unchanged; only the static type of the handle differs. It is available on every collection family and on core `array<T>` (`core/types.md` §5).
+
+There is no `thaw()`. To get a mutable collection back, copy explicitly — `frozen.toList()` — which allocates and says so.
 
 ---
 

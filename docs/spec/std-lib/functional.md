@@ -39,12 +39,22 @@ Without this import, none of the functional symbols are visible.
 
 ## Core Functional Operations
 
+All three take their source as a generic parameter constrained by `Iterable<T>`, never as a concrete collection type. Variations are invariant (`collections.md` §3.3), so a `list<T>` parameter would accept array-backed lists only; the constraint accepts every variation, plus core `array<T>`, `slice<T>`, and `range<T>`:
+
+```bestie
+fun map<C impl Iterable<T>, T, R>(xs: C, f: fn(T) -> R): list<R>
+fun filter<C impl Iterable<T>, T>(xs: C, p: fn(T) -> bool): list<T>
+fun fold<C impl Iterable<T>, T, R>(xs: C, initial: R, op: fn(R, T) -> R): R
+```
+
+`map` and `filter` return an array-backed `list<R>` — a new, owned collection the caller must discharge. They are monomorphized per instantiation, so no dispatch and no boxing occurs.
+
 ### map
 
 Transforms each element of a collection into a new value.
 
 ```bestie
-val xs = list<int>.of(1, 2, 3);
+val xs = list<int>.new(1, 2, 3);
 val ys = map(xs, (x: int) => x * 2)
 ```
 
@@ -59,7 +69,7 @@ val ys = map(xs, (x: int) => x * 2)
 Selects elements that satisfy a predicate.
 
 ```bestie
-val xs = list<int>.of(1, 2, 3, 4);
+val xs = list<int>.new(1, 2, 3, 4);
 val ys = filter(xs, (x: int) => x % 2 == 0)
 ```
 
@@ -152,12 +162,12 @@ Execution order is explicit and left-to-right.
 
 ## Functional Collections
 
-Functional operations work on any collection type that satisfies the **iterable protocol**.
+Functional operations work on anything satisfying `Iterable<T>` (`utils.md` §2):
 
-* `list`
-* `set`
-* `deque`
-* `map`
+* every `list` / `set` / `map` / `deque` / `heap` variation, including `.immutable`
+* core `array<T>`, `slice<T>`, and `range<T>`
+
+That reach is the reason the constraint is written as `impl Iterable<T>` rather than as a concrete parameter type — a `list<int>` parameter could take none of the others.
 
 Collections themselves remain structurally simple and behavior-free.
 

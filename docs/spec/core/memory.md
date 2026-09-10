@@ -801,7 +801,7 @@ Const and provenance rules:
 
 * `cast<U>()` that **removes `const`** (`ptr<const T>` → `ptr<T>`) requires `@trusted`; adding `const` is always allowed.
 * No operation in this table allocates, frees, or transfers ownership — `ptr<T>` is pure indirection (§4.2). Freeing is always an explicit, separate call by whatever owns the memory.
-* `copy(p)` / `deepCopy(p)` both duplicate the **address only** — raw pointers are not followed (see `std-lib/util.md`).
+* `copy(p)` / `deepCopy(p)` both duplicate the **address only** — raw pointers are not followed (see `std-lib/utils.md`).
 
 ---
 
@@ -1128,7 +1128,7 @@ val q = deepCopy(o)  // ✅ new container; each User deep-copied
 val r = copy(o)      // ❌ forbidden — would duplicate ownership of elements
 ```
 
-Duplication semantics are defined in full in `std-lib/util.md` §7. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
+Duplication semantics are defined in full in `std-lib/utils.md` §7. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
 
 ---
 

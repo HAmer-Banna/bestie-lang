@@ -86,7 +86,7 @@ import bestie.lib.math
 
 val a = matrix<float64>.zeros(3, 3)
 val b = matrix<float64>.identity(3)
-val c = matrix<float64>.of(2, 2, {1.0, 2.0, 3.0, 4.0})  // row-major, length == rows * cols
+val c = matrix<float64>.new(2, 2, {1.0, 2.0, 3.0, 4.0})  // row-major, length == rows * cols
 ```
 
 Rules:

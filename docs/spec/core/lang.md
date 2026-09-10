@@ -1125,7 +1125,7 @@ Anything else is a compile-time error:
 error: 'Foo' is not iterable — 'for/in' requires a 'fun iterator()' whose result has 'fun next(): T ?'
 ```
 
-**Where the protocols live.** The named protocols `Iterable<T>` and `Iterator<T>` are declared in `bestie.lib.patterns`, and every std-lib collection implements them. Core does not need that import to compile a `for` loop — it requires the *shape* above, and a lib protocol is one way to have it. But because core names `iterator()` and `next()` here, **those two method names are frozen**: they are part of the language contract and cannot be renamed or removed while the loop keyword exists (see §27). Everything else about `Iterable` / `Iterator` remains lib's to evolve.
+**Where the protocols live.** The named protocols `Iterable<T>` and `Iterator<T>` are declared in `bestie.lib.utils`, and every std-lib collection implements them. Core does not need that import to compile a `for` loop — it requires the *shape* above, and a lib protocol is one way to have it. But because core names `iterator()` and `next()` here, **those two method names are frozen**: they are part of the language contract and cannot be renamed or removed while the loop keyword exists (see §27). Everything else about `Iterable` / `Iterator` remains lib's to evolve.
 
 This is the general rule for core: core defines what its syntax *means*, lib supplies types that satisfy it.
 
@@ -1341,7 +1341,7 @@ Rules:
 * Using an operator on a type that provides no matching method is a compile-time error, never a fallback.
 * Newtypes (`type X as Y`, §6.1) inherit `Y`'s operators, including whatever `Y` lowers to.
 
-**Where the protocols live.** The protocols that declare these methods — `Addable`, `Subtractable`, `Multipliable`, `Divisible`, `Modulable`, `Negatable`, `Indexable`, `IndexAssignable`, `Equable`, `Comparable` — are in `bestie.lib.utilities`, and a type opts in by implementing them. Core defines only the mapping above. Because core names these methods, **`add`, `sub`, `mul`, `div`, `mod`, `neg`, the `*Assign` forms, `get`, `set`, `equal`, and `compareTo` are frozen** (§27); the protocols themselves stay lib's to extend.
+**Where the protocols live.** The protocols that declare these methods — `Addable`, `Subtractable`, `Multipliable`, `Divisible`, `Modulable`, `Negatable`, `Indexable`, `IndexAssignable`, `Equable`, `Comparable` — are in `bestie.lib.utils`, and a type opts in by implementing them. Core defines only the mapping above. Because core names these methods, **`add`, `sub`, `mul`, `div`, `mod`, `neg`, the `*Assign` forms, `get`, `set`, `equal`, and `compareTo` are frozen** (§27); the protocols themselves stay lib's to extend.
 
 ### 15.4 Equality
 
@@ -1454,7 +1454,7 @@ Mechanisms:
 
 There is no second, named spelling. `T ?` and `T ! E` are the only forms — Bestie does not also ship `option<T>` / `result<T,E>` types, because two vocabularies for one representation is exactly the duplication the syntax exists to avoid.
 
-See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/util.md`.
+See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/utils.md`.
 
 ---
 
@@ -1862,14 +1862,14 @@ What it does do is **freeze the name**. A symbol that a normative core rule depe
 
 | Cited symbol | Cited by | Declared in |
 | ------------ | -------- | ----------- |
-| `iterator()` | §13 — `for/in` desugaring | `bestie.lib.patterns` (`Iterable<T>`) |
-| `next(): T ?` | §13 — `for/in` desugaring | `bestie.lib.patterns` (`Iterator<T>`) |
-| `add` `sub` `mul` `div` `mod` `neg` | §15.3 — operator lowering | `bestie.lib.utilities` |
-| `addAssign` `subAssign` `mulAssign` `divAssign` `modAssign` | §15.3 — compound assignment lowering | `bestie.lib.utilities` |
-| `get(index)` / `set(index, value)` | §15.3 — `a[i]` and `a[i] = v` | `bestie.lib.utilities` |
-| `equal(other): bool` | §15.3, §15.4 — `==` and `!=` | `bestie.lib.utilities` (`Equable<T>`) |
-| `compareTo(other): int` | §15.3 — `<` `<=` `>` `>=`; §9.4 — `range<T>` bounds | `bestie.lib.utilities` (`Comparable<T>`) |
-| `hash(): int` | §5.4 — default `map` literal inference | `bestie.lib.utilities` (`Hashable<T>`) |
+| `iterator()` | §13 — `for/in` desugaring | `bestie.lib.utils` (`Iterable<T>`) |
+| `next(): T ?` | §13 — `for/in` desugaring | `bestie.lib.utils` (`Iterator<T>`) |
+| `add` `sub` `mul` `div` `mod` `neg` | §15.3 — operator lowering | `bestie.lib.utils` |
+| `addAssign` `subAssign` `mulAssign` `divAssign` `modAssign` | §15.3 — compound assignment lowering | `bestie.lib.utils` |
+| `get(index)` / `set(index, value)` | §15.3 — `a[i]` and `a[i] = v` | `bestie.lib.utils` |
+| `equal(other): bool` | §15.3, §15.4 — `==` and `!=` | `bestie.lib.utils` (`Equable<T>`) |
+| `compareTo(other): int` | §15.3 — `<` `<=` `>` `>=`; §9.4 — `range<T>` bounds | `bestie.lib.utils` (`Comparable<T>`) |
+| `hash(): int` | §5.4 — default `map` literal inference | `bestie.lib.utils` (`Hashable<T>`) |
 | `list<T>` | §5.3, §5.4 — literal type annotation | `bestie.lib.collections` |
 | `map<K,V>` | §5.3, §5.4 — default inference for `{k: v}` literals | `bestie.lib.collections` |
 
@@ -1895,7 +1895,7 @@ That asymmetry is the point. `ptr<T>` and `Iterator.next()` are permanent becaus
 
 ### 27.4 Compiler obligation
 
-The compiler resolves every cited symbol from the declaring package with no import required at the use site: `for (x in xs)` compiles without `import bestie.lib.patterns`, and `a + b` compiles without `import bestie.lib.utilities`. The import is needed only to name the protocol yourself — for example to write `impl Addable<Vec2>`.
+The compiler resolves every cited symbol from the declaring package with no import required at the use site: `for (x in xs)` compiles without `import bestie.lib.utils`, and `a + b` compiles without `import bestie.lib.utils`. The import is needed only to name the protocol yourself — for example to write `impl Addable<Vec2>`.
 
 A cited symbol that is missing or has the wrong shape is a **toolchain error**, not a user error:
 

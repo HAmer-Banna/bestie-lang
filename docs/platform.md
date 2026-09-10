@@ -121,8 +121,8 @@ Provides **high-level utilities** without system dependency.
 - `datetime` — date/time
 - `format` — formatting and templates
 - `concurrency` — fibers, channels, atomics, locks (built on core `thread`)
-- `utilities` — `option`, `result`, StringBuilder, copy helpers
-- `patterns` — protocol-based design patterns (Factory, Builder, Proxy, Iterator, Singleton via `Lazy`/`Once`)
+- `utils` — `Iterator`/`Iterable`, `Equable`/`Comparable`/`Hashable`, the operator protocols, `StringBuilder`, copy helpers
+
 
 ### Properties
 

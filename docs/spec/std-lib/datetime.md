@@ -79,13 +79,19 @@ value class Duration {
 
 Protocols implemented: `impl Equable<Duration>, Comparable<Duration>, Hashable<Duration>, Addable<Duration>, Subtractable<Duration>, Negatable`
 
-Factory constructors (free functions):
+Construction distinguishes units with **newtypes** rather than differently-named factories, so ordinary overload resolution applies and the unit travels with the value (`core/oop.md` §13.2):
 
 ```bestie
-fun Duration.ofSeconds(s: int64): Duration
-fun Duration.ofMillis(ms: int64): Duration
-fun Duration.ofNanos(ns: int64): Duration
+type Seconds as int64
+type Millis  as int64
+type Nanos   as int64
+
+Duration.new(30 as Seconds)
+Duration.new(500 as Millis)
+Duration.new(1_000 as Nanos)
 ```
+
+A bare `Duration.new(30)` is a compile-time error — `int64` is not one of the unit types, so there is no ambiguity about what `30` means.
 
 ---
 
@@ -157,17 +163,23 @@ data class TimeZone {
 Rules:
 
 * No implicit local zone
-* UTC must be explicit: `TimeZone.utc()`
+* UTC must be explicit: `utc()` or a zero-offset `TimeZone.new(...)`
 * Platform-specific zones (with DST rules) are loaded via `bestie.api.os` and wrapped in a `TimeZone`
 * Structural equality: two `TimeZone` values with the same `id` and `offset` are equal
 * `id` is a `str` (value type — no `own`/`ref` qualifier needed)
 * `offset` is a `Duration` (value class — embedded inline)
 
-Factory constructors (free functions):
+Construction:
 
 ```bestie
-fun TimeZone.utc(): TimeZone
-fun TimeZone.ofOffset(offset: Duration): TimeZone    // fixed offset zone, e.g. UTC+5:30
+TimeZone.new(Duration.new(0 as Seconds))       // UTC — a zero-offset zone
+TimeZone.new(Duration.new(19_800 as Seconds))  // fixed offset, e.g. UTC+5:30
+```
+
+`utc()` is a top-level function in this package, not a type-level one — it constructs nothing that `.new` cannot, and a function needing no instance is a plain `fun` (`core/oop.md` §13.2):
+
+```bestie
+fun utc(): TimeZone
 ```
 
 ---

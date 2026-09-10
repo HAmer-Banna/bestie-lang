@@ -100,10 +100,10 @@ value class Seed {
 * Copied by value; no identity
 * Two equal `Seed` values produce identical streams from the same algorithm
 
-Factory constructors (free functions):
+Construction:
 
 ```bestie
-fun Seed.of(value: uint64): Seed
+Seed.new(0xCAFEBABE)
 ```
 
 > Entropy-derived seeds come from `bestie.api.os` (see §9). This module never reads entropy on its own.
@@ -127,7 +127,7 @@ impl Rng for Pcg32
 Construction uses `.new(...)` with a non-`public` `init` (`core/oop.md` §11.8, §13.2):
 
 ```bestie
-val rng = Pcg32.fromSeed(Seed.of(0xCAFEBABE))
+val rng = Pcg32.fromSeed(Seed.new(0xCAFEBABE))
 ```
 
 * Deterministic: same seed → same sequence
@@ -151,7 +151,7 @@ impl Rng for Xoshiro256
 ```
 
 ```bestie
-val rng = Xoshiro256.fromSeed(Seed.of(42))
+val rng = Xoshiro256.fromSeed(Seed.new(42))
 ```
 
 Same rules as `Pcg32`: deterministic, mutable, explicit forking.
@@ -172,7 +172,7 @@ value class UniformInt {
 ```
 
 ```bestie
-fun UniformInt.of(low: int64, high: int64): UniformInt   // panics if low >= high
+fun UniformInt.new(low: int64, high: int64): UniformInt   // panics if low >= high
 
 fun sample(d: UniformInt, rng: Rng): int64
 ```
@@ -190,13 +190,13 @@ value class UniformFloat {
 ```
 
 ```bestie
-fun UniformFloat.of(low: float64, high: float64): UniformFloat
+fun UniformFloat.new(low: float64, high: float64): UniformFloat
 
 fun sample(d: UniformFloat, rng: Rng): float64
 ```
 
 * Produces values in `[low, high)`
-* `UniformFloat.of(0.0, 1.0)` is the canonical unit-interval distribution
+* `UniformFloat.new(0.0, 1.0)` is the canonical unit-interval distribution
 
 ---
 
@@ -243,7 +243,7 @@ import bestie.api.os
 import bestie.lib.random
 
 // Seed a deterministic PRNG from a one-time entropy draw.
-val seed = Seed.of(os.entropy64())          // os.entropy64 lives in bestie.api.os
+val seed = Seed.new(os.entropy64())          // os.entropy64 lives in bestie.api.os
 val rng  = Pcg32.fromSeed(seed)
 ```
 
@@ -261,7 +261,7 @@ The boundary is intentional:
 * The intended pattern is **one generator per thread**, each seeded explicitly (e.g. base seed + thread index) to preserve reproducibility.
 
 ```bestie
-val rng = Pcg32.fromSeed(Seed.of(baseSeed + threadIndex))
+val rng = Pcg32.fromSeed(Seed.new(baseSeed + threadIndex))
 ```
 
 Distributions (`UniformInt`, `UniformFloat`) are immutable value types and are freely shareable; only the generator they are sampled against carries mutable state.

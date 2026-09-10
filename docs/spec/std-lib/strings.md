@@ -196,7 +196,7 @@ val ok = c.isAscii()
 | ------- | ----- |
 | Raw byte access, codepoint access, iteration, byte slicing | core `str` (`core/types.md` §3, §6) |
 | Parsing, substring, search, split, trim, case, transforms | `bestie.lib.strings` (this document) |
-| Efficient repeated concatenation | `StringBuilder` (`std-lib/util.md` §1) |
+| Efficient repeated concatenation | `StringBuilder` (`std-lib/utils.md` §1) |
 
 For building strings in a loop, prefer `StringBuilder` over repeated `+` or `join` to avoid intermediate allocations:
 
