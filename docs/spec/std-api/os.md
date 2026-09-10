@@ -244,12 +244,12 @@ import bestie.lib.concurrency.Ordering
 val SHUTDOWN = atomic<bool>.new(false)
 
 fun installShutdown(): void ! OsError {
-    try onSignal(Signal.Term, (s: Signal) => SHUTDOWN.store(true, Ordering.release))
-    try onSignal(Signal.Int,  (s: Signal) => SHUTDOWN.store(true, Ordering.release))
+    try onSignal(Signal.Term, (s: Signal) => SHUTDOWN.store(true, Ordering.Release))
+    try onSignal(Signal.Int,  (s: Signal) => SHUTDOWN.store(true, Ordering.Release))
 }
 
 fun serveLoop(): void ! OsError {
-    while (not SHUTDOWN.load(Ordering.acquire)) {
+    while (not SHUTDOWN.load(Ordering.Acquire)) {
         serveOne()
     }
     drainAndClose()

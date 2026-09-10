@@ -189,28 +189,28 @@ import bestie.lib.concurrency.Ordering
 
 val counter = atomic<int>.new(0)
 
-counter.add(1, Ordering.relaxed)          // just count
-val n = counter.load(Ordering.acquire)    // pairs with a release store
-counter.store(n, Ordering.release)
+counter.add(1, Ordering.Relaxed)          // just count
+val n = counter.load(Ordering.Acquire)    // pairs with a release store
+counter.store(n, Ordering.Release)
 ```
 
 | Method | Notes |
 | ------ | ----- |
-| `load(o: Ordering): T` | `o` is `relaxed`, `acquire`, or `seqCst` |
-| `store(v: T, o: Ordering): void` | `o` is `relaxed`, `release`, or `seqCst` |
+| `load(o: Ordering): T` | `o` is `Relaxed`, `Acquire`, or `SeqCst` |
+| `store(v: T, o: Ordering): void` | `o` is `Relaxed`, `Release`, or `SeqCst` |
 | `add(v: T, o: Ordering): T` · `sub` | Read-modify-write; returns the previous value |
 | `exchange(v: T, o: Ordering): T` | Unconditional swap; returns the previous value |
 | `compareExchange(expected: T, desired: T, success: Ordering, failure: Ordering): T ?` | Present with the previous value on success, absent on failure |
 
 ```bestie
 enum Ordering {
-    relaxed, acquire, release, acqRel, seqCst
+    Relaxed, Acquire, Release, AcqRel, SeqCst
 }
 ```
 
-Passing an ordering the operation cannot accept — `acquire` on a store, `release` on a load — is a compile-time error, not a silent upgrade.
+Passing an ordering the operation cannot accept — `Acquire` on a store, `Release` on a load — is a compile-time error, not a silent upgrade.
 
-**There is no `increment()` convenience.** It would have to pick an ordering on the caller's behalf, and that is exactly the hidden cost Bestie refuses. Write `counter.add(1, Ordering.relaxed)` and mean it.
+**There is no `increment()` convenience.** It would have to pick an ordering on the caller's behalf, and that is exactly the hidden cost Bestie refuses. Write `counter.add(1, Ordering.Relaxed)` and mean it.
 
 Atomics are library types, not keywords. They compile to CPU atomic instructions; they do not require `bestie.api.os`.
 

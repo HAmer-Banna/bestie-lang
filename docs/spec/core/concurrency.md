@@ -279,15 +279,15 @@ An atomic operation carries an **ordering** that says which non-atomic accesses 
 
 | Ordering | Meaning |
 | -------- | ------- |
-| `relaxed` | Atomic with respect to this location only. No ordering of other accesses. Safe for counters whose value is read later under some other edge |
-| `acquire` | On a load: no subsequent access in this thread may be reordered before it. Pairs with a `release` store to give a happens-before edge |
-| `release` | On a store: no prior access in this thread may be reordered after it. Pairs with an `acquire` load |
-| `acqRel` | On a read-modify-write: `acquire` on the read, `release` on the write |
-| `seqCst` | As above, plus a single total order over all `seqCst` operations that every thread agrees on |
+| `Relaxed` | Atomic with respect to this location only. No ordering of other accesses. Safe for counters whose value is read later under some other edge |
+| `Acquire` | On a load: no subsequent access in this thread may be reordered before it. Pairs with a `Release` store to give a happens-before edge |
+| `Release` | On a store: no prior access in this thread may be reordered after it. Pairs with an `Acquire` load |
+| `AcqRel` | On a read-modify-write: `Acquire` on the read, `Release` on the write |
+| `SeqCst` | As above, plus a single total order over all `SeqCst` operations that every thread agrees on |
 
-**A `release` store observed by an `acquire` load of the same location creates a happens-before edge** between the storing and loading threads. This is the primitive every lock, channel, and lock-free structure is built from.
+**A `Release` store observed by an `Acquire` load of the same location creates a happens-before edge** between the storing and loading threads. This is the primitive every lock, channel, and lock-free structure is built from.
 
-Bestie has **no default ordering**. `atomic<T>` operations name theirs, because a silently-`seqCst` default is a hidden cost on architectures where it means a fence, and a silently-`relaxed` default is a hidden bug. This is the same rule as everywhere else in the language: the cost is written down.
+Bestie has **no default ordering**. `atomic<T>` operations name theirs, because a silently-`SeqCst` default is a hidden cost on architectures where it means a fence, and a silently-`Relaxed` default is a hidden bug. This is the same rule as everywhere else in the language: the cost is written down.
 
 Atomic operations are never data races, whatever their ordering.
 
@@ -301,7 +301,7 @@ Atomic operations are never data races, whatever their ordering.
 ### 8.5 What Core Does Not Guarantee
 
 * That a `ptr<T>` shared across threads is race-free — that is programmer-owned (§5, `memory.md` §14)
-* Any ordering between accesses to *different* locations, absent an edge from §8.2 or a `release`/`acquire` pair
+* Any ordering between accesses to *different* locations, absent an edge from §8.2 or a `Release`/`Acquire` pair
 * Progress. A spin loop with no atomic operation and no yield may be optimized as the compiler sees fit; use `atomic<T>` or a `Lock`
 * Anything about memory the program did not allocate — MMIO has its own rules (`std-api/memory.md` §5), and volatile semantics are **not** implied by any ordering above
 
