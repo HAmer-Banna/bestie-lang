@@ -158,7 +158,7 @@ Each carries meaning in exactly one position, so `val override = 1` and `fun imm
 
 `absent` is the absent value of a `T ?`, needed because bare `return` only reaches return position and a field initializer needs a value to assign. It is **not** a null literal: it has no type of its own, is valid only where a `T ?` is expected, and cannot be compared with `==`, stored in a `T`, or dereferenced. Presence needs no counterpart — a `T` is accepted wherever a `T ?` is expected.
 
-Built-in **type names** — `int`, `uint`, `float`, `bool`, `char`, `str`, `byte`, `array`, `slice`, `range`, `tuple`, `ptr`, `thread` — are ordinary identifiers bound by the prelude, not reserved words. Shadowing one is legal and warned about, in exactly the way shadowing any prelude name is (§4.8.3).
+Built-in **type names** — `int`, `uint`, `float`, `bool`, `char`, `str`, `byte`, `array`, `slice`, `range`, `tuple`, `ptr`, `thread`, `never` — are ordinary identifiers bound by the prelude, not reserved words. Shadowing one is legal and warned about, in exactly the way shadowing any prelude name is (§4.8.3).
 
 #### 3.1.5 Statement Termination
 

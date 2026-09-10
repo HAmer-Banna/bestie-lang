@@ -868,7 +868,7 @@ As with `T ?`, this is the only spelling — there is no named `result<T, E>` ty
 
 * Signatures spelled `T ! E`
 * `try` / `catch` at the call site (`exceptions.md` §2.3–2.4)
-* `return !Variant` to fail explicitly (`exceptions.md` §2.5)
+* `return ErrorSet.Variant` to fail explicitly (`exceptions.md` §2.5)
 * Type arguments that are “a value or an error” — `Channel<int ! WorkError>`
 
 Matching on a failure matches the **error set** directly, inside a `catch` — there is no `Ok` / `Err` wrapper to destructure:

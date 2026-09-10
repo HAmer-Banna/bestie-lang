@@ -693,6 +693,35 @@ For construction rules specific to inner classes — including how the outer `in
 
 ---
 
+### 9.1.1 Consuming Methods (`own this`)
+
+A method may **consume** its receiver by declaring the receiver `own this`. Calling it discharges the instance's ownership obligation, and the binding is invalid afterwards — exactly as if it had been passed to a `fun f(own x: T)` (`memory.md` §6.2).
+
+```bestie
+class Transaction {
+    fun commit(own this): void ! DbError
+    fun rollback(own this): void ! DbError
+}
+```
+
+```bestie
+val own tx = try conn.begin()
+try tx.commit()
+tx.rollback()      // ❌ 'tx' was consumed by 'commit'
+```
+
+**Rules:**
+
+* Only a reference class kind (`class`, `open class`, `abstract class`) may declare a consuming method — value kinds are copied at the call, so there is nothing to consume.
+* A consuming method is the **only** method form that discharges an ownership obligation other than `free()` / `freeDeep()`. It is responsible for releasing the instance's storage before returning.
+* `this` inside the body is an owned value: it may be moved, stored, or freed, but it must be discharged exactly once on every path.
+* A consuming method may not be `virtual`. Dynamic dispatch would make the discharge depend on the runtime type, and the compiler must know statically that the obligation was met.
+* `defer` cannot call one: `defer` runs during a scope exit and may not start another discharge (§23.4 of `lang.md`).
+
+**Why this exists.** It lets a type express *"this object must be finished, and there is more than one way to finish it"* — which ordinary `free()` cannot say. A transaction that is neither committed nor rolled back is the canonical case: with consuming methods, forgetting both is the ordinary leak error from `memory.md` §7.4, reported at compile time rather than surfacing as a held lock in production. `bestie.api.db` §8.1 is the worked example.
+
+---
+
 ### 9.2 `super`
 
 * Compile-time resolvable only
@@ -845,7 +874,7 @@ class Circle ext Shape {
     radius: int
 
     init(color: str, radius: int): ! ShapeError {
-        if radius <= 0 { return !BadRadius }   // prologue: validate before building the base
+        if radius <= 0 { return ShapeError.BadRadius }   // prologue: validate before building the base
         super.init(color)                      // ends the prologue; base now initialized
         this.radius = radius                   // derived fields follow
     }
@@ -854,7 +883,7 @@ class Circle ext Shape {
 
 **Prologue rules:**
 
-* A prologue statement may read the `init()` parameters and locals, compute values, and `return !...` from a fallible `init()`.
+* A prologue statement may read the `init()` parameters and locals, compute values, and return an error from a fallible `init()` (`exceptions.md` §2.5).
 * A prologue statement may **not** read or write any field of `this`, call any method on `this` or `super`, take `this.address()`, or otherwise observe the instance being constructed. Violations are a compile-time error.
 * `super.init(...)` — or a delegating `this.init(...)` (§11.5) — **ends the prologue**. Exactly one such call must be reached on every path through the `init()` body.
 * After `super.init(...)` returns, all base fields are fully initialized, `this` becomes accessible, and derived-field assignment proceeds in declaration order (§11.2).
@@ -950,7 +979,7 @@ class Connection {
     port: int
 
     init(host: str, port: int): ! ConnectionError {
-        if port > 65535 { return !PortOutOfRange }
+        if port > 65535 { return ConnectionError.PortOutOfRange }
         this.host = host
         this.port = port
     }
@@ -1099,7 +1128,7 @@ class Connection {
     socket: ptr<RawSocket>
 
     init(host: str): ! ConnectionError {
-        this.socket = os.openSocket(host) catch |e| { return !Unreachable }
+        this.socket = os.openSocket(host) catch |e| { return ConnectionError.Unreachable }
     }
 
     deinit() {

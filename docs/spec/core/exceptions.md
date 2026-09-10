@@ -283,7 +283,36 @@ Build mode is selected by the toolchain; see `core/lang.md` §22.2.
 panic("unreachable state reached")
 ```
 
-### 4.4 Assertions
+### 4.4 Divergence and `never`
+
+Some expressions cannot complete. `panic()` is one; so are `return`, `break`, and `continue`. An expression that provably does not complete **satisfies any expected type**, because it never produces a value for the type to describe:
+
+```bestie
+val port = config.port else { panic("no port configured") }   // port: int
+val mode = if (ok) Mode.Fast else panic("unreachable")        // mode: Mode
+```
+
+Neither `panic` nor the surrounding branch needs a cast, and neither is a special case in the type checker — the branch simply contributes no type to the result.
+
+**`never` is the return type of a function that does not return.** It is an ordinary prelude type name (`lang.md` §3.1.4), not a keyword:
+
+```bestie
+fun panic(message: str): never
+fun exit(code: int): never              // bestie.api.os
+```
+
+Rules:
+
+* A function declared `: never` must not have a reachable path that returns. The compiler rejects one that does.
+* A call to a `never` function is a diverging expression, so it satisfies any expected type exactly as `panic` does.
+* Statements after a diverging expression in the same block are **unreachable and a compile-time error**, matching the rule for `break` and `continue` (`lang.md` §13.6).
+* `never` cannot be written as a parameter type, a field type, or a generic argument. There is no value of type `never`, so a binding of that type could never be initialized.
+
+This is what lets a library express process termination without the compiler having to special-case its name. `bestie.api.os.exit` is an ordinary function; the type says it does not come back.
+
+---
+
+### 4.5 Assertions
 
 ```bestie
 assert(x > 0)                          // panics if false

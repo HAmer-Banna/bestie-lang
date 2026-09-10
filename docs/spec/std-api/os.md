@@ -101,6 +101,29 @@ Rules:
 
 ---
 
+### 4.3 Terminating This Process
+
+```bestie
+fun exit(code: int): never
+```
+
+`exit` terminates the calling process immediately with the given status code. Its return type is `never` (`core/exceptions.md` §4.4), so a call to it satisfies any expected type and the compiler knows control does not continue past it:
+
+```bestie
+val own cfg = loadConfig(path) catch |e| {
+    println("config: ${renderError(e)}")
+    exit(2)
+}
+```
+
+Rules:
+
+* `exit` does **not** run `defer` statements, does not call `deinit()`, and does not flush buffered writers. It is process termination, not scope exit — anything that must be flushed or released must be handled before the call.
+* Code `0` conventionally means success. This API assigns no meaning to any other value; that is the program's contract with whatever invoked it.
+* Returning normally from `main` exits with `0`. `exit` exists for the paths where a different code must be reported, which `main`'s `void` return cannot express.
+
+---
+
 ## 5. Environment Variables
 
 Stateless utilities:
