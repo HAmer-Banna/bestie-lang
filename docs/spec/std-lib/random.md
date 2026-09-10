@@ -243,7 +243,8 @@ import bestie.api.os
 import bestie.lib.random
 
 // Seed a deterministic PRNG from a one-time entropy draw.
-val seed = Seed.new(os.entropy64())          // os.entropy64 lives in bestie.api.os
+// entropy64 is fallible -- the OS source may be unavailable.
+val seed = Seed.new(try os.entropy64())
 val rng  = Pcg32.fromSeed(seed)
 ```
 
