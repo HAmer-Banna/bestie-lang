@@ -130,6 +130,19 @@ fun <S impl InputStream, D impl OutputStream> copy(src: ptr<S>, dst: ptr<D>): in
 
 Protocol dispatch is static by default (`core/oop.md` §2.2), so this monomorphizes per pair — no vtable, no boxing — and both type parameters are inferred from the arguments (`core/lang.md` §7.1).
 
+### 5.1 `copy`
+
+`copy` is the one utility the protocols exist to make possible, and it ships with the package:
+
+```bestie
+fun <S impl InputStream, D impl OutputStream> copy(src: ptr<S>, dst: ptr<D>): int ! IoError
+fun <S impl InputStream, D impl OutputStream> copy(src: ptr<S>, dst: ptr<D>, bufferSize: int): int ! IoError
+```
+
+It reads until end of stream, writes everything it reads, and returns the total byte count. It allocates a stack buffer, never a heap one, and it does not flush or close either side — those remain the caller's explicit decisions.
+
+Because the parameters are protocol-constrained, one function serves every pair: file to socket, socket to file, buffer to `stdout`. Each instantiation monomorphizes into a direct call.
+
 **Rules:**
 
 * `read` returning `0` is end of stream. EOF is **not** an error, so it needs no error variant and no separate `eof()` query.
