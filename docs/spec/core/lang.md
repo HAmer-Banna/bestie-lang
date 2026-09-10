@@ -150,8 +150,13 @@ when        while       _
 | `immutable` | before `class`; collection variation | `immutability.md` §2 |
 | `virtual` | before `fun` in a class body | `oop.md` §2.3 |
 | `override` | before `fun` in a class body | `oop.md` §6 |
+| `absent` | expression position where a `T ?` is expected | `types.md` §8.3 |
 
-Each carries meaning in exactly one position, so `val override = 1` and `fun immutable()` remain legal declarations. They are keywords rather than annotations because each changes what a declaration *is* — its layout, its dispatch, or which methods it has — and annotations in Bestie never do (`annotations.md`).
+Each carries meaning in exactly one position, so `val override = 1` and `fun immutable()` remain legal declarations.
+
+`immutable`, `virtual`, and `override` are keywords rather than annotations because each changes what a declaration *is* — its layout, its dispatch, or which methods it has — and annotations in Bestie never do (`annotations.md`).
+
+`absent` is the absent value of a `T ?`, needed because bare `return` only reaches return position and a field initializer needs a value to assign. It is **not** a null literal: it has no type of its own, is valid only where a `T ?` is expected, and cannot be compared with `==`, stored in a `T`, or dereferenced. Presence needs no counterpart — a `T` is accepted wherever a `T ?` is expected.
 
 Built-in **type names** — `int`, `uint`, `float`, `bool`, `char`, `str`, `byte`, `array`, `slice`, `range`, `tuple`, `ptr`, `thread` — are ordinary identifiers bound by the prelude, not reserved words. Shadowing one is legal and warned about, in exactly the way shadowing any prelude name is (§4.8.3).
 
@@ -858,6 +863,30 @@ Rules:
 * Violations are **compile-time errors**
 * No runtime dispatch introduced — still fully monomorphized
 
+#### Parameters that appear only in a constraint
+
+A type parameter may be named nowhere in the signature except inside another parameter's constraint. It is then **inferred from the constraint**, once the constrained parameter is known:
+
+```bestie
+fun <C impl Iterable<T>, T, R> map(xs: C, f: fn(T) -> R): list<R>
+
+val ys = map(nums, (x: int) => x * 2)
+// C = list<int>  — from the argument
+// T = int        — from list<int> impl Iterable<int>
+// R = int        — from the lambda's return type
+```
+
+Here `T` appears only in `C`'s constraint. Resolution runs in dependency order: `C` is fixed by the argument, then `Iterable<T>` is matched against `C`'s implementation to yield `T`, then `R` follows from `f`.
+
+Rules:
+
+* A type may implement a given protocol **at most once** — `impl Iterable<int>` and `impl Iterable<str>` on one type is a compile-time error. Without that rule the match above would be ambiguous, and the rule is worth having on its own: two iteration orders behind one `for/in` is exactly the surprise Bestie avoids.
+* Inference is a single pass in dependency order. There is no unification across the whole signature and no backtracking — that is what keeps it linear, per `platform.md` §1.
+* A cycle among constraints (`<A impl P<B>, B impl Q<A>>`) is a compile-time error, not a fixpoint search.
+* An argument-less call site that leaves a parameter unconstrained requires an explicit type argument; the compiler never guesses a default.
+
+This is the mechanism that makes generic collection code practical. Because collection variations are invariant (`std-lib/collections.md` §3.3), `fun sum(xs: list<int>)` accepts array-backed lists only; `fun <C impl Iterable<int>> sum(xs: C)` accepts every variation, plus `array<int>`, `slice<int>`, and `range<int>`.
+
 ---
 
 ## 8. Numeric Literals
@@ -1119,13 +1148,41 @@ while (i < 10) {
 
    `next()` returning absent (`T ?`, §21) ends the loop, via the `else` unwrap of `fp.md` §3.3. Because the desugaring is a static call on a concrete type, it is monomorphized and inlined like any other method — there is no dynamic dispatch and no allocation. This is the specified lowering, not a form you write by hand.
 
+3. **A type whose `next()` is fallible** — `fun next(): T ? ! E` (`types.md` §8.4). The loop must then be written **`try for`**, and the enclosing function must accept `E`:
+
+   ```bestie
+   try for (entry in dir) {
+       process(entry)
+   }
+   ```
+
+   The desugaring is form 2 with `try` inserted, and nothing else changes:
+
+   ```bestie
+   // try for (x in xs) { body }   ⇒
+   val it = xs.iterator()
+   while (true) {
+       val x = try it.next() else { break }
+       body
+   }
+   ```
+
+   `try` propagates the error out of the loop and out of the enclosing function; `else` catches the clean end. Plain `for` over a fallible iterator is a compile-time error, and `try for` over an infallible one is too — the marker is required exactly when it means something:
+
+   ```
+   error: 'DirIterator.next' returns 'Path ? ! FsError' — use 'try for' so the
+          error path is visible at the loop
+   ```
+
+   The `try` is mandatory rather than inferred because a loop that can exit early with an error is exactly the control flow `try` exists to make visible (`exceptions.md` §1). Letting plain `for` propagate silently would be the one place in Bestie where an error leaves a function unmarked.
+
 Anything else is a compile-time error:
 
 ```
-error: 'Foo' is not iterable — 'for/in' requires a 'fun iterator()' whose result has 'fun next(): T ?'
+error: 'Foo' is not iterable — 'for/in' requires a 'fun iterator()' whose result has 'fun next(): T ?' or 'fun next(): T ? ! E'
 ```
 
-**Where the protocols live.** The named protocols `Iterable<T>` and `Iterator<T>` are declared in `bestie.lib.utils`, and every std-lib collection implements them. Core does not need that import to compile a `for` loop — it requires the *shape* above, and a lib protocol is one way to have it. But because core names `iterator()` and `next()` here, **those two method names are frozen**: they are part of the language contract and cannot be renamed or removed while the loop keyword exists (see §27). Everything else about `Iterable` / `Iterator` remains lib's to evolve.
+**Where the protocols live.** The named protocols `Iterable<T>` and `Iterator<T>` are declared in `bestie.lib.utils`, and every std-lib collection implements them. Core does not need that import to compile a `for` loop — it requires the *shape* above, and a lib protocol is one way to have it. But because core names `iterator()` and `next()` here, **those two method names are frozen** (in both the infallible and fallible shapes): they are part of the language contract and cannot be renamed or removed while the loop keyword exists (see §27). Everything else about `Iterable` / `Iterator` remains lib's to evolve.
 
 This is the general rule for core: core defines what its syntax *means*, lib supplies types that satisfy it.
 
@@ -1767,7 +1824,7 @@ A runtime expression as the condition is a **compile-time error**. See `core/con
 * **specialize generics with zero cost** — choose an implementation from a compile-time property of a type parameter, with no runtime branch:
 
 ```bestie
-fun store<T>(x: T) {
+fun <T> store(x: T) {
     when (sizeOf(T) <= 16) {
         inlineSmall(x)      // small values: pass/keep by value
     } else {
@@ -1863,7 +1920,7 @@ What it does do is **freeze the name**. A symbol that a normative core rule depe
 | Cited symbol | Cited by | Declared in |
 | ------------ | -------- | ----------- |
 | `iterator()` | §13 — `for/in` desugaring | `bestie.lib.utils` (`Iterable<T>`) |
-| `next(): T ?` | §13 — `for/in` desugaring | `bestie.lib.utils` (`Iterator<T>`) |
+| `next(): T ?` · `next(): T ? ! E` | §13 — `for/in` and `try for` desugaring | `bestie.lib.utils` (`Iterator<T>`) |
 | `add` `sub` `mul` `div` `mod` `neg` | §15.3 — operator lowering | `bestie.lib.utils` |
 | `addAssign` `subAssign` `mulAssign` `divAssign` `modAssign` | §15.3 — compound assignment lowering | `bestie.lib.utils` |
 | `get(index)` / `set(index, value)` | §15.3 — `a[i]` and `a[i] = v` | `bestie.lib.utils` |

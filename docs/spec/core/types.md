@@ -884,18 +884,39 @@ Function signatures should use `T ! E`. Do not invent a second error API.
 
 A function may not use `?` and `!` interchangeably for the same idea. Absence and failure are different: use `T ?` for “no value”, `T ! E` for “this failed”. Writing one where the other is meant — `parse(s: str): int ?`, hiding *why* it failed — is the mistake this rule exists to prevent.
 
-#### Stacking `?` and `!` — open question
+#### Stacking `?` and `!`
 
-Whether `T ? ! E` is a legal return type is **not yet settled**, and the two readings differ:
+`T ? ! E` is **legal**. `T ! E ?` is not.
 
-* **Rejected** (the rule as previously written): a function returns absence *or* failure, never both. Simple, and it forces an author to decide which concept they actually mean.
-* **Permitted**: the value slot holds `T ?` and the error slot holds `E`. These are already separate registers in the `!` ABI (`exceptions.md` §3.6), so the form costs nothing and describes a shape that genuinely occurs — an operation that can legitimately produce nothing *and* can legitimately fail.
+A function returning `T ? ! E` has three outcomes: a value, a clean absence, and a failure. The value slot holds `T ?` and the error slot holds `E` — these are already separate registers in the `!` ABI (`exceptions.md` §3.6), so the form costs **nothing**: no third register, no extra branch, no allocation. The shape the ABI already has is exactly the shape this needs.
 
-The case that forces the question is a **fallible iterator**. `bestie.api.fs`'s `DirIterator.next()` must express three outcomes: the next entry, a clean end of directory, and a read error. Collapsing any two of them loses information — making end-of-directory an error variant is wrong, and dropping the error is worse. Lookups over fallible storage (a cache, a database, a memory-mapped table) have the same shape.
+```bestie
+fun next(): Path ? ! FsError        // an entry, end of directory, or a read error
+fun lookup(k: Key): Row ? ! DbError // a row, a miss, or a query failure
+```
 
-The workarounds available under the strict reading are all worse: an `End` error variant misrepresents normal termination; a separate `hasNext()` requires lookahead and races; a stateful `error()` checked after the loop is the `feof`/`ferror` model Bestie otherwise rejects. The `for/in` contract (`lang.md` §13) also requires `next(): T ?`, so a fallible iterator has no conforming shape at all today.
+**Binding.** `?` binds to the value and `!` is outermost, which follows from the existing rule that `?` binds to the immediately preceding type (§8.3). So `T ? ! E` reads as "*an optional `T`, or an error `E`*". The reverse — an optional error union — is meaningless and is a compile-time error:
 
-Until this is decided, `std-api/fs.md` writes `Path ? ! FsError` and this is the only place in the standard library that does. Resolving it one way or the other is a core change under `platform.md` §6.
+```bestie
+fun f(): int ? ! IoError    // ✅ a value, or nothing, or a failure
+fun g(): int ! IoError ?    // ❌ 'T ! E ?' is not a type
+```
+
+**Unwrapping composes with no special case.** `try` handles the failure, `else` handles the absence, and each keeps its ordinary meaning:
+
+```bestie
+val entry = try it.next() else { break }
+```
+
+`try` propagates the `FsError` to the caller; `else` catches the clean end. A `try` on a `T ? ! E` yields `T ?`, which is then unwrapped like any other optional (`fp.md` §3.3).
+
+**Why permit it.** The forcing case is a fallible iterator: `bestie.api.fs`'s `DirIterator.next()` must express the next entry, a clean end of directory, and a read error, and collapsing any two loses information. Every workaround under a strict reading is worse — an `End` error variant misrepresents normal termination as failure, a separate `hasNext()` needs lookahead and races, and a stateful `error()` checked after the loop is the `feof`/`ferror` model Bestie rejects elsewhere.
+
+The deeper reason is that refusing the form does not remove the third state; it forces the author to *encode* it, badly. That is the same argument as the no-null guarantee (`fp.md` §4), one level up: absence should be in the type, not smuggled into a sentinel.
+
+**Do not use it to dodge a decision.** `T ?` and `T ! E` remain different concepts, and the rule in this section still holds — `parse(s: str): int ?` is wrong because it hides *why* parsing failed. `T ? ! E` is for operations where absence and failure are **both genuinely possible and genuinely different**. A function whose absence case is really a failure should say so with `T ! E`.
+
+For how `for/in` consumes a fallible iterator, see `lang.md` §13.
 
 ---
 

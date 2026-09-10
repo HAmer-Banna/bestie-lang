@@ -42,9 +42,9 @@ Without this import, none of the functional symbols are visible.
 All three take their source as a generic parameter constrained by `Iterable<T>`, never as a concrete collection type. Variations are invariant (`collections.md` §3.3), so a `list<T>` parameter would accept array-backed lists only; the constraint accepts every variation, plus core `array<T>`, `slice<T>`, and `range<T>`:
 
 ```bestie
-fun map<C impl Iterable<T>, T, R>(xs: C, f: fn(T) -> R): list<R>
-fun filter<C impl Iterable<T>, T>(xs: C, p: fn(T) -> bool): list<T>
-fun fold<C impl Iterable<T>, T, R>(xs: C, initial: R, op: fn(R, T) -> R): R
+fun <C impl Iterable<T>, T, R> map(xs: C, f: fn(T) -> R): list<R>
+fun <C impl Iterable<T>, T> filter(xs: C, p: fn(T) -> bool): list<T>
+fun <C impl Iterable<T>, T, R> fold(xs: C, initial: R, op: fn(R, T) -> R): R
 ```
 
 `map` and `filter` return an array-backed `list<R>` — a new, owned collection the caller must discharge. They are monomorphized per instantiation, so no dispatch and no boxing occurs.

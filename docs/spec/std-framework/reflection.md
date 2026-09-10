@@ -78,7 +78,7 @@ class FieldInfo {
     // Compile-time projection: reads this field from a value of the owning type.
     // `FieldType` denotes the field's concrete static type, resolved by the
     // compiler during lowering — there is no boxing and no `any`.
-    fun read<T>(value: T): FieldType
+    fun <T> read(value: T): FieldType
 }
 ```
 
@@ -125,7 +125,7 @@ import bestie.framework.reflection.FieldInfo
 
 // A generic, zero-cost field walker resolved entirely at compile time.
 @pure
-fun toRecord<T>(value: T): map<str, str> {
+fun <T> toRecord(value: T): map<str, str> {
     const info = reflect<T>()
     var out = map<str, str>.build()
 
@@ -173,7 +173,7 @@ data class User {
 }
 
 @pure
-fun toJson<T>(value: T): str {
+fun <T> toJson(value: T): str {
     const info = reflect<T>()
     val sb = StringBuilder.new()
     sb.append("{")

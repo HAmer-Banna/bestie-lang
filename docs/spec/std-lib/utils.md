@@ -334,8 +334,8 @@ protocol DeepCopyable<T> {
 Free functions dispatch to these protocols (or to a compiler-derived default):
 
 ```bestie
-fun copy<T>(value: T): T        // requires T : Copyable
-fun deepCopy<T>(value: T): T    // requires T : DeepCopyable
+fun <T> copy(value: T): T        // requires T : Copyable
+fun <T> deepCopy(value: T): T    // requires T : DeepCopyable
 ```
 
 **There is no separate `Cloneable` protocol, and there are no marker protocols in Bestie.** `Copyable` / `DeepCopyable` *are* Bestie's "clone" mechanism, and they are **method-bearing** contracts (`copy()` / `deepCopy()`) — not Java-style empty markers that rely on a magic `Object.clone()`. A type opts in by satisfying a real method (explicitly or by compiler derivation, §8.2); capability is expressed by the method that performs the work, never by a contentless tag. This keeps duplication explicit, statically resolved, and free of reflective or runtime cloning machinery.

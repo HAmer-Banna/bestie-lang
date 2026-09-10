@@ -366,6 +366,27 @@ The compiler assigns niches greedily (most constrained payload first). `bool` is
 
 ---
 
+## 12a. `const` Collections (Compiler Obligation)
+
+`std-lib/collections.md` §5.2 permits `const set<T>` and `const map<K,V>` from a literal. That is a **code-generation obligation**, not an annotation, and it is materially heavier than `const array<T>`:
+
+| Form | What the compiler emits |
+| ---- | ----------------------- |
+| `const array<T>[] = {…}` | The elements, contiguously, in `.rodata`. Trivial. |
+| `const set<T> = {…}` | A complete lookup structure in `.rodata` |
+| `const map<K,V> = {…}` | The same, plus the value array |
+
+Requirements:
+
+* The key type's `hash()` (cited — `lang.md` §27) must be `@pure` and compile-time evaluable for the literal's keys. A key type whose `hash()` is not compile-time evaluable makes the collection ineligible for `const`, and that is a compile-time error naming the key type — never a silent downgrade to a runtime-built collection.
+* The emitted structure is **built at compile time**: the compiler computes the placement itself and writes the finished buckets or nodes into `.rodata`. Nothing is constructed at startup, consistent with the guarantee that a Bestie binary runs no initialization code (`oop.md` §13.1).
+* Because the structure is frozen into the object file, the **representation of a `const` collection is fixed at build time**. Changing the default representation of `map<K,V>` in a later std-lib release changes what a recompile emits, but never what an already-built binary contains.
+* The compiler is free to choose a placement strategy the runtime form does not use — perfect hashing is the obvious one, since the key set is fully known and never grows. The observable semantics (lookup result, iteration order where the variation defines one) must match the runtime form exactly.
+
+Duplicate keys or elements in the literal are rejected at compile time (`collections.md` §5.1), so the emitted structure never needs a collision path for cases the source already ruled out.
+
+---
+
 ## 13. Versioning and Stability
 
 Compiler components are versioned alongside:

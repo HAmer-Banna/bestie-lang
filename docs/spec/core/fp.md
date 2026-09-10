@@ -948,7 +948,7 @@ Rules:
 ## 12. Function Composition
 
 ```bestie
-fun compose<A, B, C>(
+fun <A, B, C> compose(
     f: fn(B) -> C,
     g: fn(A) -> B
 ): fn(A) -> C {

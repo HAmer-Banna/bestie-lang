@@ -272,22 +272,30 @@ fun readDir(p: Path): own DirIterator ! FsError
 ```
 
 ```bestie
-own dir = readDir(Path.of("/var/log")) catch |err| { ... }
-defer dir.close()
+fun scanLogs(): void ! FsError {
+    val own dir = try readDir(Path.new("/var/log"))
+    defer dir.close()
 
-loop {
-    val entry = dir.next() catch |err| { ... }
-    match entry {
-        End -> break
-        path: Path -> process(path)
+    try for (entry in dir) {
+        process(entry)
     }
+}
+```
+
+`try for` is required because `next()` is fallible (`core/lang.md` §13): `try` propagates an `FsError` out of the loop and out of `scanLogs`, while a clean end of directory ends the loop normally. Written by hand the same loop is:
+
+```bestie
+val it = dir.iterator()
+while (true) {
+    val entry = try it.next() else { break }
+    process(entry)
 }
 ```
 
 Rules:
 
 * `DirIterator` owns an OS handle and must be closed
-* `next()` returns absent at end of directory and `! FsError` on a read failure — the two outcomes are genuinely different and both must be expressible. This is the one place in the standard library that needs `T ? ! E`, a form `core/types.md` §8.4 currently rejects; see the note there.
+* `next()` returns absent at end of directory and `! FsError` on a read failure — the two outcomes are genuinely different and both must be expressible. `T ? ! E` is legal (`core/types.md` §8.4); iterate with `try for` (`core/lang.md` §13).
 * Iteration order is **not** guaranteed across platforms
 * Entries are returned as `Path`; call `stat` if metadata is needed
 

@@ -43,7 +43,7 @@ They are reusable, composable, and predictable.
 
 Collection variations are invariant (`collections.md` §3.3), so a parameter naming `list<T>` accepts array-backed lists and nothing else. Every algorithm here therefore falls into one of two shapes:
 
-* **Read-only traversal** takes a generic parameter constrained by `Iterable<T>` — `fun f<C impl Iterable<T>>(xs: C)`. This accepts every collection variation, plus core `array<T>`, `slice<T>`, and `range<T>`. It is fully monomorphized, so each instantiation compiles to what a hand-written loop would.
+* **Read-only traversal** takes a generic parameter constrained by `Iterable<T>` — `fun <C impl Iterable<T>> f(xs: C)`. This accepts every collection variation, plus core `array<T>`, `slice<T>`, and `range<T>`. It is fully monomorphized, so each instantiation compiles to what a hand-written loop would.
 * **In-place reordering and indexed access** names a concrete type, because the cost is part of the contract. `binarySearch` says `list<T>` precisely because O(log n) depends on array-backed indexing; the same signature over `list<T>.linked` would be O(n log n) with nothing in the source saying so.
 
 In-place algorithms take `ptr<list<T>>`, not `list<T>`: `list<T>` is a `class` and classes are not copyable across a call (`core/memory.md` §6.1). Pointing is how a callee mutates the caller's object.
@@ -55,7 +55,7 @@ In-place algorithms take `ptr<list<T>>`, not `list<T>`: `list<T>` is a `class` a
 ### 3.1 `sort`
 
 ```bestie
-fun sort<T impl Comparable>(data: ptr<list<T>>)
+fun <T impl Comparable> sort(data: ptr<list<T>>)
 ```
 
 Purpose:
@@ -85,7 +85,7 @@ Use when:
 ### 3.2 `stableSort`
 
 ```bestie
-fun stableSort<T impl Comparable>(data: ptr<list<T>>)
+fun <T impl Comparable> stableSort(data: ptr<list<T>>)
 ```
 
 Purpose:
@@ -110,7 +110,7 @@ Use when:
 ### 4.1 `binarySearch`
 
 ```bestie
-fun binarySearch<T impl Comparable>(
+fun <T impl Comparable> binarySearch(
     data: list<T>,
     target: T
 ): option<int>
@@ -140,13 +140,13 @@ A miss is represented by absence, not by `-1`.
 ### 5.1 `min`
 
 ```bestie
-fun min<T impl Comparable>(a: T, b: T): T
+fun <T impl Comparable> min(a: T, b: T): T
 ```
 
 ### 5.2 `max`
 
 ```bestie
-fun max<T impl Comparable>(a: T, b: T): T
+fun <T impl Comparable> max(a: T, b: T): T
 ```
 
 Rules:
@@ -160,7 +160,7 @@ Rules:
 ### 5.3 `clamp`
 
 ```bestie
-fun clamp<T impl Comparable>(
+fun <T impl Comparable> clamp(
     value: T,
     lower: T,
     upper: T
@@ -179,7 +179,7 @@ Guarantees:
 ### 6.1 `partition`
 
 ```bestie
-fun partition<T>(
+fun <T> partition(
     data: ptr<list<T>>,
     predicate: fn(T) -> bool
 ): int
@@ -211,7 +211,7 @@ val idx = partition(nums, x => x % 2 == 0)
 ### 7.1 `fold`
 
 ```bestie
-fun fold<C impl Iterable<T>, T, R>(
+fun <C impl Iterable<T>, T, R> fold(
     data: C,
     initial: R,
     op: fn(R, T) -> R
@@ -241,7 +241,7 @@ Rules:
 ### 8.1 `zip`
 
 ```bestie
-fun zip<CA impl Iterable<A>, CB impl Iterable<B>, A, B>(
+fun <CA impl Iterable<A>, CB impl Iterable<B>, A, B> zip(
     a: CA,
     b: CB
 ): Iterator<(A, B)>
