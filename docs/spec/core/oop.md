@@ -178,8 +178,8 @@ In Bestie, `enum` is one core shape with two declaration forms:
 
 ```bestie
 enum WeekendDays {
-    FRIDAY,
-    SATURDAY
+    Friday,
+    Saturday
 }
 ```
 

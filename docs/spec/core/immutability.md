@@ -126,7 +126,7 @@ val u = User.new(id: 1, name: "alice")
 Closed set of values, no mutable state. Tag-only enums lower to integer constants and may be used as `const`:
 
 ```bestie
-const WEEKEND_START : WeekendDays = WeekendDays.FRIDAY
+const WEEKEND_START : WeekendDays = WeekendDays.Friday
 ```
 
 ---
