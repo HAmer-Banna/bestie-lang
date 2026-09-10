@@ -308,7 +308,7 @@ Rules:
 * No implicit exceptions, no sentinel values
 * Optional **parameters and fields** use the same syntax: `fun connect(host: str, port: int ?)`, `val token: str ?`. `?` is not return-only.
 
-The named type `option<T>` and constructors `option.Present` / `option.Not_Present` live in `bestie.lib.utilities`. They are the same representation as `T ?`, not a second system. Import them to match by name; `if-let` below needs no import.
+There is no named `option<T>` type and no constructors to import — `T ?` is the only spelling. In expression position the absent value is written `absent` (`types.md` §8.3); presence needs no constructor, since a `T` is accepted wherever a `T ?` is expected.
 
 ---
 
@@ -331,22 +331,23 @@ val user = getUser(id) else { return }           // absent → early return
 val user = getUser(id) else { User.anonymous() } // absent → fallback value
 ```
 
-**Named matching — std-lib.** Import `bestie.lib.utilities` to match constructors:
+**Both cases — core.** `if`-let with an `else` covers the two-branch form:
 
 ```bestie
-import bestie.lib.utilities.option
-
-switch (getUser(id)) {
-    case option.Present(val user) => sendEmail(user)
-    case option.Not_Present       => println("user not found")
+if (val user = getUser(id)) {
+    sendEmail(user)
+} else {
+    println("user not found")
 }
 ```
+
+There is no `switch` form for `T ?`, because there is nothing a two-arm `switch` would add over `if`-let — and no constructors to name in a `case` pattern.
 
 Compiler enforces:
 
 * `T ?` cannot be used directly where `T` is expected — unwrapping is required
-* All branches of `switch` on `option<T>` must be covered
 * `if`-let binds the inner `T` value — the outer `T ?` is not accessible inside the block
+* An absent value reaching a context that requires `T` is a compile-time error, never a runtime fault
 
 ### 3.4 Lambdas and Partiality
 
@@ -381,7 +382,7 @@ There is no null literal. There is no nullable type. There is no way to write nu
 | In other languages | In Bestie |
 | ------------------ | --------- |
 | `null`, `nil`, `nullptr` | Does not exist |
-| `T?` (nullable reference) | `T ?` (core syntax; named `option<T>` in std-lib) |
+| `T?` (nullable reference) | `T ?` (core syntax — one spelling, no named alias) |
 | Null pointer dereference | Cannot occur through safe code |
 | Sentinel `-1` or `0` for "no value" | `T ?` |
 | Returning `null` | `return` (bare) in a `T ?` function |
@@ -401,7 +402,7 @@ There is no null literal. There is no nullable type. There is no way to write nu
 
 ### 4.3 Third-Party Bestie Libraries
 
-A library written in Bestie is structurally incapable of introducing null. It can only express absence via `T ?` (or the named std-lib form `option<T>`). This is enforced by the type system — not a convention, not a guideline.
+A library written in Bestie is structurally incapable of introducing null. It can only express absence via `T ?`. This is enforced by the type system — not a convention, not a guideline.
 
 ---
 
@@ -499,50 +500,43 @@ Rules:
 
 ## 6. Function Types
 
-Function types are **explicit and structural**. They are written with a single arrow `->` from the parameter list to the return type:
+Function types are **explicit and structural**. They are written with the `fn` prefix and a single arrow `->` from the parameter list to the return type:
 
 ```bestie
-(int) -> int
+fn(int) -> int
 ```
 
 Usage:
 
 ```bestie
-val f: (int) -> int = square
+val f: fn(int) -> int = square
 ```
 
-### 6.1 The Optional `fn` Prefix
+### 6.1 The `fn` Prefix Is Required
 
-The keyword `fn` may **optionally** prefix a function type. Both forms are exactly equivalent — `fn` adds no semantics, only emphasis:
+A function type is **always** written with the `fn` prefix. There is no bare form:
 
 ```bestie
-val f: (int) -> int    = square    // bare form
-val g: fn(int) -> int  = square    // fn-prefixed form — identical type
+val f: fn(int) -> int = square      // ✅
+val g: (int) -> int   = square      // ❌ function types are spelled with 'fn'
 ```
 
-There is no ambiguity to resolve here, so the prefix is never *required*:
+Three shapes use parentheses, and `fn` plus the arrow distinguishes all of them at a glance:
 
-* A **function type** uses the single arrow `->` (`(int) -> int`).
-* A **lambda** (a value/expression) uses the fat arrow `=>` (`(x: int) => x * 2`).
-* A **tuple type** has no arrow at all (`(int, str)`).
+* A **function type** — `fn(int) -> int`
+* A **lambda** (a value) — `(x: int) => x * 2`
+* A **tuple type** — `(int, str)`
 
-The arrows alone fully disambiguate the three. The `fn` prefix exists purely so a reader (or a `grep`) can spot a function type at a glance.
-
-**Style guideline:**
-
-* Prefer the **bare** form `(T) -> R` in simple signatures — it is lighter and reads cleanly.
-* Reach for the **`fn`-prefixed** form in dense or nested signatures, where a leading `fn` makes a higher-order parameter or a returned function easier to pick out:
+The arrows alone would be enough to parse, which is why this prefix was once optional. Optional is the wrong setting: a marker that half the code carries is a style argument, not a signal, and Bestie keeps **one spelling per idea** (§11.4 of `oop.md` makes the same call about header constructors). `fn` is now part of the type, so it is greppable, and a higher-order signature reads the same everywhere:
 
 ```bestie
-// nested / higher-order — fn aids readability
 fun compose(f: fn(int) -> int, g: fn(int) -> int): fn(int) -> int =
     (x: int) => f(g(x))
 
-// simple — bare form is enough
-fun apply(f: (int) -> int, x: int): int = f(x)
+fun apply(f: fn(int) -> int, x: int): int = f(x)
 ```
 
-Both spellings are accepted everywhere a function type is valid: parameters, return types, `val`/`var` bindings, and generic arguments. The examples throughout this document use the `fn` form for explicitness; they are equivalent to dropping the prefix.
+`fn` is a contextual keyword (`lang.md` §3.1.4): it has meaning only at the head of a function type, so `val fn = 3` remains legal.
 
 ### 6.2 Lowering Model
 
@@ -570,16 +564,12 @@ At a direct call site where the callee is statically known, the compiler emits a
 Used when:
 
 * The callable captures one or more values (explicit `[x]` or `[var x]` captures)
-* A bound method reference carries an instance (copy or moved `own`)
-* A `bind()` result carries runtime-bound arguments
 
 ```
 [ code_ptr | context_ptr ]   (2 words)
 ```
 
 `context_ptr` points to the **capture struct**, which is a fixed-size, stack-allocated record holding the captured values in capture-declaration order.
-
-For bound method references with `own` move, the context struct holds the moved value inline. For value-type copies, the struct holds the copied value inline.
 
 `context_ptr` is a typed `ptr<CaptureStruct>`. The `CaptureStruct` type is anonymous and compiler-generated — not accessible in user code.
 
@@ -601,7 +591,7 @@ When the callee type is fully known at the call site (monomorphic HOF or inlined
 
 **Capture struct lifetime:**
 
-The capture struct is stack-allocated at the lambda or `bind()` creation site. It lives as long as the callable value is live. The callable may not outlive the scope of its capture struct. The compiler enforces this through the same scope-based liveness analysis used for `ref`.
+The capture struct is stack-allocated at the lambda's creation site. It lives as long as the callable value is live. The callable may not outlive the scope of its capture struct. The compiler enforces this through the same scope-based liveness analysis used for `ref`.
 
 ---
 
@@ -613,9 +603,6 @@ The capture struct is stack-allocated at the lambda or `bind()` creation site. I
 | Non-capturing lambda, statically known | thin (1 word) or none | `call fn_ptr` |
 | Non-capturing lambda, passed as `fn(T)->R` | fat (2 words, null context) | indirect call |
 | Capturing lambda (explicit `[...]` only) | fat (2 words, live context) | indirect call |
-| Bound method — value copy | fat (2 words, inline context) | indirect call |
-| Bound method — `own` move | fat (2 words, inline context) | indirect call |
-| `bind()` with runtime args | fat (2 words, live context) | indirect call |
 
 ---
 
@@ -861,63 +848,18 @@ Rules:
 
 ---
 
-### 10.2 Bound Method References
+### 10.2 No Bound Method References
 
-A bound method reference binds an instance to a method, producing a zero-argument light callable.
-The behavior depends on the type of the bound object.
+There is no `p::getX` form that binds an instance into a callable. A method reference is always **unbound**: the receiver is passed at the call.
 
----
-
-**Value types** (`data class`, `value class`, `enum`, primitives) — copy:
+To carry a receiver, write a lambda with an explicit capture:
 
 ```bestie
-val p = Point.new(x = 1, y = 2)
-val f: fn() -> int = p::getX    // ✅ p is copied into f
+val p = Point.new(x: 1, y: 2)
+val f: fn() -> int = [p]() => p.getX()      // p copied into the capture struct
 ```
 
-The value is copied into the callable's inline context at the point of binding. No ownership concerns.
-
----
-
-**`own` values — explicit `move` required:**
-
-```bestie
-val own u = User.new()
-val f: fn() -> str = move u::getName   // ✅ u is moved into f
-f()                                     // calls getName on the moved user
-
-use(u)   // ❌ compile error: u has been moved
-```
-
-`move` transfers ownership into the callable's inline context. The source binding becomes invalid immediately — consistent with all other ownership transfer in Bestie.
-
-Without `move`, binding an `own` value is a **compile-time error**:
-
-```bestie
-val own u = User.new()
-val f: fn() -> str = u::getName   // ❌ compile error: u is own, use 'move u::getName'
-```
-
-**`ptr` receivers — unbound, pass explicitly:**
-
-A bound method reference cannot store a `ptr<T>` as an implicit capture of "this object." Use an unbound reference:
-
-```bestie
-fun greet(user: ptr<User>) {
-    val f: fn(ptr<User>) -> str = User::getName
-    f(user)
-}
-```
-
----
-
-Rules summary:
-
-* Value types — copied at binding site, no ownership tracking needed
-* `own` values — `move` required, source becomes invalid
-* `class` via `ptr<T>` — unbound; pass the pointer at the call
-* No allocation introduced in any case
-* Lowered at compile time
+A bound reference would have been a third way to build a capturing callable, alongside lambdas and — for `own` receivers — would have needed its own `move` interaction, its own rule for `ptr` receivers, and its own row in the lowering table (§6.2). The capture list already says what is carried and how, at the site where it happens.
 
 ---
 
@@ -1020,53 +962,17 @@ No implicit currying or composition exists.
 
 ## 13. Currying and Partial Application
 
-### 13.1 No Implicit Currying
+Neither exists. There is no implicit currying, and there is no `bind`.
 
-Automatic currying is not supported.
-Capturing-based currying is illegal.
-
-### 13.2 Explicit Partial Application
-
-`bind` performs partial application — it fixes one or more arguments of a function, producing a new function with fewer parameters.
-
-Bestie resolves `bind` **at compile time whenever possible**. When the bound value is only known at runtime, it is captured by copy — same semantics as explicit lambda capture, stored in a fixed-size callable context, no heap.
-
-**Compile-time constant — fully resolved at compile time:**
-
-```bestie
-val add5 = add.bind(5)       // 5 is a constant — fully specialized, zero runtime presence
-add5(3)                       // compiles to add(5, 3) directly
-```
-
-**Runtime value — captured by copy in the callable context:**
+Partial application is written as a lambda with an explicit capture list, which is what `bind` lowered to anyway:
 
 ```bestie
 val n = getUserInput()
-val addN = add.bind(n)       // n is runtime — n is copied into addN
-addN(3)                       // compiles to add(n_copy, 3)
+val addN = [n](b: int) => add(n, b)     // n copied into the capture struct
+addN(3)
 ```
 
-Equivalent to writing the explicit capture form:
-
-```bestie
-val addN = [n](b: int) => add(n, b)
-```
-
-**Binding multiple arguments:**
-
-```bestie
-fun clamp(min: int, max: int, val: int): int
-val clamp0to100 = clamp.bind(0, 100)   // fixes min and max
-clamp0to100(42)                         // compiles to clamp(0, 100, 42)
-```
-
-Rules:
-
-* Compile-time constant arguments → fully specialized at compile time
-* Runtime arguments → captured by copy, immutable, inline in the callable value
-* No heap allocation in either case
-* Captured values follow the same rules as explicit lambda captures — value types only, no `own`, no `ref`
-* `bind` arguments are bound left to right
+A `bind(...)` form would have been a second spelling for exactly this, with the capture hidden behind a method call instead of written in a `[...]` list. The lambda states its captures at the creation site, which is the property §7.3 exists to protect, and it specializes identically when the captured value is a compile-time constant.
 
 ---
 
@@ -1169,7 +1075,8 @@ Enforced by:
 
 ## 18. What Bestie Deliberately Avoids in FP
 
-* Implicit currying
+* Implicit currying and any `bind` / partial-application form (§13)
+* Bound method references (§10.2)
 * Lazy evaluation by default
 * Runtime monads
 * Hidden effect systems

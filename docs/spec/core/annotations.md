@@ -1,6 +1,6 @@
 # Annotations
 
-Annotations in Bestie are **compile-time only constructs**. They exist solely to guide the compiler, tooling, and static analysis, and **introduce zero runtime cost**. No annotation metadata is retained in the generated binary unless explicitly materialized by compiler plugins.
+Annotations in Bestie are **compile-time only constructs**. They exist solely to guide the compiler, tooling, and static analysis, and **introduce zero runtime cost**. No annotation metadata is retained in the generated binary.
 
 ---
 
@@ -13,50 +13,44 @@ Annotations in Bestie are **compile-time only constructs**. They exist solely to
 * Their primary roles include:
 
   * Validation
-  * Code generation
   * Static guarantees
   * Optimization hints
+  * Inert metadata for external tools
 
 This design aligns annotations with Bestie’s philosophy of *compile-time determinism*.
 
 ---
 
-## User-Defined Annotations
+## Two Kinds of Annotation
 
-Bestie allows **user-defined annotations**, provided they remain strictly compile-time.
+Bestie distinguishes **annotations the compiler acts on** from **annotations that are inert data**.
 
-Although the Bestie compiler itself is **closed-source and not modifiable**, the language supports **annotation extensions via compiler plugins**. These plugins may:
-
-* Interpret custom annotations
-* Enforce additional compile-time rules
-* Generate code or metadata
-* Integrate with external tooling
-
-This enables rich ecosystems (e.g. frameworks) without compromising compiler stability or runtime performance.
-Plugins operate at a compile-time boundary and cannot silently change core runtime semantics.
-
----
-
-## Annotation Syntax
-
-### Definition
+* **Compiler annotations** are the closed set listed under *Predefined Annotations* below. That list is complete: an annotation the compiler acts on is defined there, or it is not one. It cannot be extended.
+* **Declared annotations** may be written by any layer or by user code. The compiler checks their targets and their argument types and then records them for external tools. They have **no compiler behavior whatsoever** — they generate nothing, validate nothing beyond their own arguments, and change no declaration's meaning.
 
 ```bestie
 annotation ValidateRange(min: int, max: int);
-```
 
-### Usage
-
-```bestie
 @ValidateRange(min = 0, max = 100)
 fun setScore(score: int): void;
 ```
 
-Notes:
+* Annotation parameters are **named and typed**
+* All arguments must be **compile-time constants**
+* Applying one to a target its declaration does not permit is a compile-time error
+* A declared annotation may not carry a compiler annotation — that would be a way to acquire compiler behavior indirectly
 
-* Annotation parameters are **named and typed**.
-* All values must be **compile-time constants**.
-* Annotations may be applied multiple times unless restricted by the annotation definition.
+### No compiler plugins
+
+**There is no compiler-plugin mechanism.** A declared annotation cannot be given behavior by supplying code that runs during compilation. This follows from the platform pillars rather than from caution:
+
+* **Compilation speed is a hard constraint** (`platform.md` §1). A plugin is unbounded third-party work inside the build, which no amount of care in the compiler can bound.
+* **Core defines the meaning of its own syntax** (`platform.md` §12). A plugin that synthesizes fields or methods decides what a declaration *means* — the delegation that rule exists to forbid.
+* **"If something can be resolved at compile time, it must be"** (`lang.md` §2) is a promise about *the compiler*, not about a pipeline whose behavior varies per project.
+
+Frameworks that need generated code use an explicit generator that emits `.bst` source you can read, diff, and step through — not an invisible phase that makes the file on disk differ from the program that runs. The annotation is the generator's input; the generated source is a file in your repository.
+
+In particular there is no Lombok-style field synthesis. `oop.md` §11.10's rule that every field must be explicitly initialized has no opt-out, because an escape hatch from an explicitness rule is just the rule being false.
 
 ---
 
@@ -70,9 +64,6 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 | `@pure` | function | Side-effect free; callable in `const` initializers (`lang.md` §4.1) |
 | `@noInline` | function | Suppresses inlining for stack-trace and profiling clarity |
 | `@expose` | any declaration | Exposes the element to external tooling with a stable symbol name |
-| `@noNew` | class | Forbids `Type.new(...)` at external call sites — `oop.md` §11.8 |
-| `@noInit` | class | Suppresses the generated memberwise initializer — `oop.md` §11.8 |
-| `@noConstruct` | class | `@noNew` and `@noInit` combined — `oop.md` §11.8 |
 | `@since` | any declaration | Records the layer version a symbol first appeared in — below |
 | `@deprecated` | any declaration | Marks a symbol for removal; warns at every use site — below |
 
@@ -86,7 +77,9 @@ The exact semantics of each are enforced at compile time.
 
 All three are contextual keywords: they carry meaning in exactly one position and remain usable as identifiers elsewhere (`lang.md` §3.1.4). An annotation that changed semantics this way would make the zero-cost, no-runtime-effect promise of this document untrue.
 
-**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory.md` §18.7). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Initialize`, `@Reflectable`, framework routing and test annotations — comes from a compiler plugin or a higher layer, and is an unknown annotation to a plain core build.
+For the same reason there are no `@noNew` / `@noInit` / `@noConstruct` annotations. Restricting construction is a **visibility** question, and visibility already answers it: an `init` declared without `public` is `internal`, so `Type.new(...)` is unavailable outside the module, and `private init` narrows it to the declaring type. Declaring any `init` at all removes the compiler-generated memberwise one (`oop.md` §11.4), so one existing rule covers what three annotations used to.
+
+**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory.md` §18.7). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Reflectable`, framework routing and test annotations — is declared by a higher layer and is an unknown annotation to a plain core build.
 
 ---
 
@@ -101,7 +94,6 @@ Annotations may be applied to:
 | Fields | `@expose val cache: Buffer` |
 | Function parameters | `fun handle(@Named("primary") db: Database)` |
 | Local bindings and expressions | `@trusted val s = (input as Score)` |
-| Other annotations (composition, below) | `@deprecated("legacy") annotation Legacy;` |
 
 An annotation declaration may restrict which of these it accepts; applying it elsewhere is a compile-time error:
 
@@ -110,24 +102,6 @@ error: '@pure' is not applicable to a field — valid targets: function
 ```
 
 Annotations never appear on statements, blocks, or control-flow keywords. `@trusted` is the one that comes closest, and it attaches to the expression or binding whose check it suppresses — never to a block, because there is no `unsafe { }` in Bestie (`memory.md` §15).
-
-### Annotation-on-Annotation (Composition)
-
-When an annotation is applied to another annotation, it behaves as **annotation composition**:
-
-* The annotated annotation implicitly carries **both its own behavior and its parent’s behavior**.
-* This models a form of *inheritance-like reuse* without introducing runtime hierarchies.
-
-Example:
-
-```bestie
-@deprecated(reason = "superseded by the v2 codec", removedIn = "2.0")
-annotation LegacyCodec;
-```
-
-Any usage of `@LegacyCodec` now also carries the `@deprecated` warning.
-
----
 
 ## Evolution — `@since` and `@deprecated`
 
@@ -222,38 +196,6 @@ Because annotations are compile-time only, these frameworks achieve:
 * Predictable performance characteristics
 
 When a framework genuinely needs to introspect types, it uses `bestie.framework.reflection`, which is **compile-time first** and only materializes runtime metadata for types explicitly marked `@Reflectable` (see `std-framework/reflection.md`).
-
----
-
-## Third-Party Annotation Conventions
-
-The plugin system enables third-party libraries to establish their own annotation conventions. One well-known pattern is **default initialization**, analogous to Java's Lombok project.
-
-### `@Initialize` (Plugin Convention)
-
-A plugin may provide `@Initialize` to automatically generate zero or default field values for a class, so that every field without an explicit default receives the natural zero for its type:
-
-| Type | Generated default |
-| ---- | ----------------- |
-| `int`, `int8`, … | `0` |
-| `float32`, `float64` | `0.0` |
-| `bool` | `false` |
-| `str` | `""` |
-| `T ?` | `option.Not_Present` (std-lib name; plugin may emit this) |
-| Collection types | empty collection |
-
-```bestie
-// Provided by a third-party plugin — not built into the core language
-@Initialize
-class Config {
-    maxConnections: int     // plugin generates: = 0
-    timeout: float64        // plugin generates: = 0.0
-    host: str               // plugin generates: = ""
-    debug: bool             // plugin generates: = false
-}
-```
-
-Without the plugin active, `@Initialize` is an unknown annotation and the compiler still enforces explicit initialization of every field. This keeps the core strict while letting projects opt in to ergonomic defaults through their toolchain.
 
 ---
 

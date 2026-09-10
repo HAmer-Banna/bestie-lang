@@ -236,7 +236,7 @@ class DateTimeFormatter {
 * It has identity (two formatters with the same pattern are distinct objects)
 * Parsing is a stateful, fallible operation
 
-Construction uses static factory methods (`@noNew`):
+Construction uses `.new(...)` with a non-`public` `init` (`core/oop.md` §11.8, §13.2):
 
 ```bestie
 val fmt = DateTimeFormatter.iso8601()

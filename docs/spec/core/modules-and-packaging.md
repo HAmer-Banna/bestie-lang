@@ -408,7 +408,7 @@ core.types
 This includes:
 
 * `int`, `float`, `str`
-* `ptr`, `option`
+* `ptr`, `array`, `slice`, `range`
 * Basic annotations
 
 Everything else must be imported with an import declaration.

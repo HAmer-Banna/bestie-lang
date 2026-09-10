@@ -117,20 +117,19 @@ fun binarySearch<T impl Comparable>(
 Rules:
 
 * Input **must be sorted**
-* Returns index wrapped in `option`
+* Returns `int ?` — the index, or absent
 
 Example:
 
 ```bestie
-val idx = binarySearch(nums, 3)
-
-switch (idx) {
-    case option.Present(val i) => print(i)
-    case option.Not_Present    => print("not found")
+if (val i = binarySearch(nums, 3)) {
+    print(i)
+} else {
+    print("not found")
 }
 ```
 
-Failure is represented by `Not_Present`, not `-1`.
+A miss is represented by absence, not by `-1`.
 
 ---
 

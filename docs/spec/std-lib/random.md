@@ -124,7 +124,7 @@ class Pcg32 {
 impl Rng for Pcg32
 ```
 
-Construction uses static factory methods (`@noNew`):
+Construction uses `.new(...)` with a non-`public` `init` (`core/oop.md` §11.8, §13.2):
 
 ```bestie
 val rng = Pcg32.fromSeed(Seed.of(0xCAFEBABE))

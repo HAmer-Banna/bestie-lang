@@ -1375,7 +1375,7 @@ Tag-only variants occupy the tag slot only; their payload region is undefined an
 
 ### 18.6 `T ?` — Niche Optimization
 
-`T ?` (named `option<T>` in std-lib) uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
+`T ?` uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
 
 | `T` | Optimization |
 | --- | ------------ |

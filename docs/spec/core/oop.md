@@ -128,7 +128,7 @@ data class User {
 * Always receives a compiler-generated memberwise `init()` (see section 11.4)
 * `init()` may not be fallible — `data class` construction cannot return `!`
 * `virtual` calls in `init()` are impossible (no virtual methods permitted)
-* `@noInit` suppresses the generated init; `@noConstruct` forbids all construction
+* Declaring an explicit `init` replaces the generated one; visibility on that `init` restricts construction (§11.8)
 
 If you need mutable fields, use a regular `class` instead.
 
@@ -803,7 +803,7 @@ User.new().init(id: 1)         // ❌ would expose an uninitialized object
 
 `free()` and `freeDeep()` still take **no arguments**. Arguments belong only to `.new(...)`.
 
-Construction may be restricted per class via `@noNew` / `@noInit` (§11.8). There is no type that refuses `.new` and offers a differently-named factory instead: `thread`, `fiber`, and every collection are constructed with `.new` like everything else (§13.2).
+Construction may be restricted with visibility on `init` (§11.8). There is no type that refuses `.new` and offers a differently-named factory instead: `thread`, `fiber`, and every collection are constructed with `.new` like everything else (§13.2).
 
 ---
 
@@ -889,7 +889,7 @@ Rules:
 
 * The compiler-generated init is **removed entirely** once any explicit `init()` is declared. No implicit default-argument constructor is retained.
 * For a derived class with no explicit `init()`, the compiler generates a memberwise init that calls `super.init(...)` for the base fields first, then initializes derived fields, in declaration order.
-* `data class` and `value class` always receive a compiler-generated memberwise init unless `@noInit` suppresses it.
+* `data class` and `value class` always receive a compiler-generated memberwise init unless an explicit `init` is declared.
 * If a field has no default value and no `init()` is declared, the field **must** appear as a parameter in the generated init — there is no zero-initialization of arbitrary types.
 
 **No header constructor.** Bestie has no primary-constructor syntax — a class never declares parameters on its own declaration line:
@@ -993,26 +993,32 @@ Rules:
 
 ---
 
-### 11.8 Construction Restrictions (Annotations)
+### 11.8 Restricting Construction
 
-| Annotation | Effect |
-| ------------ | ------- |
-| `@noNew` | Prevents `Type.new(...)` at external call sites. Forces use of a factory function. The class may still be materialized internally by a factory. |
-| `@noInit` | Suppresses the compiler-generated memberwise initializer and forbids `Type.new(...)` at external call sites. Used for types built entirely via static factory methods or FFI. |
-| `@noConstruct` | Combines `@noNew` and `@noInit`. No user-visible construction path exists. Useful for singleton types, opaque handles, and types managed entirely by a runtime or external system. |
+Construction is restricted with **visibility on `init`**, not with annotations. There is no `@noNew`, `@noInit`, or `@noConstruct`.
+
+| Goal | Spelling |
+| ---- | -------- |
+| No `Type.new(...)` outside the module; a factory `.new` overload inside it | `init` with default (`internal`) visibility |
+| No `Type.new(...)` outside the declaring type | `private init` |
+| No user-visible construction path at all | `private init`, no public factory |
 
 ```bestie
-@noNew
 class DbHandle {
-    init(conn: RawConn) { ... }     // callable internally by factory only
-}
+    private init(conn: RawConn) { ... }
 
-fun openDb(dsn: str): DbHandle ! DbError {
-    ...
-    return DbHandle.new(conn)    // permitted inside the module
+    init(dsn: str): ! DbError {          // internal — the intended entry point
+        this.init(openRaw(dsn))
+    }
 }
-// DbHandle.new(...) at an external call site → compile-time error
 ```
+
+Two existing rules do all the work:
+
+* An `init` declared without `public` is `internal` (§7), so `DbHandle.new(conn)` is already unavailable to another module.
+* Declaring **any** `init` removes the compiler-generated memberwise initializer (§11.4), so there is nothing to suppress separately.
+
+An opaque handle materialized entirely by FFI declares a `private init` with no body reachable from Bestie; the foreign layer produces the value (`std-api/foreign.md`).
 
 ---
 
@@ -1063,19 +1069,17 @@ This rule applies to all class kinds: `class`, `open class`, `abstract class`, `
 There is no "zero state" implicitly assigned to any type. Absence of a value is not the same as zero — if a field genuinely may not hold a value, declare it as `T ?`:
 
 ```bestie
-import bestie.lib.utilities.option
-
 class Session {
     userId: int
     token: str ?                 // explicitly absent until authenticated
 
     init(userId: int) {
         this.userId = userId
-        this.token = option.Not_Present
+        this.token = absent
     }
 
     fun authenticate(tok: str) {
-        this.token = option.Present(tok)
+        this.token = tok         // a T is accepted where T ? is expected
     }
 }
 ```
@@ -1084,27 +1088,7 @@ Using `T ?` for lazy or conditional fields makes the absent state a first-class 
 
 ---
 
-### 11.11 `@Initialize` — Third-Party Plugin Convention
-
-The core language enforces explicit initialization for all fields. For use cases where zero or default initialization of an entire class body is desirable — for example, configuration holders or data-transfer objects — a **third-party compiler plugin** may provide an `@Initialize` annotation that generates default field values automatically:
-
-```bestie
-// Provided by a third-party plugin — not part of the core language
-@Initialize
-class Config {
-    maxConnections: int     // plugin generates: = 0
-    timeout: float64        // plugin generates: = 0.0
-    host: str               // plugin generates: = ""
-}
-```
-
-The plugin synthesizes the appropriate zero/default value for each field based on its type, removing the need to write `= 0` or `= ""` everywhere when that is the desired behavior.
-
-The core language itself is unchanged: without the plugin, `@Initialize` is an unknown annotation and the compiler will still reject uninitialized fields. This is explicitly an **opt-in escape hatch**, in the spirit of Java's Lombok project — extending the language through the plugin system without compromising the core's explicit-initialization guarantee.
-
----
-
-### 11.12 Destruction (`deinit`)
+### 11.11 Destruction (`deinit`)
 
 Bestie has **no C++-style destructor and no RAII**. `deinit()` is never invoked implicitly and never runs at scope exit. It is an explicit, deterministic cleanup hook that runs **only** because the programmer calls `free()` or `freeDeep()`. See `core/memory.md` §7 for how the call site drives it and why this does not reintroduce implicit cleanup.
 
@@ -1149,7 +1133,6 @@ Applies to:
 
 * Classes
 * Protocols
-* File-level functions
 
 No reflection or registration overhead.
 Sealing may improve dispatch and layout because the full implementor set is known at compile time.
@@ -1201,26 +1184,6 @@ Rules:
 
 * Protocol rules still apply (no state, no fields)
 * Default implementations remain static
-
-### 12.3 Sealed File-Level Functions
-
-File-level functions may be sealed to define a closed overload set.
-
-`sealed fun parse(str: str): Token`
-`sealed fun parse(int: int): Token`
-
-Properties:
-
-* Only declared overloads are allowed
-* No external extension or overloading
-* Resolution remains compile-time
-
-Rules:
-
-* All sealed overloads must appear in the same file
-* Prevents accidental API extension
-
----
 
 ## 13. Type-Level Members
 

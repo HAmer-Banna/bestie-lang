@@ -312,21 +312,19 @@ Disallowed:
 
 ---
 
-### 4.4 Multiple Value Declarations
+### 4.4 One Declaration Form
 
-Multiple value declarations are **binding syntax sugar**, not data structures.
+There is no comma-separated multiple-declaration form. `val x, y, z = 5, 6, 3` is not Bestie — declare each binding on its own line, or destructure a tuple (§4.5):
 
 ```bestie
-val x, y, z = 5, 6, 3
+val x = 5
+val y = 6
+val z = 3
+
+val (a, b, c) = (5, 6, 'c')     // ✅ destructuring — heterogeneous, one value
 ```
 
-Rules:
-
-* RHS values must share the **same type**
-* No tuple is created
-* Binding is positional
-* Lowered to independent bindings at compile time
-* Zero runtime cost
+The comma form was a second spelling for destructuring with an arbitrary extra restriction (all values had to share one type), and it read as if a tuple were being built when none was. Tuple destructuring already covers the case, without the restriction.
 
 ---
 
@@ -1454,7 +1452,7 @@ Mechanisms:
 * `T ?` — absence (core syntax)
 * `T ! E` — recoverable failure (core syntax)
 
-Named `option<T>` / `result<T, E>` are std-lib (`bestie.lib.utilities`) — same representation, not a second system, not core.
+There is no second, named spelling. `T ?` and `T ! E` are the only forms — Bestie does not also ship `option<T>` / `result<T,E>` types, because two vocabularies for one representation is exactly the duplication the syntax exists to avoid.
 
 See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/util.md`.
 
@@ -1594,29 +1592,25 @@ switch (status) {
 
 Enum variants with payloads are destructured inline:
 
-Named `option` / `result` constructors live in `bestie.lib.utilities` (`import` required). Signatures should still use `T ?` and `T ! E`.
-
 ```bestie
-import bestie.lib.utilities.result
+enum Message {
+    Text(str),
+    Resize(int, int),
+    Close
+}
 
-switch (result) {
-    case result.Ok(val value) => println("Got: ${value}")
-    case result.Err(val err)  => println("Error: ${err}")
+switch (msg) {
+    case Message.Text(val body)   => render(body)
+    case Message.Resize(val w, val h) => layout(w, h)
+    case Message.Close            => shutdown()
 }
 ```
 
-Enum variants without payloads match directly:
-
-```bestie
-import bestie.lib.utilities.option
-
-switch (opt) {
-    case option.Present(val user) => greet(user)
-    case option.Not_Present       => println("no user")
-}
-```
+Variants without payloads match directly, as `Message.Close` does above.
 
 Exhaustiveness is enforced — all variants must be covered or a wildcard must be present.
+
+**Absence and failure are not matched this way.** `T ?` and `T ! E` are core syntax, not enums with constructors you name: unwrap `T ?` with `if`-let or `else` (`fp.md` §3.3), and handle `T ! E` with `try` / `catch` (`exceptions.md` §2). Matching an *error set* with `switch` inside a `catch` is the exception, and that matches the error enum directly (`exceptions.md` §3.4).
 
 ---
 
@@ -1670,10 +1664,10 @@ switch ((x, y)) {
 A `case` may include a guard condition with `if`. The guard is evaluated only when the pattern matches:
 
 ```bestie
-switch (result) {
-    case result.Ok(val n) if n > 0 => println("positive: ${n}")
-    case result.Ok(val n)          => println("non-positive: ${n}")
-    case result.Err(val e)         => println("error: ${e}")
+switch (msg) {
+    case Message.Resize(val w, val h) if w > 4096 => reject()
+    case Message.Resize(val w, val h)             => layout(w, h)
+    case _                                        => ignore()
 }
 ```
 
@@ -1686,13 +1680,13 @@ Guards do not affect exhaustiveness analysis — the compiler treats guarded cas
 `val` inside a pattern binds the matched value as a local immutable:
 
 ```bestie
-case option.Present(val user) => greet(user)
+case Message.Text(val body) => render(body)
 ```
 
 `var` binds a mutable copy:
 
 ```bestie
-case option.Present(var user) => { user.name = "updated"; save(user) }
+case Message.Text(var body) => { body = body.trim(); render(body) }
 ```
 
 ---
@@ -1878,8 +1872,6 @@ What it does do is **freeze the name**. A symbol that a normative core rule depe
 | `hash(): int` | §5.4 — default `map` literal inference | `bestie.lib.utilities` (`Hashable<T>`) |
 | `list<T>` | §5.3, §5.4 — literal type annotation | `bestie.lib.collections` |
 | `map<K,V>` | §5.3, §5.4 — default inference for `{k: v}` literals | `bestie.lib.collections` |
-| `option<T>` · `Present` / `Not_Present` | §21, §24.2 — the named form of `T ?` | `bestie.lib.utilities` |
-| `result<T,E>` · `Ok` / `Err` | §21, §24.2 — the named form of `T ! E` | `bestie.lib.utilities` |
 
 ### 27.2 What freezing does and does not mean
 

@@ -819,20 +819,34 @@ fun connect(host: str, port: int ?)
 val token: str ?
 ```
 
-This syntax is sealed with the rest of core. The named type `option<T>`, its constructors (`Present` / `Not_Present`), and any helper methods live in **`bestie.lib.utilities`** — part of the language, not part of core. See `std-lib/util.md`. `int ?` and `option<int>` are the same representation; the names can evolve with the library, the `?` spelling cannot.
+This syntax is sealed with the rest of core, and it is the **only** spelling. There is no named `option<T>` type: a second vocabulary for one representation would mean two ways to write every optional signature, and the whole surface below needs no import.
 
-**Core surface (no import):**
+**The complete surface:**
 
 * Signatures, parameters, and fields spelled `T ?`
 * On `fun f(): T ?`: `return value` is present; a bare `return` is absent
+* `absent` — the absent value in expression position, for fields and assignments
 * `if (val x = …)` binds only when present (`fp.md` §3)
+* `else` supplies a fallback or diverts (`fp.md` §3.3)
 * FFI: C `NULL` maps to `ptr<T> ?` (`foreign.md`)
 
-**Std-lib surface (`import bestie.lib.utilities`):**
+```bestie
+class Session {
+    userId: int
+    token: str ?
 
-* The name `option<T>`
-* Matching `option.Present` / `option.Not_Present`
-* Generics that read better as `list<option<User>>` (equivalently `list<User ?>` without import)
+    init(userId: int) {
+        this.userId = userId
+        this.token = absent
+    }
+
+    fun authenticate(tok: str) {
+        this.token = tok        // a T value is accepted where T ? is expected
+    }
+}
+```
+
+`absent` is a contextual keyword valid only where a `T ?` is expected. It is not a null literal: it has no type of its own, cannot be compared with `==`, cannot be stored in a `T`, and cannot be dereferenced. Presence needs no constructor — a `T` is accepted wherever a `T ?` is expected, exactly as `return value` already works.
 
 Default parameters (`x: int = 0`) are a different tool: the caller may omit the argument and the compiler fills a compile-time constant. `x: int ?` means the value may be absent at runtime. Both are valid; they are not interchangeable.
 
@@ -848,18 +862,23 @@ Default parameters (`x: int = 0`) are a different tool: the caller may omit the 
 fun parse(s: str): int ! ParseError
 ```
 
-The named type `result<T, E>`, its constructors (`Ok` / `Err`), and any helper methods live in **`bestie.lib.utilities`**. `int ! ParseError` and `result<int, ParseError>` are the same representation.
+As with `T ?`, this is the only spelling — there is no named `result<T, E>` type.
 
-**Core surface (no import):**
+**The complete surface:**
 
 * Signatures spelled `T ! E`
-* `try` / `catch` at the call site
+* `try` / `catch` at the call site (`exceptions.md` §2.3–2.4)
+* `return !Variant` to fail explicitly (`exceptions.md` §2.5)
 * Type arguments that are “a value or an error” — `Channel<int ! WorkError>`
 
-**Std-lib surface (`import bestie.lib.utilities`):**
+Matching on a failure matches the **error set** directly, inside a `catch` — there is no `Ok` / `Err` wrapper to destructure:
 
-* The name `result<T, E>`
-* Matching `result.Ok` / `result.Err`
+```bestie
+try connect() catch |e| switch (e) {
+    case NetworkError.Timeout => retry()
+    case NetworkError.Refused => giveUp()
+}
+```
 
 Function signatures should use `T ! E`. Do not invent a second error API.
 
@@ -886,7 +905,7 @@ Bestie's core type surface is intentionally compact:
 
 * Primitive numeric values behave like zero-cost value classes
 * `bool`, `char`, and `str` expose explicit core operations only
-* `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms. Named `option<T>` / `result<T, E>` live in `bestie.lib.utilities`
+* `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms, each with exactly one spelling
 * Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
 * `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()`; `.toList()` via `bestie.lib.collections`)
 * Conversions are explicit

@@ -110,14 +110,14 @@ Higher-order behavior is resolved entirely at compile time.
 
 ## Partial Application
 
-Bestie supports partial application explicitly.
+Partial application is written as a lambda with an explicit capture list. There is no `bind` (`core/fp.md` §13).
 
 ```bestie
 fun add(a: int, b: int): int = a + b
-val add10 = add.bind(10)
+val add10 = [10](b: int) => add(10, b)
 ```
 
-* `bind` follows the core callable model
+* The capture list states what is carried, at the site where it happens
 * Partial application never captures mutable state implicitly
 
 ---

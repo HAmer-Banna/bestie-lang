@@ -483,9 +483,9 @@ dq[0]             // 10  — equivalent element to dq.peekFirst()
 | Expression | Returns | On empty deque |
 | ---------- | ------- | -------------- |
 | `dq[-1]` | `T` | **panics** (like all `[]` access) |
-| `dq.peekLast()` | `T ?` | `option.Not_Present` |
+| `dq.peekLast()` | `T ?` | absent |
 | `dq[0]` | `T` | **panics** |
-| `dq.peekFirst()` | `T ?` | `option.Not_Present` |
+| `dq.peekFirst()` | `T ?` | absent |
 
 So `dq[-1]` and `dq.peekLast()` read the **same element**; they differ only at the boundary. Use `dq[-1]` when a present element is an invariant (you *expect* it to be there) and use `dq.peekLast()` when emptiness is an expected, recoverable case.
 
@@ -508,7 +508,7 @@ val copy : list<int>   = ls[1..4].toList()   // explicit O(n) owned copy
 
 The `[lo..hi]` view and positional `[]` are not available everywhere. In these cases you use accessor/conversion methods instead:
 
-1. **Empty-safe access.** `c[i]`, `c[-1]`, and `get(index)` **panic** out of bounds. When absence is expected, use the option-returning accessors: `deque.peekFirst()` / `deque.peekLast()` return `T ?`, `list.indexOf(value)` returns `int ?`, and `map.get(key)` returns the value option. These never panic.
+1. **Empty-safe access.** `c[i]`, `c[-1]`, and `get(index)` **panic** out of bounds. When absence is expected, use the `T ?`-returning accessors: `deque.peekFirst()` / `deque.peekLast()` return `T ?`, `list.indexOf(value)` returns `int ?`, and `map.get(key)` returns `V ?`. These never panic.
 
 2. **`set<T>` has no positional index.** A set has no stable position, so `xs[2]` does not exist. Use `contains(value)`, or iterate with `for/in`. There is no slicing.
 

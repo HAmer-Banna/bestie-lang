@@ -315,16 +315,14 @@ fun readConfig(path: str): str ! IoError {
 | Mechanism | When to use | Layer |
 | --------- | ----------- | ----- |
 | `T ?` | Function return, parameter, or field that may be absent | **Core syntax** |
-| `option<T>` | Named form: matching `Present` / `Not_Present`, helpers | **Std-lib** (`bestie.lib.utilities`) — same representation as `T ?` |
-| `T ! E` | Recoverable failure with a typed reason — **the spelling for function signatures** | **Core syntax** |
-| `result<T, E>` | Named form: matching `Ok` / `Err`, helpers | **Std-lib** (`bestie.lib.utilities`) — same representation as `T ! E` |
+| `T ! E` | Recoverable failure with a typed reason | **Core syntax** |
 | `panic()` | Violated invariant — no recovery possible | Core |
 
-`T ?` is presence. `T ! E` is success-or-error. They are not four systems. `option` / `result` are names for those two types so matching and helpers can evolve without touching core syntax.
+`T ?` is absence. `T ! E` is success-or-error. There are exactly two, each with exactly one spelling — no named `option<T>` / `result<T,E>` aliases, and nothing to import.
 
-Function signatures should use `T ?` and `T ! E`. Import `bestie.lib.utilities` when you need the names.
+Matching a failure matches the **error set** directly inside a `catch` (§3.4); absence is unwrapped with `if`-let or `else` (`fp.md` §3.3). Neither has constructors to destructure.
 
-See `types.md` §8.3 and §8.4, and `std-lib/util.md`.
+See `types.md` §8.3 and §8.4.
 
 ---
 
