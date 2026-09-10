@@ -72,7 +72,8 @@ import bestie.api.fs
 | `Metadata` | `data class` | A snapshot of file attributes; structural equality is meaningful; immutable |
 | `Permissions` | `value class` | A small bitset of mode flags; inlined; no identity |
 | `FileType` | `enum` | Closed set of variants (file, dir, symlink, other) |
-| `File` | `class` | Holds an OS file descriptor — mutable, identity-bearing, must be closed |
+| `OpenMode` · `SeekFrom` | `enum` | Closed sets; no flag bitmasks |
+| `File` | `class` | Holds an OS file descriptor — mutable, identity-bearing, must be closed. Implements the `bestie.api.io` stream protocols (§6) |
 | `DirIterator` | `class` | Holds an open directory handle and cursor state; stateful; must be closed |
 
 **Why `File` and `DirIterator` are `class`:**
@@ -104,10 +105,11 @@ value class Path {
 
 Paths are **values**, compared and combined explicitly — never mutated in place.
 
-Factory and query functions (free functions, pure):
+Construction is `Path.new`; the query functions are free functions and pure:
 
 ```bestie
-fun Path.of(text: str): Path
+Path.new(text: str): Path                  // an ordinary init, core/oop.md §13.2
+
 fun join(base: Path, child: str): Path
 fun parent(p: Path): Path ?               // absent if p has no parent
 fun fileName(p: Path): str ?               // absent for the root path
@@ -126,77 +128,89 @@ Rules:
 
 ## 6. Opening Files
 
-Files are opened into `bestie.api.io` streams. `bestie.api.fs` provides the openers; `bestie.api.io`
-provides the read/write surface.
+A `File` **is** a stream. It implements the `bestie.api.io` protocols, so everything written against those works on a file with no file-specific code:
 
 ```bestie
-fun openRead(p: Path): own ByteInputStream ! FsError
-fun openWrite(p: Path, mode: OpenMode): own ByteOutputStream ! FsError
-```
+import bestie.api.io.InputStream
+import bestie.api.io.OutputStream
 
-```bestie
-enum OpenMode {
-    Truncate,   // create or empty
-    Append,     // create or append
-    CreateNew   // fail if it already exists
+class File impl InputStream, OutputStream {
+    fun read(dst: slice<var byte>): int ! ReadError
+    fun write(src: slice<byte>): int ! WriteError
+    fun flush(): void ! WriteError
+
+    fun metadata(): Metadata ! FsError
+    fun sync(): void ! FsError            // flush OS buffers to durable storage
+    fun truncate(size: int64): void ! FsError
+    fun seek(offset: int64, from: SeekFrom): int64 ! FsError
+    fun path(): Path
+
+    fun close(): void
 }
+
+enum OpenMode {
+    Read,       // read only; fails if missing
+    Truncate,   // write; create or empty
+    Append,     // write; create or append
+    CreateNew,  // write; fail if it already exists
+    ReadWrite   // read and write; create if missing
+}
+
+enum SeekFrom {
+    Start, Current, End
+}
+
+fun open(p: Path, mode: OpenMode): own File ! FsError
 ```
 
-Example (ownership and explicit close, consistent with `bestie.api.io`):
+There is **one** way to open a file. An earlier shape offered `openRead` / `openWrite` returning streams *and* a separate `File` handle for metadata and syncing, which meant choosing up front whether you would ever need to `stat` what you had opened. Since `File` implements the stream protocols, the split buys nothing.
+
+### 6.1 Example
 
 ```bestie
-own stream = openRead(Path.of("/etc/config")) catch |err| { ... }
-defer stream.close()
+import bestie.api.io.TextReader
+import bestie.api.io.Encoding
+import bestie.api.io.copy
 
-own data = stream.read()
-process(data)
+fun readConfig(p: Path): str ! (FsError | ReadError) {
+    val own f = try open(p, OpenMode.Read)
+    val own text = TextReader.new(move f, Encoding.Utf8)
+    defer text.close()                    // closes the wrapped file too
+
+    return try text.readAll()
+}
+
+fun backup(from: Path, to: Path): int ! (FsError | IoError) {
+    val own src = try open(from, OpenMode.Read)
+    defer src.close()
+
+    val own dst = try open(to, OpenMode.CreateNew)
+    defer dst.close()
+
+    return try copy(src.address(), dst.address())
+}
 ```
 
 Rules:
 
-* Openers return `bestie.api.io` streams — `bestie.api.fs` adds no new read/write methods
-* Handles are owned (`own`) and must be closed explicitly
-* No implicit buffering — wrap in `BufferedInputStream` from `bestie.api.io` if desired
+* A `File` is `own` and must be closed explicitly — nothing closes at scope exit
+* Wrapping a `File` in a `TextReader` or `BufferedReader` **moves** it; closing the wrapper closes the file (`bestie.api.io` §7.2)
+* No implicit buffering. A raw `File` write is a syscall; wrap in `BufferedWriter` when that matters.
+* Reading from a file opened `OpenMode.Truncate`, or writing to one opened `OpenMode.Read`, is `FsError.WrongMode` — the mode is enforced, not advisory
 
 ---
 
-## 7. The `File` Handle
+## 7. Metadata
 
-For operations that go beyond plain streaming (querying live metadata, syncing, truncating),
-`bestie.api.fs` exposes an explicit handle.
-
-```bestie
-class File {
-    fun metadata(): Metadata ! FsError
-    fun sync(): void ! FsError          // flush OS buffers to durable storage
-    fun truncate(size: int64): void ! FsError
-    fun close(): void
-}
-```
-
-Construction uses static factory methods (`@noNew`):
-
-```bestie
-own f = File.open(Path.of("data.bin"), OpenMode.Append) catch |err| { ... }
-defer f.close()
-```
-
-`File` is a `class` because it owns a mutable OS descriptor with identity. It is never copied;
-ownership is transferred explicitly.
-
----
-
-## 8. Metadata
-
-### 8.1 `Metadata`
+### 7.1 `Metadata`
 
 ```bestie
 data class Metadata {
     val kind: FileType
     val size: int64           // bytes
     val permissions: Permissions
-    val modified: Instant     // bestie.lib.datetime value type
-    val created: Instant
+    val modified: Instant       // bestie.lib.datetime value type
+    val created:  Instant ?     // absent where the platform does not record it
 }
 ```
 
@@ -222,8 +236,9 @@ Rules:
 * `Metadata` is an immutable **snapshot** taken at the time of the call
 * `exists` returns a plain `bool`; only genuine I/O failures are errors
 * Timestamps reuse `Instant` from [`bestie.lib.datetime`](../std-lib/datetime.md) — no bespoke time type
+* `created` is `Instant ?`: several filesystems do not record a creation time, and reporting the modification time instead would be a lie
 
-### 8.2 `Permissions`
+### 7.2 `Permissions`
 
 ```bestie
 value class Permissions {
@@ -241,9 +256,9 @@ fun setReadOnly(p: Path, readOnly: bool): void ! FsError
 
 ---
 
-## 9. Directories
+## 8. Directories
 
-### 9.1 Creation and Removal
+### 8.1 Creation and Removal
 
 ```bestie
 fun createDir(p: Path): void ! FsError            // fails if parent is missing
@@ -257,7 +272,7 @@ Rules:
 * Recursive removal is a **separate, explicitly named** function (`removeAll`) — never a flag
 * `createDir` does not silently create parents; use `createDirAll` for that
 
-### 9.2 Listing — `DirIterator`
+### 8.2 Listing — `DirIterator`
 
 Directory listing is an **iterator over a live handle**, not an eagerly materialized list, so
 large directories do not force an allocation.
@@ -301,11 +316,11 @@ Rules:
 
 ---
 
-## 10. File Operations
+## 9. File Operations
 
 ```bestie
 fun rename(from: Path, to: Path): void ! FsError       // atomic when same volume
-fun copy(from: Path, to: Path): void ! FsError         // contents + permissions
+fun copyFile(from: Path, to: Path): void ! FsError     // contents + permissions
 fun symlink(target: Path, link: Path): void ! FsError
 fun readLink(link: Path): Path ! FsError
 ```
@@ -313,12 +328,12 @@ fun readLink(link: Path): Path ! FsError
 Rules:
 
 * `rename` is atomic on the same volume; cross-volume moves are an error, not a silent copy
-* `copy` never follows into directories implicitly — it copies a single regular file
+* `copyFile` never follows into directories implicitly — it copies a single regular file. It is named `copyFile` rather than `copy` so it does not collide with `bestie.api.io.copy`, which streams between any two handles
 * Symlink support may be conditionally unavailable on some platforms (reported via `FsError`)
 
 ---
 
-## 11. Error Model
+## 10. Error Model
 
 All fallible operations return a **typed error** via the core error union (`!`), consistent
 with `bestie.api.io` and `bestie.api.os`.
@@ -332,6 +347,7 @@ errors FsError {
     IsADirectory,
     NotEmpty,
     CrossDevice,        // e.g. rename across volumes
+    WrongMode,          // read on a write-only handle, or the reverse
     Unsupported,        // operation not available on this platform
     Io                  // underlying bestie.api.io failure
 }
@@ -346,7 +362,7 @@ Rules:
 
 ---
 
-## 12. Integration with Concurrency
+## 11. Integration with Concurrency
 
 `bestie.api.fs` introduces **no** async keywords. Blocking calls run on whatever thread invokes
 them; concurrency is achieved with core `thread` or `fiber` from `bestie.lib.concurrency` (matching `bestie.api.io`):
@@ -354,11 +370,21 @@ them; concurrency is achieved with core `thread` or `fiber` from `bestie.lib.con
 ```bestie
 import bestie.lib.concurrency.fiber
 
-fiber.of(() => {
-    own stream = openRead(path) catch |err| { ... }
-    defer stream.close()
-    process(stream.read())
-})
+fun scanInBackground(p: Path): void ! FsError {
+    val own f = try open(p, OpenMode.Read)
+
+    // The handle is moved into the fiber, which owns and closes it.
+    fiber.new([move f]() => {
+        defer f.close()
+
+        var buf : array<byte>[4096] = array<byte>[4096].fill(0)
+        while (true) {
+            val n = f.read(buf[..]) catch |e| { return }
+            if (n == 0) { break }
+            process(buf[..n])
+        }
+    })
+}
 ```
 
 * File handles are **not** implicitly thread-safe
@@ -366,9 +392,9 @@ fiber.of(() => {
 
 ---
 
-## 13. Relationship to Other APIs
+## 12. Relationship to Other APIs
 
-* `bestie.api.fs` **builds on** `bestie.api.io` — it opens streams, it does not redefine them
+* `bestie.api.fs` **builds on** `bestie.api.io` — a `File` *is* an `InputStream` / `OutputStream`, so this package defines no read or write surface of its own
 * `bestie.api.fs` **uses** `bestie.api.os` for platform metadata and `bestie.lib.datetime` for timestamps
 * `bestie.api.network` and `bestie.api.http` are independent peers, not built on `fs`
 
@@ -376,7 +402,7 @@ This preserves the clean layering described in `bestie.api.io`.
 
 ---
 
-## 14. What `bestie.api.fs` Explicitly Excludes
+## 13. What `bestie.api.fs` Explicitly Excludes
 
 * File watching / change notifications
 * Glob / pattern-matching query language
@@ -387,7 +413,7 @@ This preserves the clean layering described in `bestie.api.io`.
 
 ---
 
-## 15. Stability and Evolution
+## 14. Stability and Evolution
 
 * APIs are additive within a major version
 * Platform-specific behavior is reported through `FsError`, never hidden
@@ -395,13 +421,13 @@ This preserves the clean layering described in `bestie.api.io`.
 
 ---
 
-## 16. Summary
+## 15. Summary
 
 `bestie.api.fs` is:
 
 * Explicit — handles are owned and closed; paths are values
 * Portable — one surface, honest about platform limits
-* Composable — opens into `bestie.api.io` streams rather than reinventing I/O
+* Composable — a `File` *is* a stream, so `copy`, `BufferedReader`, and `TextReader` all work on it unchanged
 * Predictable — typed errors, no exceptions, no hidden state
 
 `File` and `DirIterator` are the only classes — the types that own live OS handles. `Path`,
