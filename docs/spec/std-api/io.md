@@ -11,9 +11,9 @@ This document defines the **I/O API layer** for Bestie.
 The purpose of `bestie.api.io` is to provide:
 
 * Hosted console I/O (`print`, `println`, `input`, `printf`)
-* Stream-based I/O
-* Buffered I/O
-* Binary and text I/O
+* The `InputStream` / `OutputStream` protocols every other I/O package implements
+* `stdin` / `stdout` / `stderr` as ordinary stream values
+* Explicit buffering and explicit text encoding
 * Explicit resource lifetimes
 * Composable I/O pipelines
 
@@ -66,114 +66,200 @@ I/O errors are expressed using **core error unions**, not exceptions.
 
 ---
 
-## 4. Core Abstractions
+## 4. Class Kinds and Ownership Rationale
 
-### 4.1 Streams
+| Type | Kind | Why |
+| ---- | ---- | --- |
+| `InputStream` | `protocol` | Many unrelated things are readable — a `File`, a `TcpSocket`, an in-memory buffer. A protocol lets one `copy` serve all of them with static dispatch and no vtable. |
+| `OutputStream` | `protocol` | Same, for writing. |
+| `TextReader` | `class` | Wraps a byte stream plus encoder state. Stateful (a multi-byte scalar can straddle a read boundary) and has identity. |
+| `TextWriter` | `class` | Same, for encoding out. |
+| `BufferedReader` | `class` | Owns a heap buffer and a cursor. Mutable state, identity. |
+| `BufferedWriter` | `class` | Same, plus unflushed data — losing track of *which* writer holds it would be a correctness bug, so identity is essential. |
+| `Encoding` | `enum` | A closed set of text encodings. No state. |
 
-All I/O is modeled using **streams**.
-
-```bestie
-InputStream
-OutputStream
-```
-
-Properties:
-
-* Explicit open / close
-* Ownership-aware
-* Not implicitly thread-safe
-* Deterministic lifetime
+Every wrapper **owns** the stream it wraps, so wrapper classes declare `own` fields and `close()` releases the whole chain. Ownership flows one way: a wrapper takes ownership of what it wraps, which is why `move` is required to build one.
 
 ---
 
-### 4.2 Byte vs Text Streams
+## 5. Stream Protocols
 
-Two primary stream families exist:
-
-* **Binary streams**
-* **Text streams**
+All I/O is modelled on **two protocols**. Everything else in this document is a class that implements or wraps them.
 
 ```bestie
-ByteInputStream
-ByteOutputStream
+protocol InputStream {
+    /// Reads into `dst`, returning the number of bytes read.
+    /// A return of 0 means end of stream — it is not an error.
+    fun read(dst: slice<var byte>): int ! ReadError
 
-TextInputStream
-TextOutputStream
+    fun close(): void
+}
+
+protocol OutputStream {
+    /// Writes from `src`, returning the number of bytes accepted.
+    /// A short write is normal and is not an error.
+    fun write(src: slice<byte>): int ! WriteError
+
+    fun flush(): void ! WriteError
+    fun close(): void
+}
 ```
+
+**Why two protocols and not four.** Splitting byte and text streams into separate protocol pairs is the obvious alternative, and it is wrong: text is not a different kind of stream, it is a byte stream plus an encoding. A separate pair would duplicate every method for one field's worth of difference. Encoding is a **wrapper** instead (§6), which also makes "no implicit encoding conversion" structural rather than a rule to remember.
+
+**Why protocols and not classes.** A `File` and a `TcpSocket` genuinely *are* readable. If streams were classes, their `read` methods would be unrelated functions that merely share a name, and no generic operation over "something readable" could be written at all:
+
+```bestie
+fun <S impl InputStream, D impl OutputStream> copy(src: ptr<S>, dst: ptr<D>): int ! IoError {
+    var buf : array<byte>[8192] = array<byte>[8192].fill(0)
+    var total = 0
+
+    while (true) {
+        val n = try src.val.read(buf[..])
+        if (n == 0) { break }
+
+        var written = 0
+        while (written < n) {
+            written += try dst.val.write(buf[written..n])
+        }
+        total += n
+    }
+    return total
+}
+```
+
+Protocol dispatch is static by default (`core/oop.md` §2.2), so this monomorphizes per pair — no vtable, no boxing — and both type parameters are inferred from the arguments (`core/lang.md` §7.1).
+
+**Rules:**
+
+* `read` returning `0` is end of stream. EOF is **not** an error, so it needs no error variant and no separate `eof()` query.
+* Short reads and short writes are normal. Callers loop, as `copy` does above; nothing retries on your behalf.
+* `read` takes `slice<var byte>` — the caller owns the buffer and the stream writes through the view, so no allocation happens per call (`core/types.md` §6).
+* Streams are **not** implicitly thread-safe. Sharing one across threads needs ownership transfer or a `Lock`.
+* `close()` is explicit and idempotent. Nothing closes at scope exit — pair it with `defer`.
+
+---
+
+## 6. Standard Streams and Text
+
+### 6.1 `stdin`, `stdout`, `stderr`
+
+The three standard streams are values, so they compose with everything above:
+
+```bestie
+import bestie.api.io.stdout
+import bestie.api.io.stderr
+
+val stdin  : InputStream
+val stdout : OutputStream
+val stderr : OutputStream
+```
+
+They are process-lifetime handles that the program does not own: **do not `close()` them**, and their ownership is never transferred. Closing a standard stream is a compile-time error.
+
+The console functions of §2 are built on these, and having them as values is what makes redirection possible:
+
+```bestie
+fun report(out: ptr<OutputStream>, msg: str): void ! WriteError {
+    try out.val.write(msg.bytes())
+}
+
+report(stdout.address(), "done\n")     // to the console
+report(logFile.address(), "done\n")    // same function, to a file
+```
+
+### 6.2 `Encoding`
+
+```bestie
+enum Encoding {
+    Utf8,
+    Utf16Le,
+    Utf16Be,
+    Ascii,
+    Latin1
+}
+```
+
+### 6.3 `TextReader` / `TextWriter`
+
+Text is a byte stream plus an encoding, and the wrapping is always explicit:
+
+```bestie
+class TextReader {
+    val own source: InputStream
+    val encoding: Encoding
+
+    fun readLine(): str ? ! ReadError    // absent at end of stream
+    fun readAll(): str ! ReadError
+    fun close(): void                    // closes the wrapped stream
+}
+
+class TextWriter {
+    val own sink: OutputStream
+    val encoding: Encoding
+
+    fun write(text: str): void ! WriteError
+    fun writeLine(text: str): void ! WriteError
+    fun flush(): void ! WriteError
+    fun close(): void
+}
+```
+
+`readLine()` returns `str ? ! ReadError` — a line, a clean end of stream, or a read failure. All three are distinct outcomes, which is exactly the shape `core/types.md` §8.4 permits, so a line-oriented reader iterates with `try for` (`core/lang.md` §13).
+
+**Rules:**
+
+* Constructing a `TextReader` **moves** the byte stream into it. The source is no longer separately usable, which is what prevents interleaved raw and decoded reads from desynchronising the decoder.
+* Invalid bytes for the declared encoding are a `ReadError`, never a silent replacement character.
+* UTF-8 is the conventional default but never the implicit one — the encoding is always written at the construction site.
+
+---
+
+## 7. Buffering and Resource Management
+
+### 7.1 Buffering is explicit
+
+```bestie
+class BufferedReader impl InputStream {
+    val own source: InputStream
+
+    fun read(dst: slice<var byte>): int ! ReadError
+    fun close(): void
+}
+
+class BufferedWriter impl OutputStream {
+    val own sink: OutputStream
+
+    fun write(src: slice<byte>): int ! WriteError
+    fun flush(): void ! WriteError
+    fun close(): void
+}
+```
+
+Because both implement the stream protocols, a buffer is transparent to everything downstream — `copy` neither knows nor cares that one is present.
 
 Rules:
 
-* No implicit encoding conversion
-* Text streams require explicit encoding
-* UTF-8 is the default, not the only option
+* Buffer capacity is a required constructor argument. There is no default size to be surprised by.
+* Buffering changes performance, never semantics.
+* Buffering never hides an error: a failure during an internal flush surfaces from the `write` or `flush` that triggered it.
+* **`BufferedWriter.close()` flushes first.** If that flush fails, `close()` still releases the underlying resource and then reports the error — a failed flush must not leak a file descriptor.
 
----
+### 7.2 Resource management
 
-## 5. Reading and Writing
-
-### 5.1 Reading
-
-```bestie
-fun read(): list<byte> ! IoError
-fun readExact(n: int): list<byte> ! IoError
-```
-
-Rules:
-
-* Partial reads are explicit
-* EOF is not an error
-* Blocking semantics are explicit
-
----
-
-### 5.2 Writing
+I/O resources are not garbage collected, are never closed implicitly, and follow ordinary ownership rules (`core/memory.md` §7).
 
 ```bestie
-fun write(data: slice<byte>): void ! IoError
-fun flush(): void ! IoError
+fun readConfig(path: Path): str ! IoError {
+    val own file = try fs.open(path, OpenMode.Read)
+    val own reader = TextReader.new(move file, Encoding.Utf8)
+    defer reader.close()
+
+    return try reader.readAll()
+}
 ```
 
-`write` takes a `slice<byte>` — a borrowed, zero-copy view (`core/types.md` §6), so passing a buffer never duplicates it. Reads return an owned `list<byte>`; the length is not known in advance, so a fixed-capacity `array<byte>` cannot express the result.
-
-No implicit flushing occurs.
-
----
-
-## 6. Buffering
-
-Buffering is **explicit** and opt-in.
-
-```bestie
-BufferedInputStream
-BufferedOutputStream
-```
-
-Rules:
-
-* Buffer size must be specified
-* Buffering does not change semantics
-* Buffering never hides errors
-
----
-
-## 7. Resource Management
-
-I/O resources:
-
-* Are not garbage-collected
-* Must be closed explicitly
-* Follow ownership rules
-
-Example:
-
-```bestie
-own stream = FileInputStream.open(path)
-defer stream.close()
-
-process(stream)
-```
-
-(Exact `defer` semantics may be finalized later, but resource lifetime is always explicit.)
+Wrapping transfers ownership, so a chain has exactly one owner at each level and `close()` on the outermost wrapper releases all of it. That is also why `file` cannot be used after the `move` — the compiler rejects it as a use-after-move, which is what makes the single `defer` sufficient.
 
 ---
 
@@ -191,11 +277,20 @@ Example:
 ```bestie
 import bestie.lib.concurrency.fiber
 
-fiber.of(() => {
-    own data = stream.read()
-    process(data)
+// The fiber takes ownership of the stream — nothing is shared across the boundary.
+fiber.new([move stream]() => {
+    var buf : array<byte>[4096] = array<byte>[4096].fill(0)
+    defer stream.close()
+
+    while (true) {
+        val n = stream.read(buf[..]) catch |e| { return }
+        if (n == 0) { break }
+        process(buf[..n])
+    }
 })
 ```
+
+A blocking `read` parks the fiber and releases its host thread; it does not block the scheduler. That is the whole reason `bestie.api.io` needs no async colouring — the blocking call *is* the async call, and which one it is depends on what is running it.
 
 This keeps:
 
@@ -210,17 +305,19 @@ This keeps:
 All I/O functions return **typed errors**:
 
 ```bestie
-errors ReadError  { Eof, Interrupted, Closed }
-errors WriteError { Closed, NoSpace, Interrupted }
+errors ReadError  { Interrupted, Closed, InvalidEncoding, DeviceFailure }
+errors WriteError { Interrupted, Closed, NoSpace, DeviceFailure }
 errors IoError = ReadError | WriteError
 ```
 
 Error sets compose per `core/exceptions.md` §3.1, so a function declaring `! IoError` accepts `try` on anything returning `! ReadError` or `! WriteError` with no conversion.
 
+**There is no `Eof` variant.** End of stream is a normal outcome, reported as a `0` return from `read` (§5) and as absence from `TextReader.readLine()`. Making it an error would force every caller to pattern-match a failure on the most ordinary path in the API — the same mistake as an `End` iterator variant (`core/types.md` §8.4).
+
 Rules:
 
 * No exceptions
-* No hidden retries
+* No hidden retries — a short read is returned to you, not looped over internally
 * Errors must be handled or propagated
 
 ---
@@ -264,14 +361,13 @@ Rules:
 
 ## 13. Summary
 
-* Interpolation is core syntax
-* Hosted console, files, and byte/text streams live in `bestie.api.io`
-* Structured codecs live in `bestie.lib.format` — lib wins the `format` name
-* Explicit, composable, and predictable
+`bestie.api.io` is the smallest package that everything else talking to the outside world builds on:
 
-This clean separation keeps the core sealed and the ecosystem extensible.
+* **Two protocols** — `InputStream` and `OutputStream`. `bestie.api.fs` and `bestie.api.network` implement them; nothing re-invents them.
+* **`stdin` / `stdout` / `stderr` are values**, not just functions, so the console is a stream like any other and output can be redirected without changing a signature.
+* **Text is a wrapper, not a second stream family.** An encoding is always written at the construction site, which makes "no implicit encoding conversion" structural.
+* **Buffering is a wrapper too**, transparent to everything downstream because it implements the same protocols.
+* **EOF is not an error.** A `0` read and an absent line are ordinary outcomes.
+* **Ownership flows one way** — a wrapper owns what it wraps, so one `close()` releases the chain and the compiler rejects any use of the moved-from handle.
 
----
-
-**Next step**: `bestie.api.os.md`
-(Process management, environment variables, signals, clocks)
+Interpolation stays core syntax; structured codecs stay in `bestie.lib.format`, which wins the `format` name over any api package.
