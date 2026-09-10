@@ -557,8 +557,7 @@ Rules:
 
 ### Immutability
 
-`array<T>` does **not** use the `.immutable` builder modifier — it has no builder chain.
-Two dedicated forms handle immutability instead:
+`array<T>` has no builder chain, so immutability is reached in two ways.
 
 **`const`** — compile-time literal arrays. Stored in `.rodata`. Zero runtime cost. Only valid with a literal right-hand side:
 
@@ -566,12 +565,16 @@ Two dedicated forms handle immutability instead:
 const DAYS : array<str>[] = {"Mon", "Tue", "Wed", "Thu", "Fri"}
 ```
 
-**`@immutable val`** — runtime arrays frozen after construction. The compiler rejects any mutation attempt as a compile-time error. Zero runtime overhead (no flag, no wrapper):
+**`array<T>.immutable`** — a runtime array whose mutation API is unavailable (`immutability.md` §2.1). Because `array<T>` has no builder chain, this type is produced by **`freeze()`**, an ownership-consuming conversion:
 
 ```bestie
-@immutable val primes : array<int>[] = {2, 3, 5, 7, 11}
-primes[0] = 1    // ❌ compile-time error: element mutation on @immutable binding
-primes.add(13)   // ❌ compile-time error: add on @immutable binding
+val own primes = array<int>[5]
+primes.add(2)
+primes.add(3)
+
+val own frozen = move primes.freeze()   // array<int>.immutable — primes is now invalid
+frozen[0] = 1                           // ❌ compile-time error: 'set' is not available
+frozen.add(5)                           // ❌ compile-time error: 'add' is not available
 ```
 
 Full matrix:
@@ -580,10 +583,10 @@ Full matrix:
 | ----------- | ------- | ---------------- | ------- |
 | `var arr : array<int>[5]` | ✅ | ✅ | stack / heap |
 | `val arr : array<int>[] = {1,2,3}` | ❌ | ✅ | stack / heap |
-| `@immutable val arr : array<int>[] = {1,2,3}` | ❌ | ❌ | stack / heap |
+| `val arr : array<int>.immutable` | ❌ | ❌ | stack / heap |
 | `const arr : array<int>[] = {1,2,3}` | ❌ | ❌ | `.rodata` |
 
-`@immutable val` makes the array safe to share across threads with no locks — the compiler's guarantee that nothing mutates it is sufficient.
+Because `move` invalidates the source, no mutable path to a frozen array's storage survives the call. That is what makes `array<T>.immutable` safe to share across threads with no lock — the compiler's guarantee that nothing mutates it is sufficient.
 
 ---
 
@@ -693,7 +696,7 @@ A `slice<var T>` is exclusive: while it is alive, no other access to the overlap
 
 Slicing immutable storage is always safe and never requires a copy:
 
-* A slice over a `str`, a `const` array, or an `@immutable val` array is inherently read-only.
+* A slice over a `str`, a `const` array, or an `array<T>.immutable` is inherently read-only.
 * Because the source cannot mutate in place, the "no mutation while borrowed" rule is satisfied for free — the only remaining constraint is lifetime (the slice must not outlive the source).
 
 ### Class Kind and Performance

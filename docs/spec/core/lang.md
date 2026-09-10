@@ -140,7 +140,18 @@ true        try         type        val         value       var
 when        while       _
 ```
 
-**Contextual keywords** have meaning only in one position and remain usable as identifiers elsewhere: `get` and `set` (property accessors, `oop.md` §10), `internal` (visibility), and `fn` (the optional function-type prefix, `fp.md` §6.1).
+**Contextual keywords** have meaning only in one position and remain usable as identifiers elsewhere:
+
+| Keyword | Position | Defined in |
+| ------- | -------- | ---------- |
+| `get` / `set` | property accessors | `oop.md` §10 |
+| `internal` | visibility modifier | `oop.md` §7 |
+| `fn` | function-type prefix | `fp.md` §6.1 |
+| `immutable` | before `class`; collection variation | `immutability.md` §2 |
+| `virtual` | before `fun` in a class body | `oop.md` §2.3 |
+| `override` | before `fun` in a class body | `oop.md` §6 |
+
+Each carries meaning in exactly one position, so `val override = 1` and `fun immutable()` remain legal declarations. They are keywords rather than annotations because each changes what a declaration *is* — its layout, its dispatch, or which methods it has — and annotations in Bestie never do (`annotations.md`).
 
 Built-in **type names** — `int`, `uint`, `float`, `bool`, `char`, `str`, `byte`, `array`, `slice`, `range`, `tuple`, `ptr`, `thread` — are ordinary identifiers bound by the prelude, not reserved words. Shadowing one is legal and warned about, in exactly the way shadowing any prelude name is (§4.8.3).
 
@@ -267,7 +278,12 @@ Properties:
 * Preferred default
 * Encourages value-oriented programming
 
-File-level `val` must be annotated with `@immutable`.
+**File-level `val` must have an immutable type** — a naturally immutable type (§4.2 of `immutability.md`), an `immutable class`, or an `immutable` collection variation. `var` is forbidden at file scope entirely (§4.3), so this closes the remaining path to shared mutable module state: a file-level `val list<int>` would be a rebinding-proof name pointing at a freely mutable object visible to every function in the file.
+
+```bestie
+val LIMITS : list<int>.immutable = ...   // ✅ mutation API unavailable
+val CACHE  : list<int>           = ...   // ❌ file-level val must be immutable
+```
 
 > **Two axes of `val` — binding vs. field.** The `val` keyword is used in two distinct positions, and they mean different things:
 > * **`val` binding** (`val x = ...`) — the *binding* cannot be rebound. It says nothing about whether the storage it designates is writable; that depends on the type. Notably, taking `.address()` of a `val T` binding yields a **mutable** `ptr<T>`, because the binding designates writable storage (see `core/memory.md` §8.3 and §10.1.2).
@@ -275,7 +291,7 @@ File-level `val` must be annotated with `@immutable`.
 >
 > In short: a `val` binding means "this name cannot be rebound"; a `val` field means "this field cannot be mutated." The keyword is the same; the axis is different.
 
-> For a complete per-type breakdown of what `val`, `@immutable val`, `.immutable`, and `const` each prevent, see `core/immutability.md`.
+> For a complete per-type breakdown of what `val`, `immutable`, and `const` each prevent, see `core/immutability.md`.
 
 ---
 
@@ -419,7 +435,7 @@ Properties:
 
 | Scope | Introduced by | Notes |
 | ----- | ------------- | ----- |
-| Module / file | top of a file | `var` is forbidden here; file-level `val` requires `@immutable` |
+| Module / file | top of a file | `var` is forbidden here; file-level `val` must have an immutable type (§4.2) |
 | Type body | `class` / `data class` / `protocol` / `enum` | members and `const`s live in the type namespace |
 | Function | `fun` parameter list + body | parameters live in the function's top scope |
 | Block | `{ ... }` | including `if`/`switch`/loop bodies and function-literal bodies |
@@ -461,19 +477,19 @@ Shadowing and overriding are unrelated mechanisms and must not be confused:
 
 | | Shadowing | Overriding |
 | --- | --------- | ---------- |
-| Applies to | local bindings / variables | `@virtual` methods in a class hierarchy |
+| Applies to | local bindings / variables | `virtual` methods in a class hierarchy |
 | Mechanism | a name in an inner scope hides one in an outer scope | a subclass replaces a base method's implementation |
 | Resolution | lexical, **compile time** | dynamic dispatch, **runtime** (vtable or sealed tag) |
-| Requires | nothing — just a nested declaration | `@virtual` on the base, `@override` on the subclass |
+| Requires | nothing — just a nested declaration | `virtual` on the base, `override` on the subclass |
 | Cost | zero | one dynamic dispatch |
 
-Crucially, Bestie has **no member hiding**. A subclass cannot silently redeclare a base field or non-`@virtual` method to shadow it:
+Crucially, Bestie has **no member hiding**. A subclass cannot silently redeclare a base field or non-`virtual` method to shadow it:
 
 * Redeclaring an inherited **field** is a compile-time error.
-* Redeclaring a non-`@virtual` **method** is a compile-time error — there is no static "method hiding" as in some languages.
-* The only legal way for a subclass to provide a new implementation of an inherited method is to **override** a `@virtual` method with `@override`.
+* Redeclaring a non-`virtual` **method** is a compile-time error — there is no static "method hiding" as in some languages.
+* The only legal way for a subclass to provide a new implementation of an inherited method is to **override** a `virtual` method with `override`.
 
-This keeps method resolution unambiguous: a call either dispatches statically to a single definition or dynamically to a `@virtual` override. See `core/oop.md` §6 (Inheritance & Override Rules) for the full override semantics.
+This keeps method resolution unambiguous: a call either dispatches statically to a single definition or dynamically to a `virtual` override. See `core/oop.md` §6 (Inheritance & Override Rules) for the full override semantics.
 
 ---
 
@@ -1360,7 +1376,7 @@ A derived structural `==` requires every field to be comparable; a field whose t
 
 ### 15.5 Introspection and Identity
 
-* `is` — runtime type test (instanceof-equivalent): `x is T` yields `bool`. Meaningful for `\|virtual` and sealed hierarchies; statically resolved (and warned as redundant) when the type is known at compile time. See `core/oop.md` §5.5.
+* `is` — runtime type test (instanceof-equivalent): `x is T` yields `bool`. Meaningful for `virtual` and sealed hierarchies; statically resolved (and warned as redundant) when the type is known at compile time. See `core/oop.md` §5.5.
 * `typeOf(x)` — compile-time type query
 * `sizeOf(T)` — compile-time size in bytes
 * `alignOf(T)` — compile-time alignment requirement in bytes

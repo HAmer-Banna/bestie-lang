@@ -72,10 +72,10 @@ This is **early binding**.
 
 ### 2.3 Dynamic Polymorphism (Explicit)
 
-* Requires `@virtual`
-* `@override` mandatory
-* Vtables generated only for open `@virtual` hierarchies
-* Sealed `@virtual` hierarchies may use compact tags and direct dispatch instead of vtables
+* Requires `virtual`
+* `override` mandatory on every overriding method
+* Vtables generated only for open `virtual` hierarchies
+* Sealed `virtual` hierarchies may use compact tags and direct dispatch instead of vtables
 * Dispatch happens at runtime
 
 This is **late binding**, and is **opt-in only**.
@@ -116,7 +116,7 @@ data class User {
 **Rules:**
 
 * All fields are implicitly `val` — `var` fields are **forbidden**
-* Fields holding collections must use `.immutable` collections
+* Fields holding collections must use the `immutable` variation (`list<T>.immutable`, `map<K,V>.immutable`)
 * Cannot be open or inherited
 * Cannot declare `protected` members
 * Inner classes must be `private value class` only
@@ -127,7 +127,7 @@ data class User {
 
 * Always receives a compiler-generated memberwise `init()` (see section 11.4)
 * `init()` may not be fallible — `data class` construction cannot return `!`
-* `@virtual` calls in `init()` are impossible (no virtual methods permitted)
+* `virtual` calls in `init()` are impossible (no virtual methods permitted)
 * `@noInit` suppresses the generated init; `@noConstruct` forbids all construction
 
 If you need mutable fields, use a regular `class` instead.
@@ -256,10 +256,10 @@ enum Direction {
 
 Rules:
 
-* Methods are statically dispatched, follow ordinary method rules, and may not be `@virtual`
+* Methods are statically dispatched, follow ordinary method rules, and may not be `virtual`
 * Fields are forbidden — a `const` is a compile-time value in the type's namespace, not per-instance storage
 * `this` is the enum value; for a payload variant, match on it to reach the payload
-* Type-level members (`static`) follow section 13
+* Type-level members follow section 13
 
 There is deliberately no built-in `values()`, `name()`, or `ordinal()`. Each would either require runtime metadata (which core does not emit) or bake a reflection-shaped API into a sealed layer. An exhaustive `switch` covers the cases `name()` is normally used for, and `enum ... as T` covers `ordinal()`. A `values()`-style listing over a closed set is a `bestie.lib` concern.
 
@@ -289,7 +289,7 @@ class File {
 * Receives a compiler-generated memberwise `init()` if none is declared (see section 11.4)
 * If using `ext`, every `init()` must call `super.init(...)` exactly once, optionally preceded by a `this`-free prologue (see section 11.3)
 * May have fallible `init()` returning `! ErrorSet` (see section 11.6)
-* `@virtual` calls inside `init()` are a compile-time error (see section 11.7)
+* `virtual` calls inside `init()` are a compile-time error (see section 11.7)
 
 ---
 
@@ -300,22 +300,22 @@ Explicit inheritance root, explicit polymorphic intent
 
 ```bestie
 open class Shape {
-    @virtual fun area(): int
+    virtual fun area(): int
 }
 ```
 
 **Rules:**
 
 * Must be explicitly marked `open`
-* Virtual methods must be explicitly annotated with `@virtual`
-* `@override` mandatory
+* Virtual methods must be explicitly marked `virtual`
+* `override` mandatory on every overriding method
 * Single inheritance only
 
 **Construction:**
 
 * `init()` follows standard rules (see section 11)
 * Subclasses must call `super.init(...)` exactly once in every `init()`, optionally preceded by a `this`-free prologue (see section 11.3)
-* `@virtual` methods must not be called from `init()` — the derived subclass is not yet initialized (see section 11.7)
+* `virtual` methods must not be called from `init()` — the derived subclass is not yet initialized (see section 11.7)
 
 **Warning — unsubclassed `open` within module:**
 
@@ -350,7 +350,7 @@ Partial implementation with shared logic
 
 ---
 
-`data class`, `value class`, `enum`, and `@immutable class` cannot use `ext`.
+`data class`, `value class`, `enum`, and `immutable class` cannot use `ext`.
 They may use `impl` with protocols, but only statically dispatched protocol methods are allowed.
 
 ---
@@ -433,8 +433,7 @@ protocol A { fun greet(): str = "A" }
 protocol B { fun greet(): str = "B" }
 
 class C impl A, B {
-    @override
-    fun greet(): str = A.greet(this)    // explicit — pick A's default
+    override fun greet(): str = A.greet(this)    // explicit — pick A's default
 }
 ```
 
@@ -490,7 +489,7 @@ val p: Printable = Circle.new()
 
 * Always safe
 * Compile-time verified
-* Preserves early binding unless `@virtual` is involved
+* Preserves early binding unless `virtual` is involved
 
 ---
 
@@ -506,7 +505,7 @@ Rules:
 
 * Must use `as`
 * Fails at compile time if statically impossible
-* Runtime check exists only for `@virtual` hierarchies
+* Runtime check exists only for `virtual` hierarchies
 * Sealed hierarchies may lower the check to a compact type-tag test
 * Runtime check uses compiler-emitted type metadata, not reflection APIs
 
@@ -531,7 +530,7 @@ Rules:
 ### 5.4 Binding Preservation Rules
 
 * Static calls remain statically bound after casting
-* Dynamic dispatch only occurs for `@virtual` methods
+* Dynamic dispatch only occurs for `virtual` methods
 * Casting **never introduces late binding**
 
 ---
@@ -548,14 +547,14 @@ val matched: bool = shape is Circle
 
 `is` only performs a *runtime* test where a runtime type actually exists:
 
-* `@virtual` hierarchies (`open` / `abstract class`) — the check reads compiler-emitted type metadata.
+* `virtual` hierarchies (`open` / `abstract class`) — the check reads compiler-emitted type metadata.
 * Sealed hierarchies — the check lowers to a compact type-tag comparison (no metadata pointer walk).
 
 In both cases the test uses compiler-emitted type information, **never reflection or a general RTTI API**.
 
 **Static (compile-time) resolution:**
 
-For a value whose concrete type is fully known at compile time (no `@virtual` involved), `x is T` is resolved at compile time to a constant `true` or `false`. Because static dispatch already knows the type, a check that can never vary is redundant — the compiler emits a warning:
+For a value whose concrete type is fully known at compile time (no `virtual` involved), `x is T` is resolved at compile time to a constant `true` or `false`. Because static dispatch already knows the type, a check that can never vary is redundant — the compiler emits a warning:
 
 ```
 warning: 'x is Circle' is always true — type is statically known, 'is' check is redundant
@@ -567,7 +566,7 @@ warning: 'x is Circle' is always true — type is statically known, 'is' check i
 
 ```bestie
 open class Shape {
-    @virtual fun area(): float64
+    virtual fun area(): float64
 }
 class Circle ext Shape { radius: float64 }
 class Rectangle ext Shape { width: float64; height: float64 }
@@ -597,13 +596,13 @@ fun describe(s: Shape): str {
 
 ## 6. Inheritance & Override Rules
 
-* `@override` mandatory
+* `override` mandatory on every overriding method
 * Signature must match exactly
 * Only `open` and `abstract` classes are inheritable
 * A closed `class` cannot be extended
 * A closed `class` may extend an `open` or `abstract` base
 
-Overriding is distinct from lexical shadowing: it replaces a `@virtual` method's implementation and is resolved by dynamic dispatch, whereas shadowing only hides a binding in a nested scope at compile time. Bestie has **no member hiding** — a subclass may not redeclare an inherited field or non-`@virtual` method. See `core/lang.md` §4.8.4 for the shadowing-vs-overriding distinction.
+Overriding is distinct from lexical shadowing: it replaces a `virtual` method's implementation and is resolved by dynamic dispatch, whereas shadowing only hides a binding in a nested scope at compile time. Bestie has **no member hiding** — a subclass may not redeclare an inherited field or non-`virtual` method. See `core/lang.md` §4.8.4 for the shadowing-vs-overriding distinction.
 
 ### 6.1 Default Implementation Resolution
 
@@ -759,7 +758,7 @@ class Temperature {
 * The `set` body receives the incoming value as a parameter — `set(value) { ... }`. The parameter name is chosen by the author (`set(v)` is equally valid).
 * A `val` property may declare a `get` body only. A `var` property may declare both a `get` and a `set` body.
 * Bodied accessors reference explicit fields — there is **no implicit backing field**. A computed property that only reads other fields declares no field of its own; a stored/validated property declares its own (typically `private`) field.
-* An accessor body follows normal method rules (ownership, visibility, static dispatch). Accessors are **not** `@virtual`.
+* An accessor body follows normal method rules (ownership, visibility, static dispatch). Accessors are **not** `virtual`.
 * Shorthand (`=> { get }` / `=> { get; set }`) and bodied accessors may be mixed within the same class as appropriate — use the shorthand for trivial exposure and a body only where logic is required.
 
 **Allowed contexts:**
@@ -804,7 +803,7 @@ User.new().init(id: 1)         // ❌ would expose an uninitialized object
 
 `free()` and `freeDeep()` still take **no arguments**. Arguments belong only to `.new(...)`.
 
-Construction may be restricted per class via `@noNew` / `@noInit` (§11.8). Types that are factory-only (`thread.of`, `fiber.of`) reject `.new` entirely — that is a type rule, not a second construction syntax.
+Construction may be restricted per class via `@noNew` / `@noInit` (§11.8). There is no type that refuses `.new` and offers a differently-named factory instead: `thread`, `fiber`, and every collection are constructed with `.new` like everything else (§13.2).
 
 ---
 
@@ -869,7 +868,7 @@ class Circle ext Shape {
 * Since Bestie supports single inheritance only (`ext` binds exactly one class), initialization order is always a linear chain with no diamond ambiguity
 * Because the prologue cannot touch `this`, a failure returned from the prologue needs **no field drops** — nothing has been initialized yet. This is strictly cheaper than failing after `super.init(...)`, which must drop the base (§11.6).
 
-> **Why narrower than Java's flexible constructor bodies (JEP 482):** Java's main motivation is initializing subclass fields *before* `super()` so base-class virtual calls don't observe uninitialized derived state. Bestie forbids `@virtual` calls in `init()` entirely (§11.7), so that motivation does not apply — the prologue exists purely for early validation/argument computation and pairs with fallible construction (§11.6). Writing `this` fields before `super.init(...)` remains forbidden, preserving the linear "base fully initialized before any derived field" invariant.
+> **Why narrower than Java's flexible constructor bodies (JEP 482):** Java's main motivation is initializing subclass fields *before* `super()` so base-class virtual calls don't observe uninitialized derived state. Bestie forbids `virtual` calls in `init()` entirely (§11.7), so that motivation does not apply — the prologue exists purely for early validation/argument computation and pairs with fallible construction (§11.6). Writing `this` fields before `super.init(...)` remains forbidden, preserving the linear "base fully initialized before any derived field" invariant.
 
 ---
 
@@ -972,14 +971,14 @@ Rules:
 
 ### 11.7 Virtual Methods Forbidden During Construction
 
-Calling `@virtual` methods from within any `init()` body is a **compile-time error**.
+Calling `virtual` methods from within any `init()` body is a **compile-time error**.
 
 ```bestie
 open class Base {
-    @virtual fun configure() { ... }
+    virtual fun configure() { ... }
 
     init() {
-        this.configure()    // error: @virtual call forbidden in init()
+        this.configure()    // error: virtual call forbidden in init()
     }
 }
 ```
@@ -988,7 +987,7 @@ Reason: during `init()`, the derived class is not yet fully initialized. Dispatc
 
 Rules:
 
-* Any call to a `@virtual`-annotated method within an `init()` body — on `this`, on `super`, or on a field value — is rejected at compile time
+* Any call to a `virtual` method within an `init()` body — on `this`, on `super`, or on a field value — is rejected at compile time
 * Calls to non-virtual methods and protocol methods with static dispatch are permitted
 * This restriction applies to all `init()` overloads, including delegating constructors
 
@@ -1134,7 +1133,7 @@ c.free()    // runs c.deinit(), then releases c's storage
 * `deinit()` runs when `free()` or `freeDeep()` is explicitly called on a live, fully-constructed instance. It is **not** called at scope exit, and the compiler still requires explicit discharge of every ownership obligation (`memory.md` §7.4).
 * **Execution order** — `x.freeDeep()`: (1) run `x.deinit()`; (2) drop `own` fields in **reverse** declaration order; (3) release `x`'s own storage. `x.free()`: run `x.deinit()`, then release only `x`'s storage — its direct `own` fields must already have been discharged (`memory.md` §7.1).
 * **Hierarchy chaining** — for an `open`/`abstract class` hierarchy, `deinit()` chains **most-derived first**, then each base `deinit()` up the chain, reversing the `super.init(...)` order. The compiler inserts the base calls automatically; do **not** call `super.deinit()` manually.
-* `deinit()` may read fields and call non-`@virtual` methods. Calling a `@virtual` method from `deinit()` is a compile-time error, for the same reason as §11.7: while a base subobject is being destroyed, the derived part may already be torn down.
+* `deinit()` may read fields and call non-`virtual` methods. Calling a `virtual` method from `deinit()` is a compile-time error, for the same reason as §11.7: while a base subobject is being destroyed, the derived part may already be torn down.
 * `deinit()` must not move `this`, transfer ownership of `this`, or create a new owning alias of the instance — **resurrection is forbidden**.
 * `deinit()` is **not** invoked on construction failure. If a fallible `init()` returns an error, only the already-initialized fields are dropped in reverse order (§11.6); a never-completed object has no `deinit()`. `deinit()` pairs only with a *completed* `init()`.
 * A `panic` inside `deinit()` terminates the program immediately, consistent with the language-wide no-unwind guarantee. Fields not yet dropped are not cleaned up.
@@ -1223,52 +1222,61 @@ Rules:
 
 ---
 
-## 13. Type-Level Members (`static`)
+## 13. Type-Level Members
 
-A `static` member belongs to the **type**, not to an instance. It is the mechanism behind `thread.of(...)`, `Channel<T>.of(16)`, `int32.MAX`, and every factory the standard library exposes.
+A member that belongs to the **type** rather than to an instance comes in exactly two forms, and neither needs a keyword of its own.
+
+### 13.1 Type-level constants — a `const` in the type body
+
+`lang.md` §4.1 already places a `const` declared in a class or protocol body in the **type's namespace**. That is all a type-level constant is:
 
 ```bestie
 class Connection {
     val host: str
 
-    static const DEFAULT_PORT: int = 5432
-
-    static fun open(host: str): own Connection ! ConnError {
-        return Connection.new(host)
-    }
+    const DEFAULT_PORT: int = 5432
 }
 
 val port = Connection.DEFAULT_PORT
-val own c = try Connection.open("db.local")
 ```
 
-**Rules:**
+It follows `lang.md` §4.1 exactly: compile-time evaluated, inlined as an immediate, zero bytes of data unless its address is taken. There is no per-type object, no class metadata, and **no initialization order problem** — nothing runs at startup, because there is nothing to run.
 
-* `static` applies to `fun` and `const`. There is **no static `var`** — mutable global state is not created by a keyword. A process-wide mutable value needs `threadlocal` (`concurrency.md` §7) or an explicit atomic/lock from `bestie.lib.concurrency`.
-* A `static fun` has no `this` and cannot call instance methods or read fields. Access is always qualified by the type: `Connection.open(...)`, never through an instance.
-* `static` members are **not inherited into a subclass's namespace** and are never `@virtual`. `Base.make()` and `Derived.make()` are unrelated declarations; there is no static dispatch surprise because there is no static dispatch at all — the call is resolved to one function at compile time.
-* Visibility modifiers apply normally. A `private static fun` is reachable only inside the declaring type (or file, for a top-level type — section 7).
-* Every class kind may declare them: `class`, `open class`, `abstract class`, `data class`, `value class`, `enum`, and `protocol`. On a `protocol`, a `static fun` must have a body — a protocol has no instances and cannot require a type-level member of its implementors.
-* A `static const` follows `lang.md` §4.1: inlined as an immediate, zero bytes of data unless its address is taken.
-* Lowered to a plain mangled function or a `.rodata` constant. There is no per-type object, no class metadata, and no initialization order problem — a `static const` is compile-time evaluated, so there is nothing to run at startup.
+The numeric limits (`int32.MAX`, `float64.EPSILON`) are compiler-known constants of the same shape, not user declarations — see `constants.md` §3.
 
-**Why this is the factory mechanism.** `@noNew` (section 11.8) forbids `Type.new(...)` at external call sites and directs callers to a factory; `static fun` is where that factory lives. `thread` and `fiber` are exactly this shape — construction is refused, and `of` is a type-level function:
+### 13.2 Type-level functions — there are none; use `.new(...)`
+
+Bestie has **no `static fun`**, and no `static` keyword at any layer.
+
+Every type-level function that a factory would need is a **constructor**, and §11.1 already settles that constructors are spelled `Type.new(...)`. So the factory *is* `.new`:
 
 ```bestie
-@noNew
-class DbHandle {
-    init(conn: RawConn) { ... }
-
-    static fun open(dsn: str): own DbHandle ! DbError { ... }
-}
-
-val own h = try DbHandle.open("postgres://...")   // ✅
-val own g = DbHandle.new(conn)                    // ❌ @noNew
+list<int>.new()                 // empty list
+list<int>.linked.new()          // empty linked list
+set<int>.new(1, 2, 3)           // varargs init — fp.md §9
+thread.new(body)                // no special-cased construction path
+Channel<int>.new(16)
+Connection.new(host)            // fallible init — §11.6
 ```
 
-**What `static` is not.** It is not a companion object, not a namespace for free functions, and not a singleton mechanism. A function that needs no type at all should be a top-level `fun` — Bestie has no rule forcing functions into classes. Bestie has no language-level singleton (section 15); `bestie.lib.patterns` provides `Lazy` / `Once` for that.
+There is no second construction verb. `of` and `build` do not exist as language forms.
 
----
+**Alternative constructors that differ in meaning, not in type**, are distinguished with a newtype (`lang.md` §6.1) rather than with a distinct function name. Overload resolution then works normally, and the unit travels with the value:
+
+```bestie
+type Seconds as int64
+type Millis  as int64
+
+Duration.new(30 as Seconds)
+Duration.new(30 as Millis)
+```
+
+**A function that needs no instance and constructs nothing is a top-level `fun`.** Bestie has no rule forcing functions into a type's namespace, so `bestie.lib.math.identity(3)` is a plain function, not `matrix.identity(3)`.
+
+**Restricting construction** is a visibility question, not a keyword question. An `init` declared without `public` is `internal` (§7), so `Type.new(...)` is already unavailable outside the module; `private init` narrows it to the declaring type, leaving a factory `.new` overload as the only way in.
+
+**What this is not.** There is no companion object, no namespace for free functions, no per-type storage, and no singleton mechanism. Bestie has no language-level singleton (section 15) and no mutable global state created by a keyword — a process-wide mutable value needs `threadlocal` (`concurrency.md` §7) or an explicit atomic / lock from `bestie.lib.concurrency`.
+
 
 ## 14. Thread Safety Guarantees
 
@@ -1279,22 +1287,35 @@ Always thread-safe — deep immutability is declared explicitly:
 * `data class` — value semantics, no identity
 * `value class` — value semantics, no identity
 * `enum` — closed, no mutable state
-* Classes annotated `@immutable` — deep immutability enforced by the compiler
+* `immutable class` — deep immutability enforced by the compiler
 * Primitive types (`int`, `float64`, `bool`, `char`, etc.)
-* Immutable collections — created via `.immutable` builder: `list<T>.immutable.build()`, `set<T>.immutable.build()`, etc.
+* Immutable collections — the `immutable` variation: `list<T>.immutable`, `set<T>.immutable`
 * `const` values — stored in read-only memory
 
 **Not** automatically thread-safe:
 
 * `val xs: list<int>` — the binding is immutable, but the list is mutable
 * A class with all `val` fields, if any field holds a mutable collection or a mutable class
-* `open class` and regular `class` instances unless annotated `@immutable`
+* `open class` and regular `class` instances unless declared `immutable`
+
+Note that this list has no per-binding entry. A frozen *binding* would leave every other reference to the same object free to mutate it, so it could never make sharing safe; immutability that carries a thread-safety guarantee is always a property of the type (`immutability.md` §6).
+
+The bridge from a mutable value to a shareable one is **`freeze()`**, which consumes ownership:
+
+```bestie
+val own ls = list<int>.new()
+ls.add(1)
+
+val own frozen = move ls.freeze()   // list<int>.immutable — ls is now invalid
+```
+
+Because `move` invalidates the source, no mutable path to that storage survives the call. That is what makes the result safe to hand to another thread with no lock.
 
 User responsibility:
 
 * `open class` and mutable classes — use locks or ownership transfer
-* Mutable collections — use `.concurrent` builder or ownership transfer
-* Singleton-style global objects — use atomics or locks from `bestie.lib.concurrency`
+* Mutable collections — transfer ownership, or guard with a `Lock` from `bestie.lib.concurrency`
+* Process-wide shared state — use atomics or locks from `bestie.lib.concurrency`
 
 ---
 
@@ -1305,7 +1326,7 @@ User responsibility:
 * General-purpose runtime RTTI APIs
 * Reflection-based dispatch
 * Fragile base classes
-* Language-level singleton types (section 13 explains what `static` does and does not give you)
+* Language-level singleton types, and any `static` keyword (section 13)
 * Anonymous classes / inline object expressions (use a named class or a lambda — see section 4.3)
 
 ---

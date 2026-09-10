@@ -106,22 +106,31 @@ Safe to share across threads — deep immutability must be explicit:
 
 * Primitive types (`int`, `float64`, `bool`, `char`, etc.)
 * `data class`, `value class`, `enum` — value semantics by definition
-* Classes annotated `@immutable`
+* `immutable class` — deep immutability enforced by the compiler
 * `const` values
-* Immutable collections — built with `.immutable`: `list<T>.immutable.build()`
+* Immutable collections — the `immutable` variation: `list<T>.immutable`
 
 ```bestie
-val cfg = Config.load()                          // Config is a data class ✅
-val xs  = list<int>.immutable.build()            // explicitly immutable ✅
-thread.of(() => read(cfg))                       // ✅ safe
-thread.of(() => process(xs))                     // ✅ safe
+val cfg = Config.new(...)                        // Config is a data class ✅
+val xs : list<int>.immutable = ...               // explicitly immutable ✅
+thread.new(() => read(cfg))                      // ✅ safe
+thread.new(() => process(xs))                    // ✅ safe
 ```
 
 **Not** safe to share:
 
 ```bestie
-val xs: list<int> = list<int>.build()
-thread.of(() => read(xs))    // ❌ compile error: mutable list, val binding is not enough
+val xs : list<int> = list<int>.new()
+thread.new(() => read(xs))   // ❌ compile error: mutable list, val binding is not enough
+```
+
+The bridge is `freeze()`, which consumes ownership — after the `move` there is no mutable path left to that storage, which is exactly what makes the result shareable:
+
+```bestie
+val own ls = list<int>.new()
+ls.add(1)
+val own frozen = move ls.freeze()   // list<int>.immutable
+thread.new(() => process(frozen))   // ✅ safe
 ```
 
 ---

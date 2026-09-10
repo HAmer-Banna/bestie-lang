@@ -66,9 +66,6 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 
 | Annotation | Targets | Effect |
 | ---------- | ------- | ------ |
-| `@immutable` | type, field, local binding | Deep immutability — see `core/immutability.md` |
-| `@virtual` | method | Permits dynamic dispatch and overriding — `oop.md` §2.3 |
-| `@override` | method | Enforces override correctness — `oop.md` §6 |
 | `@trusted` | expression, local binding | Suppresses a compiler-inserted check the programmer undertakes to uphold: range construction (`lang.md` §6.2), checked narrowing (`types.md` §2.1), dropping pointee `const` (`memory.md` §8.8). Searchable by design |
 | `@pure` | function | Side-effect free; callable in `const` initializers (`lang.md` §4.1) |
 | `@noInline` | function | Suppresses inlining for stack-trace and profiling clarity |
@@ -81,6 +78,14 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 
 The exact semantics of each are enforced at compile time.
 
+**Every annotation in this table is a hint, a suppression, or metadata.** None of them changes what a declaration *is*, how it is laid out, or how a call dispatches. That is the dividing line between an annotation and a keyword in Bestie, and it is why `immutable`, `virtual`, and `override` are **keywords, not annotations**:
+
+* `virtual` adds a vtable pointer to the object and turns a direct call into an indirect one — it changes layout *and* dispatch (`oop.md` §2.3, `memory.md` §18.2).
+* `override` is a checked assertion about a hierarchy, not a hint — the compiler rejects it when it is false (`oop.md` §6).
+* `immutable` changes which methods a type has (`core/immutability.md` §2.1).
+
+All three are contextual keywords: they carry meaning in exactly one position and remain usable as identifiers elsewhere (`lang.md` §3.1.4). An annotation that changed semantics this way would make the zero-cost, no-runtime-effect promise of this document untrue.
+
 **Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory.md` §18.7). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Initialize`, `@Reflectable`, framework routing and test annotations — comes from a compiler plugin or a higher layer, and is an unknown annotation to a plain core build.
 
 ---
@@ -91,17 +96,17 @@ Annotations may be applied to:
 
 | Target | Example |
 | ------ | ------- |
-| Type declarations (`class`, `data class`, `value class`, `enum`, `protocol`) | `@immutable class Config { ... }` |
+| Type declarations (`class`, `data class`, `value class`, `enum`, `protocol`) | `@deprecated("use Config2") class Config { ... }` |
 | Functions and methods, including `init` and accessors | `@pure fun area(r: float64): float64` |
-| Fields | `@immutable val cache: Buffer` |
+| Fields | `@expose val cache: Buffer` |
 | Function parameters | `fun handle(@Named("primary") db: Database)` |
 | Local bindings and expressions | `@trusted val s = (input as Score)` |
-| Other annotations (composition, below) | `@immutable annotation ValueObject;` |
+| Other annotations (composition, below) | `@deprecated("legacy") annotation Legacy;` |
 
 An annotation declaration may restrict which of these it accepts; applying it elsewhere is a compile-time error:
 
 ```
-error: '@virtual' is not applicable to a field — valid targets: method
+error: '@pure' is not applicable to a field — valid targets: function
 ```
 
 Annotations never appear on statements, blocks, or control-flow keywords. `@trusted` is the one that comes closest, and it attaches to the expression or binding whose check it suppresses — never to a block, because there is no `unsafe { }` in Bestie (`memory.md` §15).
@@ -116,11 +121,11 @@ When an annotation is applied to another annotation, it behaves as **annotation 
 Example:
 
 ```bestie
-@immutable
-annotation ValueObject;
+@deprecated(reason = "superseded by the v2 codec", removedIn = "2.0")
+annotation LegacyCodec;
 ```
 
-Any usage of `@ValueObject` now also implies `@immutable`.
+Any usage of `@LegacyCodec` now also carries the `@deprecated` warning.
 
 ---
 

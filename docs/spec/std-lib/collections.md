@@ -250,50 +250,47 @@ Optional compiler warnings may be emitted for redundant modifiers.
 
 ---
 
-### 4.4 `.immutable` Modifier vs `@immutable val`
+### 4.4 What `immutable` Means Here
 
-These are two distinct mechanisms with fundamentally different semantics.
-
-**`.immutable` modifier** — a collection variation. The collection exists in a functionally immutable state: mutation methods return a **new collection** rather than modifying in place. The original is always unchanged. This is the same model `str` uses — `+` on a `str` produces a new string, it does not modify the original:
+`immutable` is a **variation**, selected in type position like any other:
 
 ```bestie
-val ls = list<int>.immutable.of(1, 2, 3)
-val ls2 = ls.add(4)     // ls  → still {1, 2, 3}
-                        // ls2 → new list {1, 2, 3, 4}
+val ls : list<int>.immutable = ...
 ```
 
-The binding `ls` itself can be rebound if declared with `var`.
-
-**`@immutable val`** — a compiler-enforced freeze on the binding. Any mutation attempt — including calls that would return a new collection — is a **compile-time error**. The binding can never be changed:
+It means exactly what it means everywhere else in Bestie (`core/immutability.md` §2.1): **the mutation API is unavailable.** `add`, `insert`, `remove`, and `ls[i] = v` are compile-time errors on an immutable collection.
 
 ```bestie
-@immutable val ls : list<int> = {1, 2, 3}
-ls.add(4)       // ❌ compile-time error: mutation on @immutable binding
-val ls2 = ls    // ✅ reading and copying are fine
+val ls : list<int>.immutable = ...
+ls.add(4)          // ❌ compile-time error: 'add' is not available on an immutable list
+val ls2 = ls       // ✅ reading and copying are fine
 ```
 
-Comparison:
+**It is freeze, not persist.** `add` does not return a new collection. A persistent collection would allocate on every call that reads like an update and hand the caller an `own` obligation for each one; making that affordable requires structural sharing, which requires refcounting to know when a shared node dies, and `own` guarantees exactly one owner. There is nothing to share, and no garbage collector to absorb the difference.
 
-| Mechanism | Mutation call behaviour | Produces new collection? | Rebind the variable? |
-| --------- | ----------------------- | ------------------------ | -------------------- |
-| `list<T>.immutable` | Returns new collection | ✅ allowed | depends on `val`/`var` |
-| `@immutable val` | Compile-time error | ❌ forbidden | ❌ always |
-| `const` (literal only) | Compile-time error | ❌ forbidden | ❌ always |
+This is also why `str` needs no equivalent: `str` has no mutation API at all, so `s + " world"` is a constructor rather than a redirected mutation, and there is nothing for a modifier to remove.
 
-**The same distinction applies to `str`:**
-
-`str` is already functionally immutable by nature — `+` and all transformation methods return a new `str`. Annotating a `str` binding with `@immutable val` goes one step further: it prevents even the production of new values from that binding:
+**Obtaining one.** Either construct it directly, or freeze a mutable collection with `freeze()`, which consumes ownership:
 
 ```bestie
-val s : str = "hello"
-val s2 = s + " world"   // ✅ s unchanged, s2 is a new str
+val own ls = list<int>.new()
+ls.add(1)
+ls.add(2)
 
-@immutable val s3 : str = "hello"
-val s4 = s3 + " world"  // ❌ compile-time error: transformation on @immutable binding
+val own frozen = move ls.freeze()   // list<int>.immutable — ls is now invalid
 ```
 
-Use `.immutable` when you want **persistent / functional collection behaviour** — safe sharing, history, pure functions.
-Use `@immutable val` when any mutation attempt, however indirect, is a **programming error** that should never compile.
+Because `move` invalidates the source, no mutable path to that storage survives, which is what makes the result safe to share across threads with no lock (`core/oop.md` §14).
+
+**Comparison:**
+
+| Mechanism | Mutation call | Rebind the name? |
+| --------- | ------------- | ---------------- |
+| `list<T>` | modifies in place | depends on `val` / `var` |
+| `list<T>.immutable` | compile-time error | depends on `val` / `var` |
+| `const` (literal only) | compile-time error | ❌ always |
+
+There is no per-binding freeze. A frozen binding would leave other references to the same collection free to mutate it, so it could never carry the guarantee that makes immutability worth having (`core/immutability.md` §6).
 
 ---
 
@@ -317,8 +314,7 @@ val b : map<str,int> = {"a": 1, "b": 2}
 >
 > Immutability is always **opt-in** and explicit, with the same mechanisms across arrays and collections:
 > * `val` — freezes the binding only; contents stay mutable
-> * `.immutable` — functional immutability (mutations return a new collection); collections only
-> * `@immutable val` — hard freeze; any mutation is a compile-time error
+> * `immutable` — the mutation API is unavailable; a variation on collections, reached via `freeze()` on `array<T>`
 > * `const` — compile-time constant in read-only memory (requires a literal)
 >
 > See `core/immutability.md` §5 (arrays) and §7 (collections) for the full per-type model.

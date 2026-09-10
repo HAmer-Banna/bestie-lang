@@ -612,7 +612,7 @@ s.val = 1           // ❌
 
 Dropping pointee `const` (`ptr<const T>` → `ptr<T>`) requires `@trusted`. Adding `const` is always allowed (§8.8). Nested pointers apply `const` at each level independently (§8.6).
 
-`@immutable val p: ptr<T>` still only freezes the **binding**. It does not make the pointee read-only — that is `ptr<const T>`. See `immutability.md` §8.
+`val p: ptr<T>` freezes only the **binding**. It does not make the pointee read-only — that is `ptr<const T>`. There is no deeper per-binding freeze; `immutable` applies to types, not bindings (`immutability.md` §2, §8).
 
 #### 8.4.2 The address word — `p.addr` and `p.toStr()`
 
@@ -1038,7 +1038,7 @@ val p: Printable = Circle.new(radius: 5)
 The concrete type must be statically known at the point of assignment. This means:
 
 * `val p: Printable = Circle.new()` — ✅ concrete type is known at compile time
-* `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `@virtual` instead
+* `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `virtual` instead
 
 `.address()` on a protocol-typed variable resolves to the concrete type's pointer:
 
@@ -1047,9 +1047,9 @@ val p: Printable = circle
 val addr = p.address()   // ptr<const Circle> — concrete type is known at compile time
 ```
 
-**Dynamic dispatch via `@virtual`:**
+**Dynamic dispatch via `virtual`:**
 
-When dynamic dispatch is needed (elements of different concrete types), use `@virtual` methods and an `open class` hierarchy. The vtable pointer lives inside the object (see §18.2), not in a separate indirection layer. There is no fat-pointer protocol mechanism in Bestie.
+When dynamic dispatch is needed (elements of different concrete types), use `virtual` methods and an `open class` hierarchy. The vtable pointer lives inside the object (see §18.2), not in a separate indirection layer. There is no fat-pointer protocol mechanism in Bestie.
 
 **Protocols have no fields, no size, no allocation.** Attempting to store a protocol as a standalone value without a concrete type is a compile-time error.
 
@@ -1135,7 +1135,7 @@ Duplication semantics are defined in full in `std-lib/util.md` §7. Note that fo
 ### 11.3 Immutable & Concurrent Variants
 
 ```bestie
-val l = list<int>.array.immutable.build()
+val l : list<int>.immutable = ...
 ```
 
 Rules:
@@ -1301,15 +1301,15 @@ There is no `@layout(stable)`, no `@stable`, and no core annotation that freezes
 
 ---
 
-### 18.2 `open class` with `@virtual` — Vtable Layout
+### 18.2 `open class` with `virtual` — Vtable Layout
 
-An object in a live `@virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before the packed user fields.
+An object in a live `virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before the packed user fields.
 
 ```
 [ vtable_ptr | packed user fields ]
 ```
 
-The vtable is a read-only, statically allocated table of function pointers. Each `@virtual` method on the class occupies one slot, in declaration order. Slots are inherited from parent classes in the order they appear in the parent's vtable, followed by the subclass's own `@virtual` methods.
+The vtable is a read-only, statically allocated table of function pointers. Each `virtual` method on the class occupies one slot, in declaration order. Slots are inherited from parent classes in the order they appear in the parent's vtable, followed by the subclass's own `virtual` methods.
 
 Vtable pointer size equals the platform pointer size (4 bytes on 32-bit, 8 bytes on 64-bit).
 
@@ -1317,7 +1317,7 @@ The compiler emits one vtable per concrete class. Abstract classes do not emit a
 
 ---
 
-### 18.3 Sealed `@virtual` Hierarchy — Compact Tag Dispatch
+### 18.3 Sealed `virtual` Hierarchy — Compact Tag Dispatch
 
 When an `open class` hierarchy is declared `sealed` with a `permits` list, the compiler replaces the vtable pointer with a **compact type tag**.
 

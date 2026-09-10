@@ -99,6 +99,7 @@ Bestie provides a compact but expressive core:
 - `package`
 - `data class` — immutable structural type
 - `value class` — inline value wrapper
+- `immutable class` — deeply immutable identity type
 - `class` — identity type (final by default)
 - `open class` / `abstract class`
 - `enum` — simple tags or rich tagged variants
