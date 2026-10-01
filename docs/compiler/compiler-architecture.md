@@ -362,7 +362,41 @@ Invalid bit patterns of a payload encode the tag. No annotation.
 | `own T` / non-null heap address | non-zero | zero address (internal only — not a language `null`) |
 | `uint8 in 0..=200` | `0..=200` | 201–255 |
 
-The compiler assigns niches greedily (most constrained payload first). `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Niche search recurses into inline fields; padding is never a niche (`memory-layout.md` §11). Sealed class hierarchies use a minimum-size type tag pinned at offset 0, not a type word, and dispatch with a `switch` on that tag.
+The compiler assigns niches greedily: the inline field with the fewest niche values is used first, searching recursively through embedded value types. `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Padding is never a niche (`spec/core/memory-layout.md` §11).
+
+### Type word and descriptors
+
+Implements `spec/core/memory-layout.md` §7. Every Bestie program is closed at link time (no subtypes are loaded at run time), so all type descriptors live in one read-only **descriptor section** of the linked image.
+
+* **Encoding.** The 4-byte type word is the offset of the class's descriptor from the start of the descriptor section, emitted as a section-relative relocation and resolved by the linker. Dispatch materializes the section base as an instruction-pointer-relative constant and adds the type word — one add more than a full vtable pointer, 4 bytes less per object. On 32-bit targets the same offset encoding is used.
+* **Descriptor.** One per concrete class; abstract classes get none.
+
+  | Entry | Used by |
+  | ----- | ------- |
+  | `id: uint32` | `is` — the class's pre-order number in its hierarchy |
+  | `size: uint32` | Sized deallocation through a base type |
+  | `deinit` entry | `free()` / `freeDeep()` through a base type — runs the most-derived chain |
+  | virtual slots | One per `virtual` method: inherited slots first in the parent's order, then the subclass's new methods |
+
+* **`is`.** The linker numbers each hierarchy in pre-order, so every subtree is a contiguous id range. `x is T` lowers to `lo(T) <= desc.id <= hi(T)`: one load and two comparisons at any depth.
+* **Devirtualization.** Whole-program analysis (§5.2) turns a `virtual` method with one reachable implementation, or a call site with one possible receiver class, into a direct call.
+
+### Sealed tags
+
+Implements `memory-layout.md` §8. Dispatch lowers to a `switch` on the tag with direct calls. Freeing through a sealed base reads `sizeOf` from a compile-time table indexed by tag, and `deinit` is a `switch` on the tag. Tags are numbered in pre-order of the permit tree, so `is` on a nested sealed subtree is a range check.
+
+### Sized deallocation
+
+Implements `memory-layout.md` §10. The size passed to the allocator on every free:
+
+| What is freed | Size source |
+| ------------- | ----------- |
+| Object whose concrete type is static | `sizeOf(T)` constant |
+| Object freed through a `virtual` base | descriptor `size` |
+| Object freed through a sealed base | tag → size table |
+| Collection buffer | `capacity * strideOf(T)` from the collection's stored capacity |
+
+The default allocator is size-classed: each class is a run of equal-sized slots, so objects of one size class sit contiguously (cache and TLB locality) and a slot carries no header. A 12-byte object occupies a 16-byte slot, where a general-purpose `malloc` would spend 32.
 
 ---
 

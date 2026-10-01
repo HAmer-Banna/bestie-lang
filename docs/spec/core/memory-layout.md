@@ -170,7 +170,7 @@ Copying `sizeOf(Base)` bytes of raw memory over a `Derived` object, through `ptr
 
 Bestie does **not** load subtypes at run time. Every `open` or `abstract class` and every subtype that extends it is part of the program when it is linked. A dynamically loaded module cannot extend an `open class` from the host program; a plugin boundary uses FFI and function pointers (`std-api/foreign.md`), not inheritance.
 
-This rule is what lets the type word be 32 bits, lets `is` be a range check, and lets the linker devirtualize (§7.4).
+This rule is what lets the type word be 32 bits, `is` run in constant time, and calls be devirtualized (§7.3).
 
 ### 7.2 Layout
 
@@ -180,27 +180,19 @@ An object of a hierarchy with at least one `virtual` method carries a **type wor
 [ type word: uint32 | packed fields, filling bytes 4.. first ]
 ```
 
-The type word is not a pointer. It is the offset of the class's **type descriptor** within the program's descriptor section, resolved by the linker. Dispatch adds the section base, which is a link-time constant addressed relative to the instruction pointer, to the type word. That costs one add more than an 8-byte vtable pointer and saves 4 bytes in every object. On 32-bit targets the type word has the same size as a pointer, and the encoding is the same.
+The type word is exactly 4 bytes on every target. It identifies the object's concrete class and is opaque: its value has no meaning to programs, and its encoding is the compiler's (`compiler/compiler-architecture.md` §12, *Type word and descriptors*).
 
 An `open class` with no `virtual` methods has **no** type word. Where no runtime dispatch exists, the concrete type of every value is known statically (`memory.md` §10.1.4), so nothing needs to be stored in the object.
 
-### 7.3 The type descriptor
+### 7.3 What the type word guarantees
 
-One read-only descriptor per concrete class, emitted into the descriptor section:
+From the type word alone, in constant time and without any per-object data beyond those 4 bytes:
 
-| Entry | Used by |
-| ----- | ------- |
-| `id: uint32` | `is` — the class's pre-order number in its hierarchy |
-| `size: uint32` | Sized `free()` of an object whose static type is a base (§10) |
-| `deinit` entry | `free()` / `freeDeep()` through a base type — runs the most-derived `deinit` chain (`oop.md` §11.11) |
-| virtual slots | One function per `virtual` method. Inherited slots come first, in the parent's order, followed by the subclass's new methods |
+* **Dispatch.** A `virtual` call reaches the most-derived override.
+* **`is` at any depth.** `x is T` costs the same whether `T` is the direct class or a distant ancestor.
+* **Freeing through a base.** `free()` / `freeDeep()` on a base-typed `own` value runs the most-derived `deinit` chain (`oop.md` §11.11) and releases the object's full size (§10).
 
-Abstract classes get no descriptor, because they cannot be instantiated.
-
-### 7.4 Consequences of the closed world
-
-* **`is` is a range check.** The linker numbers each hierarchy in pre-order, so every subtree occupies a contiguous id range. `x is T` lowers to `lo(T) <= desc.id <= hi(T)`: one load and two comparisons, at any depth.
-* **Devirtualization.** A `virtual` method with exactly one implementation in the linked program is called directly. A call site where the type can be only one class becomes a direct call. The type word is still stored, because layout is fixed before link time (§12).
+Because the program is closed (§7.1), the compiler may also call a `virtual` method directly wherever it can prove only one implementation is reachable. The type word is still stored, because layout is fixed before the whole program is known (§15).
 
 ---
 
@@ -232,8 +224,8 @@ class Rect ext Shape { w: int16; h: int16; x: float64 }
 Rules:
 
 * **Pre-order numbering.** If the base is concrete, it is tag 0. The permitted types follow in pre-order of the permit tree, so a nested sealed subtree occupies a contiguous range and `is` is a range check. For a single-level permit list this is simply declaration order.
-* **Dispatch** is a `switch` on the tag with direct calls. There is no descriptor indirection.
-* **Sized free** uses a compile-time table from tag to `sizeOf`, and `deinit` dispatch is a switch on the tag.
+* **Dispatch** goes straight from the tag to the target method, with no descriptor indirection.
+* **Freeing through the base** finds the size and the `deinit` chain from the tag; nothing else is stored.
 * Unused tag values are niches (§11).
 
 ---
@@ -282,19 +274,11 @@ enum Slot  { Empty, Full(own Buffer) }      // one pointer: Empty = zero address
 
 `Type.new(...)` allocates exactly `sizeOf(T)` bytes, rounded up to the allocator's size class, at `alignOf(T)`. The default allocator stores **no metadata before or around the object**: no chunk header, no size word, no type word.
 
-That works because every deallocation is **sized**. The compiler always knows the size being freed:
-
-| What is freed | Where the size comes from |
-| ------------- | ------------------------- |
-| An object whose concrete type is static | `sizeOf(T)` — a constant |
-| An object freed through a `virtual` base | `size` in its type descriptor (§7.3) |
-| An object freed through a sealed base | The tag → size table (§8) |
-| A collection's buffer | `capacity * strideOf(T)`; the collection already stores its capacity |
+That works because every deallocation is **sized**: the compiler always knows the size being freed — from the static type, from the type word (§7.3), from the sealed tag (§8), or from a collection's stored capacity. How each case is lowered, and the default allocator's size classes, are the compiler's (`compiler/compiler-architecture.md` §12, *Sized deallocation*).
 
 Consequences:
 
-* A 12-byte object costs its size class (16 bytes), not 32 as with a general-purpose `malloc`.
-* Objects of one size class are contiguous in memory, which helps cache and TLB locality.
+* An object costs its size rounded up to a size class — no header on top of that.
 * Every `bestie.lib.allocators` allocator follows the same sized interface (`std-lib/allocators.md`). The `Debug` allocator may add redzones around allocations, which is its purpose; it is not the default.
 * Memory obtained from C (`c.malloc`) is returned with C's `free`, never with Bestie's deallocation (`memory.md` §16).
 
@@ -327,7 +311,7 @@ Entry ?          // 5 bytes — "absent" is live = 2
 User ?           // one pointer, when User is a heap class — "absent" is the zero address
 ```
 
-Each level of `T ? ?` or each extra tagged variant consumes one niche value. The compiler picks niches greedily, starting with the field that has the fewest niche values (`compiler/compiler-architecture.md` §12). When no niche exists, the tag is a pinned byte that fills a hole under §4.1. It is not a padded prefix.
+Each level of `T ? ?` or each extra tagged variant consumes one niche value. Which niche is used is the compiler's choice (`compiler/compiler-architecture.md` §12), fixed per §15. When no niche exists, the tag is a pinned byte that fills a hole under §4.1. It is not a padded prefix.
 
 ### 11.3 Padding is never a niche
 
@@ -363,7 +347,7 @@ A type marked `@repr(C)` (`std-api/foreign.md` §5.2) is laid out in declaration
 | Rejected | Reason |
 | -------- | ------ |
 | `@layout`, `@stable`, `@packed`, `@align` | Layout is the compiler's obligation, not a request. FFI uses `@repr(C)` |
-| 8-byte vtable pointer | 32 bits address every descriptor in a closed-world program (§7) |
+| 8-byte vtable pointer | 4 bytes identify every class in a closed-world program (§7) |
 | Bit-packed `bool` | Read-modify-write cost and races between distinct fields (§4.3) |
 | Compressed 32-bit `own` / `ref` pointers | Requires one heap base, which conflicts with explicit allocators and the no-arena-sublanguage rule (`memory.md` §17). A 32-bit handle into one allocator is a library type, not a language default |
 | Padding used as a niche | Padding is not preserved by writes (§11.3) |
@@ -377,7 +361,7 @@ A type marked `@repr(C)` (`std-api/foreign.md` §5.2) is laid out in declaration
 
 * For a given compiler version and target, the same type always gets the same layout: offsets, size, alignment, stride, niche assignment.
 * Layout is **not** stable across compiler versions or targets. Bytes that leave the process — files, network, shared memory between different builds — go through serialization or a `@repr(C)` type.
-* Type-word values and descriptor ids are assigned by the linker and are stable within one linked program only.
+* Type-word values are stable within one linked program only.
 * Sealed and enum tag values are stable within a compilation unit. Persist an `enum as T` discriminant (`oop.md` §3.3), never a compiler-assigned tag.
 * `virtual` slot order is stable within a linked program.
 
