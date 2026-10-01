@@ -788,7 +788,7 @@ After construction, the range is a fact the compiler uses: one check at the cons
 
 The compiler is **obligated** to use the minimum valid representation for every type — enum tags, niches, sealed-class tags, `bool`, `char`, and packed class fields. You do not opt in. There is no `@layout` / `@stable` escape hatch in core; FFI that must match a C header uses `bestie.api.foreign` (`@repr(C)`).
 
-How it packs, which niches exist, and what that does to the object file: `docs/compiler/compiler-architecture.md` (layout compaction).
+The layout rules themselves — field placement, size vs. stride, type words, tags, niches, and the header-free allocator — are specified in `memory-layout.md`. How the compiler implements them: `docs/compiler/compiler-architecture.md` (layout compaction).
 
 ---
 
@@ -1435,11 +1435,12 @@ A derived structural `==` requires every field to be comparable; a field whose t
 * `typeOf(x)` — compile-time type query
 * `sizeOf(T)` — compile-time size in bytes
 * `alignOf(T)` — compile-time alignment requirement in bytes
-* `offsetOf(T, field)` — compile-time byte offset of a field within `T`'s packed layout (`memory.md` §18.1)
+* `strideOf(T)` — compile-time distance between consecutive `T` elements in an array: `sizeOf(T)` rounded up to `alignOf(T)`. `sizeOf` excludes tail padding, so the two differ for aggregates (`memory-layout.md` §3)
+* `offsetOf(T, field)` — compile-time byte offset of a field within `T`'s packed layout (`memory-layout.md` §4)
 
-All five are resolved by the compiler and emit no code. `sizeOf`, `alignOf`, and `offsetOf` are valid in `const` initializers and `when` conditions (§25.2).
+All six are resolved by the compiler and emit no code. `sizeOf`, `alignOf`, `strideOf`, and `offsetOf` are valid in `const` initializers and `when` conditions (§25.2).
 
-`offsetOf` reports the **compiler-chosen** offset, not the source declaration index — fields are reordered and packed (`memory.md` §18.1). It is the supported way to compute a field address without hand-arithmetic, and it is what allocators, MMIO regions, and `@repr(C)` interop need.
+`offsetOf` reports the **compiler-chosen** offset, not the source declaration index — fields are reordered and packed (`memory-layout.md` §4). It is the supported way to compute a field address without hand-arithmetic, and it is what allocators, MMIO regions, and `@repr(C)` interop need.
 
 No hidden operator behavior.
 

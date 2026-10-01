@@ -329,7 +329,7 @@ Foreign code is **contained**, not viral.
 
 ## 12. Layout Compaction (Compiler Obligation)
 
-This is the object-file side of `lang.md` §6.2–6.3. The language contract is: the compiler uses the minimum valid representation — including field reordering to kill alignment padding. Programmers do not opt in. There is no `@layout(stable)` / `@stable` in core. C declaration-order ABI is `bestie.api.foreign` (`@repr(C)`).
+This is the object-file side of `lang.md` §6.2–6.3 and `spec/core/memory-layout.md`, which specifies the layout rules. The language contract is: the compiler uses the minimum valid representation — including field reordering to kill alignment padding. Programmers do not opt in. There is no `@layout(stable)` / `@stable` in core. C declaration-order ABI is `bestie.api.foreign` (`@repr(C)`).
 
 ### Range constraints as facts
 
@@ -362,7 +362,7 @@ Invalid bit patterns of a payload encode the tag. No annotation.
 | `own T` / non-null heap address | non-zero | zero address (internal only — not a language `null`) |
 | `uint8 in 0..=200` | `0..=200` | 201–255 |
 
-The compiler assigns niches greedily (most constrained payload first). `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Sealed class hierarchies use a minimum-size type tag, not a vtable pointer, and dispatch with a `switch` on that tag.
+The compiler assigns niches greedily (most constrained payload first). `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Niche search recurses into inline fields; padding is never a niche (`memory-layout.md` §11). Sealed class hierarchies use a minimum-size type tag pinned at offset 0, not a type word, and dispatch with a `switch` on that tag.
 
 ---
 

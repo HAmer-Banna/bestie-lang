@@ -226,14 +226,14 @@ enum HttpStatus as uint16 {
 
 Rules:
 
-* `as T` names the underlying integer type. Without it the compiler chooses the smallest type that fits (`memory.md` §18.4) and no discriminant may be written.
+* `as T` names the underlying integer type. Without it the compiler chooses the smallest type that fits (`memory-layout.md` §9.1) and no discriminant may be written.
 * With `as T`, every value must be a compile-time constant in `T`'s range, and every variant must have one — partial assignment is a compile-time error, because implicit "continue from the last one" is exactly the C rule that makes reordering a silent break.
 * Values need not be contiguous or ascending. **Duplicates are a compile-time error** — two names for one value would break exhaustive `switch` and round-tripping.
 * `e as T` yields the discriminant. The reverse is checked and fallible: `try (n as Errno)` returns `! RangeError` for an unlisted value. There is no unchecked integer-to-enum conversion outside `@trusted`.
 * Explicit discriminants apply to **tag-only** enums. A payload variant has no single integer value; for a tagged union with a fixed wire tag, model the tag as its own `enum as T` field.
 * The written values are part of the type's contract. Reordering variants does not change them — that is the point.
 
-Without `as T`, tag values are compiler-assigned and stable only within a compilation unit (`memory.md` §18.7); do not persist or transmit them.
+Without `as T`, tag values are compiler-assigned and stable only within a compilation unit (`memory-layout.md` §15); do not persist or transmit them.
 
 #### Enum Members
 
@@ -1189,7 +1189,7 @@ Properties:
 Rules:
 * Base must be open or abstract
 * No implicit inheritance outside the permit list
-* Sealing may replace pointer-sized runtime metadata with compact type tags
+* Sealing replaces the 32-bit type word with a compact type tag (`memory-layout.md` §8)
 * Calls through sealed hierarchies may lower to direct tag-switch dispatch instead of vtables
 
 ### 12.2 Sealed Protocols

@@ -71,7 +71,7 @@ The exact semantics of each are enforced at compile time.
 
 **Every annotation in this table is a hint, a suppression, or metadata.** None of them changes what a declaration *is*, how it is laid out, or how a call dispatches. That is the dividing line between an annotation and a keyword in Bestie, and it is why `immutable`, `virtual`, and `override` are **keywords, not annotations**:
 
-* `virtual` adds a vtable pointer to the object and turns a direct call into an indirect one — it changes layout *and* dispatch (`oop.md` §2.3, `memory.md` §18.2).
+* `virtual` adds a type word to the object and turns a direct call into an indirect one — it changes layout *and* dispatch (`oop.md` §2.3, `memory-layout.md` §7).
 * `override` is a checked assertion about a hierarchy, not a hint — the compiler rejects it when it is false (`oop.md` §6).
 * `immutable` changes which methods a type has (`core/immutability.md` §2.1).
 
@@ -79,7 +79,7 @@ All three are contextual keywords: they carry meaning in exactly one position an
 
 For the same reason there are no `@noNew` / `@noInit` / `@noConstruct` annotations. Restricting construction is a **visibility** question, and visibility already answers it: an `init` declared without `public` is `internal`, so `Type.new(...)` is unavailable outside the module, and `private init` narrows it to the declaring type. Declaring any `init` at all removes the compiler-generated memberwise one (`oop.md` §11.4), so one existing rule covers what three annotations used to.
 
-**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory.md` §18.7). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Reflectable`, framework routing and test annotations — is declared by a higher layer and is an unknown annotation to a plain core build.
+**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory-layout.md` §13). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Reflectable`, framework routing and test annotations — is declared by a higher layer and is an unknown annotation to a plain core build.
 
 ---
 

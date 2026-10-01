@@ -109,7 +109,7 @@ Supported ABI tags:
 
 Bestie has no `struct` keyword — a C-ABI aggregate is a **`value class`** (`core/oop.md` §3.2): no identity, no vtable, copy-by-value, laid out inline.
 
-Bestie types in ordinary code are **always packed by the compiler** (`core/memory.md` §18.1). Declaration order is not the ABI.
+Bestie types in ordinary code are **always packed by the compiler** (`core/memory-layout.md` §4). Declaration order is not the ABI.
 
 To match a C header's declared layout and padding, mark the type `@repr(C)` — that is an FFI contract, not a core language mode. There is no `@layout(stable)` / `@stable` in core.
 

@@ -89,7 +89,7 @@ fun map<T>(region: MemoryRegion): own MmioRegion<T> ! MemoryError
 
 Rules:
 
-* `map<T>` fails with `MemoryError.Misaligned` unless `region.base` satisfies `alignOf(T)`, and with `MemoryError.SizeMismatch` unless `region.size` is a whole multiple of `sizeOf(T)`.
+* `map<T>` fails with `MemoryError.Misaligned` unless `region.base` satisfies `alignOf(T)`, and with `MemoryError.SizeMismatch` unless `region.size` is a whole multiple of `strideOf(T)`.
 * On a hosted platform `map<T>` requires privilege and fails with `MemoryError.PermissionDenied` without it. On bare metal it typically succeeds for any well-formed region.
 * An out-of-range `index` **panics**, exactly as `array<T>` does (`core/types.md` §5). A register index outside the mapping is a violated invariant, not a recoverable condition.
 * The mapping is `own`. It is released by `free()`, never implicitly.
@@ -182,7 +182,7 @@ This is the **Tier 1** configuration of `platform.md` §8: core plus std-lib, no
 errors MemoryError {
     InvalidRegion,      // base + size wraps, or size is zero
     Misaligned,         // base does not satisfy alignOf(T)
-    SizeMismatch,       // size is not a whole multiple of sizeOf(T)
+    SizeMismatch,       // size is not a whole multiple of strideOf(T)
     AlreadyMapped,      // the region overlaps a live mapping
     PermissionDenied,   // hosted platform, insufficient privilege
     Unsupported         // the target has no MMIO facility
@@ -210,7 +210,7 @@ Cache maintenance, TLB operations, and architecture-specific barriers belong the
 
 | Layer | Responsibility |
 | ----- | -------------- |
-| Core language | `ptr<T>`, ownership, `sizeOf` / `alignOf` / `offsetOf` |
+| Core language | `ptr<T>`, ownership, `sizeOf` / `alignOf` / `strideOf` / `offsetOf` |
 | `bestie.lib.concurrency` | `Ordering`, atomics |
 | `bestie.lib.allocators` | General-purpose allocation |
 | `bestie.api.memory` | MMIO, volatile access, barriers |

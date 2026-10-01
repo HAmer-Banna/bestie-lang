@@ -294,8 +294,8 @@ Atomic operations are never data races, whatever their ordering.
 ### 8.4 What Core Guarantees About Layout
 
 * An access to a value of a primitive type, a `ptr<T>`, or any type at most one machine word wide and naturally aligned is a **single memory access**. The compiler will not split it into narrower accesses, and will not fabricate a write to a location the program did not write.
-* Distinct fields of an object are distinct memory locations. Writing one field never writes another, so two threads touching two different fields of the same object do not race — field packing (`memory.md` §18.1) never merges independent fields into one access.
-* Adjacent `bool` fields are byte-sized, not bit-packed, precisely so that this holds (`docs/compiler/compiler-architecture.md`).
+* Distinct fields of an object are distinct memory locations. Writing one field never writes another, so two threads touching two different fields of the same object do not race — field packing (`memory-layout.md` §4) never merges independent fields into one access.
+* Adjacent `bool` fields are byte-sized, not bit-packed, precisely so that this holds (`memory-layout.md` §4.3).
 * Values wider than a machine word have no atomicity guarantee. Sharing one across threads requires a `Lock`, or ownership transfer.
 
 ### 8.5 What Core Does Not Guarantee

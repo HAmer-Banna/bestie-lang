@@ -192,7 +192,7 @@ The following class kinds are **heap-allocated reference types**. A value of the
 | Kind | Reference type? | Notes |
 | ---- | --------------- | ----- |
 | `class` | ✅ | Default: heap-allocated, identity semantics |
-| `open class` | ✅ | Same, plus vtable pointer in layout |
+| `open class` | ✅ | Same, plus a 32-bit type word when the hierarchy has `virtual` methods (`memory-layout.md` §7) |
 | `abstract class` | ✅ | Cannot be instantiated directly |
 
 A `class` is an identity on the heap. It is **not copyable**. To hold one you either **own** it or **point** at it. To store one on another object without owning it, the field is `ref` (see §5).
@@ -657,6 +657,8 @@ When not provable, responsibility is explicit on the pointer-using code.
 p.offset(2).val
 ```
 
+`p.offset(n)` moves by `n * strideOf(T)` bytes — the array element distance, which includes `T`'s tail padding (`memory-layout.md` §3).
+
 ---
 
 ### 8.6 Pointer of Pointers and Const Propagation
@@ -695,9 +697,9 @@ const c: ptr<int> = ...
 val cc = c.address()     // ptr<const ptr<int>>    (const binding → read-only slot)
 ```
 
-**Pointer arithmetic** on a `ptr<ptr<T>>` strides by one machine word (`sizeof(ptr<T>)`), since the elements are pointers.
+**Pointer arithmetic** on a `ptr<ptr<T>>` strides by one machine word (`strideOf(ptr<T>)`), since the elements are pointers.
 
-**`T ?` and the niche (§18.6):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `ptr<ptr<T>> ?` has **no niche** and uses an explicit tag, exactly like `ptr<T> ?`.
+**`T ?` and the niche (`memory-layout.md` §11):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `ptr<ptr<T>> ?` has **no niche** and uses an explicit tag, exactly like `ptr<T> ?`.
 
 ---
 
@@ -771,7 +773,7 @@ pp.val = 9090                             // ✅ port is var
 
 Rules:
 
-* The result points at the field's storage slot, at the **compiler-chosen** offset of that field within the packed object (§18.1). The offset is compile-time known for a given compiler and type; it is **not** the source declaration index.
+* The result points at the field's storage slot, at the **compiler-chosen** offset of that field within the packed object (`memory-layout.md` §4). The offset is compile-time known for a given compiler and type; it is **not** the source declaration index.
 * Const-ness follows the same two-axis rule as any other address: the **binding** axis sets the pointer's base const-ness (§10.1.2) and the **field**'s own `val`/`var` governs write-through (§10.1.3). A pointer to a `val` field rejects writes even when the pointer is non-const; a pointer derived from a `const` binding is `ptr<const _>`.
 * An interior pointer is valid only while the enclosing object is alive and not moved. If the object is freed or moved, the interior pointer dangles — programmer responsibility, identical to the ephemeral-address rule for value types (§10.1.2, §10.1.5).
 * Interior pointers into a `value class` or other stack/inline value are ephemeral and must not be returned, stored, or sent across threads (§10.1.5).
@@ -790,7 +792,7 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 | `p.addr` | `uint` | §8.4.2 | The address word `p` holds. Not a dereference. Valid on `ptr<const T>`. |
 | `p.toStr()` | `str` | §8.4.2 | Hex address (`0x…`), width = `target.bits`. Interpolation of `p` uses this. |
 | `p.address()` | `ptr<ptr<T>>` | §8.6 | Address of the pointer's own storage slot. Const-ness per binding (§10.1.2). |
-| `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic; strides by `sizeof(T)`. Provable OOB is a compile error. |
+| `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic; strides by `strideOf(T)` (`memory-layout.md` §3). Provable OOB is a compile error. |
 | `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
 | `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
 | `p.isZero()` | `bool` | §8.7 | True if the address is the zero address (FFI / `@trusted` boundary). |
@@ -1017,7 +1019,7 @@ val p: ptr<DateTime> = dt.address()    // ptr<DateTime>, not ptr<const DateTime>
 p.val.date = Date.new(...)      // ❌ compile-time error — date is val in data class
 ```
 
-**`open class` vtable pointer:** The hidden vtable pointer prepended to `open class` objects (see §18.2) is **never user-accessible**. It does not appear as a field name, cannot be read, and cannot be overwritten through any pointer. The compiler guarantees the vtable pointer is read-only from all access paths, including `ptr<OpenClass>`. Overwriting the vtable through `ptr<byte>` and raw offsets is possible (it is raw, low-level code) but is the programmer's exclusive responsibility.
+**`virtual` type word and sealed tag:** The hidden 32-bit type word at offset 0 of a `virtual` hierarchy object, and the tag of a sealed hierarchy (`memory-layout.md` §7–§8), are **never user-accessible**. They do not appear as field names, cannot be read, and cannot be overwritten through any typed pointer, including `ptr<OpenClass>`. Overwriting them through `ptr<byte>` and raw offsets is possible (it is raw, low-level code) but is the programmer's exclusive responsibility.
 
 ---
 
@@ -1049,7 +1051,7 @@ val addr = p.address()   // ptr<const Circle> — concrete type is known at comp
 
 **Dynamic dispatch via `virtual`:**
 
-When dynamic dispatch is needed (elements of different concrete types), use `virtual` methods and an `open class` hierarchy. The vtable pointer lives inside the object (see §18.2), not in a separate indirection layer. There is no fat-pointer protocol mechanism in Bestie.
+When dynamic dispatch is needed (elements of different concrete types), use `virtual` methods and an `open class` hierarchy. The type word lives inside the object (`memory-layout.md` §7), not in a separate indirection layer. There is no fat-pointer protocol mechanism in Bestie.
 
 **Protocols have no fields, no size, no allocation.** Attempting to store a protocol as a standalone value without a concrete type is a compile-time error.
 
@@ -1281,123 +1283,11 @@ Explicitly rejected designs:
 
 ## 18. Object and Tag Layout
 
-This section defines the concrete in-memory layout for every class kind. IR and codegen must honor it.
+The concrete in-memory layout of every class kind — field placement, size vs. stride, the 32-bit type word of `virtual` hierarchies, sealed and enum tags, niches, and the header-free sized allocator — is specified in **`memory-layout.md`**. IR and codegen must honor it.
 
 ---
 
-### 18.1 Regular `class` and `data class` (no virtual dispatch)
-
-No object header. No type tag. No vtable pointer.
-
-**The compiler always builds the best layout it can.** Source declaration order is not the in-memory order. Fields are reordered and packed to minimize size and padding (C's `char, int, char` wasting a word vs `char, char, int` is a 1970s tax Bestie does not pay). Named field access, `init` assignment, and `.address()` on a field use the packed offsets — the programmer never writes those offsets.
-
-```
-[ packed fields — compiler-chosen order, minimum padding ]
-```
-
-There is no `@layout(stable)`, no `@stable`, and no core annotation that freezes declaration order. Matching a C struct's declared layout is an FFI concern (`bestie.api.foreign` `@repr(C)`), not a language mode.
-
-`value class` follows the same packing rule. It is always inlined at the point of use — stack, or inline within an enclosing object — and is never heap-allocated through `new()`.
-
----
-
-### 18.2 `open class` with `virtual` — Vtable Layout
-
-An object in a live `virtual` hierarchy carries a **vtable pointer as its first field**. This is an implicit, hidden word prepended before the packed user fields.
-
-```
-[ vtable_ptr | packed user fields ]
-```
-
-The vtable is a read-only, statically allocated table of function pointers. Each `virtual` method on the class occupies one slot, in declaration order. Slots are inherited from parent classes in the order they appear in the parent's vtable, followed by the subclass's own `virtual` methods.
-
-Vtable pointer size equals the platform pointer size (4 bytes on 32-bit, 8 bytes on 64-bit).
-
-The compiler emits one vtable per concrete class. Abstract classes do not emit a vtable (they cannot be instantiated).
-
----
-
-### 18.3 Sealed `virtual` Hierarchy — Compact Tag Dispatch
-
-When an `open class` hierarchy is declared `sealed` with a `permits` list, the compiler replaces the vtable pointer with a **compact type tag**.
-
-Tag size: the smallest unsigned integer that can distinguish all permitted types.
-
-| Permitted types | Tag type |
-| --------------- | -------- |
-| 1–255 | `uint8` |
-| 256–65535 | `uint16` |
-| > 65535 | `uint32` (rare) |
-
-```
-[ tag: uint8 | padding | packed user fields ]
-```
-
-Tag values are compiler-assigned. The base type's tag = 0 if it is concrete; otherwise tags start at 0 for the first permitted subtype. The assignment is deterministic: permitted types in declaration order receive consecutive tag values starting at 0.
-
-Dispatch on a sealed hierarchy lowers to a `switch` on the tag value, with direct calls to the target method — no vtable indirection.
-
----
-
-### 18.4 `enum` — Tag-Only Variant
-
-A tag-only `enum` (no payload) lowers to an unsigned integer of the smallest fitting size, using the same sizing rule as the sealed tag above.
-
-```
-[ tag: uint8 ]   // for ≤ 255 variants
-```
-
-The tag is the entire representation. No padding, no additional fields.
-
----
-
-### 18.5 `enum` with Payload Variants — Discriminated Union
-
-An `enum` with one or more payload variants uses a **discriminated union** layout:
-
-```
-[ tag | padding | payload_union ]
-```
-
-* `tag` — same sizing rule as above
-* `padding` — inserted by the compiler to align the payload to the maximum alignment of any variant's payload type
-* `payload_union` — sized to the largest payload variant, with each variant's fields laid out from the start of the union region
-
-The total size of the discriminated union is:
-```
-sizeof(tag) + sizeof(padding) + sizeof(largest_payload)
-```
-rounded up to the alignment of the largest payload type.
-
-Tag-only variants occupy the tag slot only; their payload region is undefined and not accessed.
-
----
-
-### 18.6 `T ?` — Niche Optimization
-
-`T ?` uses niche optimization where the type system guarantees a specific bit pattern is not a valid `T` value.
-
-| `T` | Optimization |
-| --- | ------------ |
-| Reference or `own` heap-allocated type | Zero-address niche: `Not_Present` = all-zero word; `Present(x)` = non-zero address |
-| `ptr<T>` (raw pointer) | No niche — `ptr<T>` may legitimately hold the zero address; `T ?` of a pointer uses a tag |
-| Primitive with a reserved bit pattern (e.g., `bool`) | Compiler-specific niche if unambiguous |
-| All other types | Explicit tag: `[ tag: uint8 | padding | value ]` |
-
-The niche optimization is invisible to user code. `T ?` always behaves as a two-variant type; the layout is a compiler implementation detail.
-
----
-
-### 18.7 Layout Stability Guarantees
-
-* For a given compiler version and target, the same type always receives the same packed layout
-* Vtable slot indices are stable within a compilation unit
-* Tag values for sealed hierarchies and enums are stable within a compilation unit
-* There is **no** core annotation that pins declaration-order layout. C ABI matching belongs in `bestie.api.foreign` (`@repr(C)`), not in the language
-
----
-
-## 19. Summary  <!-- formerly §18 — renumbered after §18 Object and Tag Layout was inserted -->
+## 19. Summary
 
 Bestie’s memory and ownership model is:
 

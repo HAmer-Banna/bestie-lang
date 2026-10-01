@@ -31,6 +31,7 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 | `fiber` | Cooperative lightweight execution on a host `thread` |
 | `Channel<T>` | Bounded message passing (CSP send/receive) |
 | `atomic<T>` | Explicit atomic operations on primitives |
+| `Isolated<T>` | Places a value on its own cache line, to prevent false sharing |
 | `Lock` | Last-resort exclusive lock for shared mutation |
 | `CancellationToken` | Cooperative cancellation flag, passed explicitly |
 
@@ -213,6 +214,21 @@ Passing an ordering the operation cannot accept — `Acquire` on a store, `Relea
 **There is no `increment()` convenience.** It would have to pick an ordering on the caller's behalf, and that is exactly the hidden cost Bestie refuses. Write `counter.add(1, Ordering.Relaxed)` and mean it.
 
 Atomics are library types, not keywords. They compile to CPU atomic instructions; they do not require `bestie.api.os`.
+
+### 5.2 Cache-Line Isolation — `Isolated<T>`
+
+The compiler packs fields for minimum size and never adds cache-line padding on its own (`core/memory-layout.md` §12). When two values are known to be written by different threads, isolate them by type:
+
+```bestie
+import bestie.lib.concurrency.Isolated
+
+class Queue {
+    head: Isolated<atomic<uint>>
+    tail: Isolated<atomic<uint>>
+}
+```
+
+`Isolated<T>` is a `value class` whose size and alignment are the target's cache-line size. Access the wrapped value through `.val`. The padding cost is visible in the field's type, not added by default.
 
 ---
 
