@@ -123,6 +123,14 @@ gen-schema = ["bestie", "run", "schema-gen", "--", "schema/orders.sql"]
 | `kind` | `executable`, `library`, `staticlib`, or `dynlib` (`modules-and-packaging.md` §13.1) |
 | `modules` | The modules this target builds from. Defaults to every module in the project |
 | `static` | Linux only: link musl statically for a dependency-free file (`modules-and-packaging.md` §13.3) |
+| `triple` | The target triple. Defaults to the host. An OS of `none` makes the target freestanding (`core/freestanding.md` §2) |
+| `entry` | Freestanding: the `export(c)` function the program starts at (`freestanding.md` §3.1) |
+| `linker-script` | A linker script passed to the platform linker unchanged (`freestanding.md` §6.3) |
+| `link-args` | Extra arguments for the platform linker |
+| `float` | `"hard"`, `"soft"`, or `"none"` (`freestanding.md` §10.1) |
+| `simd-registers` | `false` forbids all use of vector registers (`freestanding.md` §10.2) |
+| `red-zone` | x86-64: `false` by default on freestanding targets (`freestanding.md` §10.3) |
+| `stack-size` · `stack-check` · `stack-probes` · `stack-frame-warn` | Stack budget and analysis (`freestanding.md` §8) |
 
 A project with no `[[target]]` table is a single `library` target if it has no `main`, and a single `executable` otherwise. A project published to the registry must contain a `library` target — that is what other projects depend on.
 
@@ -162,7 +170,7 @@ include  = ["csrc/include"]
 defines  = { CRC_TABLE = "1" }
 ```
 
-`native.compile` is **declarative**: the toolchain invokes the target's C compiler with exactly these sources, include paths, and defines. There is no hook to run a program instead. This covers the common reason other ecosystems need build scripts — bundling a C library — without letting a dependency execute arbitrary code on your machine.
+`sources` may be C (`.c`), assembly (`.s`, `.S` — preprocessed), or C++ (`vision.md` C3). `native.compile` is **declarative**: the toolchain invokes the target's C compiler with exactly these sources, include paths, and defines. There is no hook to run a program instead. This covers the common reason other ecosystems need build scripts — bundling a C library — without letting a dependency execute arbitrary code on your machine.
 
 ### 4.6 `[profile.*]`
 
@@ -175,6 +183,7 @@ Profiles select build settings. `debug` and `release` always exist; others may b
 | `lto` | `true` / `false` | Link-time optimization across all modules |
 | `strip` | `true` / `false` | Remove symbols from the artifact |
 | `debug-info` | `none`, `lines`, `full` | Debug information emitted |
+| `panic-info` | `full`, `location`, `none` | What a panic carries — `none` strips every panic message and file name from the binary (`core/freestanding.md` §3.3) |
 
 Profiles apply to the whole build, dependencies included, so a release build is release all the way down.
 

@@ -340,6 +340,8 @@ A type marked `@repr(C)` (`std-api/foreign.md` §5.2) is laid out in declaration
 
 `@repr(C)` exists to match a C header. It is not a way to choose a layout for Bestie code.
 
+Two other declarations have a fixed layout by definition, because describing fixed bytes is their purpose (`freestanding.md` §7): a `union` places every field at offset 0, as C does, and a `bitfield` is exactly its backing unsigned integer, with every field at the bit positions it states.
+
 ---
 
 ## 14. What Bestie Deliberately Does Not Do

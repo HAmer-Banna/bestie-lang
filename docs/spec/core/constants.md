@@ -23,6 +23,8 @@ These constants exist to drive **conditional compilation** (`when`, `core/lang.m
 | `target.arch`   | `str` | `"x86_64"`, `"arm64"`, `"riscv64"`             |
 | `target.bits`   | `int` | `32`, `64`                                     |
 | `target.endian` | `str` | `"little"`, `"big"`                            |
+| `target.freestanding` | `bool` | `true` when the target has no OS — triple OS `none` (`freestanding.md` §2) |
+| `target.float`  | `str` | `"hard"`, `"soft"`, `"none"` (`freestanding.md` §10.1) |
 
 All fields are resolved at compile time to string or integer constants. Because they describe the *target*, cross-compiling for another platform yields that platform's values — `target.bits` inside a 32-bit build is `32` even on a 64-bit host.
 
@@ -46,7 +48,7 @@ Flags that are not declared are `false` by default — **no runtime check, no li
 
 | Field         | Type   | Values                  |
 | ------------- | ------ | ----------------------- |
-| `build.mode`  | `str`  | `"debug"`, `"release"`  |
+| `build.mode`  | `str`  | `"debug"`, `"release"`, `"safe"` |
 | `build.debug` | `bool` | `true` in debug builds  |
 
 `build.mode` is selected by the toolchain and is the same switch that governs signed-overflow trapping (`core/lang.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:

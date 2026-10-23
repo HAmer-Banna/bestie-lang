@@ -277,6 +277,8 @@ A panic represents a **violated invariant**. The program cannot recover meaningf
 
 Build mode is selected by the toolchain; see `core/lang.md` §22.2.
 
+On a **freestanding** target there is no process to terminate: a panic calls the program's `@panicHandler`, which every freestanding program must provide (`freestanding.md` §3.3). A hosted program may provide one too, to record a crash before it ends. In no case does a panic unwind — Bestie emits no unwind tables (`freestanding.md` §10.4).
+
 ### 4.3 Explicit Panic
 
 ```bestie

@@ -155,6 +155,36 @@ debug.assertNoLeaks()
 
 ---
 
+## 4a. `GlobalAllocator` and `Aligned<T, A>`
+
+### 4a.1 `GlobalAllocator`
+
+The protocol a program's heap allocator implements (`core/freestanding.md` §3.4):
+
+```bestie
+protocol GlobalAllocator {
+    fun alloc(size: uint, align: uint): ptr<byte> ?
+    fun free(p: ptr<byte>, size: uint, align: uint): void
+}
+```
+
+* `alloc` returns absent when memory is exhausted; the compiler-generated allocation path turns that into a panic, or into an error for fallible allocation APIs.
+* `free` always receives the size and alignment of the original allocation — deallocation is sized (`memory-layout.md` §10).
+* One module-level `val` per program is registered with `@globalAllocator`. On hosted targets it replaces the default allocator; on freestanding targets it is the only one.
+
+### 4a.2 `Aligned<T, const A: int>`
+
+A `value class` holding one `T` with alignment `A`, a power of two from `1` to `65536`. Its size is `sizeOf(T)` rounded up to `A`.
+
+```bestie
+val table: Aligned<array<uint64>[512], 4096> = …
+table.val[0] = entry
+```
+
+It exists for hardware that requires alignment — page tables, DMA descriptors, interrupt vector tables — and is the alignment counterpart of `Isolated<T>` (`concurrency.md` §5.2): the cost is visible in the type, never added by default, and there is no `@align` annotation (`core/memory-layout.md` §14).
+
+---
+
 ## 5. Relationship to Other Layers
 
 * `bestie.lib.allocators` provides strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`)

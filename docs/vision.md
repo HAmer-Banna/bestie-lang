@@ -103,9 +103,9 @@ Bestie must be usable with **no operating system and no runtime**: firmware, boo
 * Compile-time target selection with `when` and `target.*` (`lang.md` §25)
 * Static C-layout arrays in every dimension (`types.md` §5)
 
-**Required to reach 100% — roadmap:**
+**Specified in `core/freestanding.md`** — B1–B8 below are no longer gaps; the table records what each one covers:
 
-| # | Gap | Why bare metal needs it |
+| # | Item | Why bare metal needs it |
 | - | --- | ----------------------- |
 | B1 | **Inline assembly** — an `asm` form with explicit inputs, outputs, and clobbers | Control registers, interrupt enable/disable, system calls, context switches |
 | B2 | **Freestanding runtime contract** — a custom entry point, a user-supplied panic handler, and a compile-time error when heap allocation is used with no allocator registered | There is no `main`, no process to terminate, and no heap until you build one |

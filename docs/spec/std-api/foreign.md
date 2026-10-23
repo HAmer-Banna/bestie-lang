@@ -84,7 +84,10 @@ Supported ABI tags:
 
 * `c`
 * `system`
-* Platform-specific (namespaced)
+* `interrupt` and `naked` — definitions only (`core/freestanding.md` §5)
+* Architecture-qualified conventions — `x86.sysv`, `x86.win64`, `arm.aapcs`, `riscv.lp64d`, …
+
+C `union` types map to Bestie `union`, which always has C layout, and C bit-fields map to `bitfield` with the bit positions of the target ABI stated explicitly (`core/freestanding.md` §7).
 
 ### 4.3 Exporting to C — `export(c) fun`
 

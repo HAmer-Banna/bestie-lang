@@ -63,13 +63,22 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 | `@trusted` | expression, local binding | Suppresses a compiler-inserted check the programmer undertakes to uphold: range construction (`lang.md` §6.2), checked narrowing (`types.md` §2.1), dropping pointee `const` (`memory.md` §8.8). Searchable by design |
 | `@pure` | function | Side-effect free; callable in `const` initializers (`lang.md` §4.1) |
 | `@noInline` | function | Suppresses inlining for stack-trace and profiling clarity |
+| `@inline` | function | Must be inlined at every call; impossible inlining is a compile-time error (`freestanding.md` §9) |
+| `@cold` | function | Rarely called; optimized for size and placed away from hot code (`freestanding.md` §9) |
+| `@likely` / `@unlikely` | boolean expression | Branch weight for the condition it marks (`freestanding.md` §9) |
+| `@stackBound` | function | Trusted worst-case stack use for recursion or raw function-pointer calls (`freestanding.md` §8) |
+| `@section` | function, module-level `val` | Emit into the named section (`freestanding.md` §6.1) |
+| `@used` | function, module-level `val` | Keep even when unreferenced (`freestanding.md` §6.1) |
+| `@weak` | `export` function or `val` | Weak symbol definition (`freestanding.md` §6.1) |
+| `@panicHandler` | function | The function a panic calls (`freestanding.md` §3.3) |
+| `@globalAllocator` | module-level `val` | The program's heap allocator (`freestanding.md` §3.4) |
 | `@expose` | any declaration | Exposes the element to external tooling with a stable symbol name |
 | `@since` | any declaration | Records the layer version a symbol first appeared in — below |
 | `@deprecated` | any declaration | Marks a symbol for removal; warns at every use site — below |
 
 The exact semantics of each are enforced at compile time.
 
-**Every annotation in this table is a hint, a suppression, or metadata.** None of them changes what a declaration *is*, how it is laid out, or how a call dispatches. That is the dividing line between an annotation and a keyword in Bestie, and it is why `immutable`, `virtual`, and `override` are **keywords, not annotations**:
+**Every annotation in this table is a hint, a suppression, or metadata.** None of them changes what a declaration *is*, how it is laid out, or how a call dispatches. The linkage annotations (`@section`, `@used`, `@weak`) tell the linker where a symbol goes; the registration annotations (`@panicHandler`, `@globalAllocator`) tell the toolchain which declaration fills a role. The declarations themselves are unchanged. That is the dividing line between an annotation and a keyword in Bestie, and it is why `immutable`, `virtual`, and `override` are **keywords, not annotations**:
 
 * `virtual` adds a type word to the object and turns a direct call into an indirect one — it changes layout *and* dispatch (`oop.md` §2.3, `memory-layout.md` §7).
 * `override` is a checked assertion about a hierarchy, not a hint — the compiler rejects it when it is false (`oop.md` §6).

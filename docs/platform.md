@@ -322,9 +322,10 @@ Restrictions:
 
 Purpose:
 
-- Kernels and drivers (no OS I/O)
 - Freestanding experiments
 - Logic that only needs core + std-lib helpers
+
+A real kernel, driver, or firmware image is a **project** whose target has OS `none` — it needs a manifest for its entry point, linker script, and machine settings. See `core/freestanding.md`.
 
 Hello-world `println` and any talk to the OS require std-api (Tier 2).
 

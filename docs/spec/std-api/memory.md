@@ -172,7 +172,9 @@ On a freestanding target:
 * `bestie.api.os` is typically absent — there is no process, no environment, no signals
 * MMIO is the primary hardware interaction mechanism
 
-This is the **Tier 1** configuration of `platform.md` §8: core plus std-lib, no `bestie-project.toml`, no hosted I/O. `bestie.lib.concurrency` remains available, which is why `Ordering` is reused here rather than redefined.
+A freestanding program is a project whose target has OS `none`: core, std-lib, and this package, with no hosted I/O. Its entry point, panic handler, allocator, linker control, inline assembly, interrupt handlers, and register-level types (`bitfield`, `union`) are specified in `core/freestanding.md`. `bestie.lib.concurrency` remains available, which is why `Ordering` is reused here rather than redefined.
+
+Architecture-specific types used by interrupt handlers — `bestie.api.memory.x86.InterruptFrame` and its counterparts — live in the platform sub-namespaces of §10.
 
 ---
 

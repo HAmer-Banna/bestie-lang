@@ -151,6 +151,10 @@ when        while       _
 | `virtual` | before `fun` in a class body | `oop.md` §2.3 |
 | `override` | before `fun` in a class body | `oop.md` §6 |
 | `absent` | expression position where a `T ?` is expected | `types.md` §8.3 |
+| `export` | before `fun` or a module-level `val`, with an ABI tag | `std-api/foreign.md` §4.3, `freestanding.md` §5 |
+| `asm` | expression, or module-level declaration | `freestanding.md` §4 |
+| `union` | type declaration | `freestanding.md` §7.1 |
+| `bitfield` · `at` | type declaration · bit position inside one | `freestanding.md` §7.2 |
 
 Each carries meaning in exactly one position, so `val override = 1` and `fun immutable()` remain legal declarations.
 
