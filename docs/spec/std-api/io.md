@@ -341,6 +341,7 @@ Rules:
 
 * File system operations (→ `bestie.api.fs`)
 * Networking (→ `bestie.api.network`)
+* Interprocess communication (→ `bestie.api.ipc`)
 * HTTP (→ `bestie.api.http`)
 * Compression formats
 * Serialization formats (JSON, CSV, etc.)
@@ -355,6 +356,7 @@ Each concern has its own API layer.
 
 * `bestie.api.fs` builds on `bestie.api.io`
 * `bestie.api.network` builds on `bestie.api.io`
+* `bestie.api.ipc` builds on `bestie.api.io`, and on `bestie.api.os` for handing handles to children
 * `bestie.api.http` builds on `bestie.api.network`
 * Higher-level frameworks build on all of the above
 

@@ -88,7 +88,7 @@ val f = fiber.new(() => compute())
 fun parkUntilReady(handle: int, interest: Readiness): void
 ```
 
-`bestie.api.io`, `bestie.api.fs`, and `bestie.api.network` call it in place of blocking the OS thread when a scheduler is present, and block normally when one is not. That is the whole dependency: std-lib publishes the hook, std-api honors it, and neither imports the other's types.
+`bestie.api.io`, `bestie.api.fs`, `bestie.api.network`, and `bestie.api.ipc` call it in place of blocking the OS thread when a scheduler is present, and block normally when one is not. That is the whole dependency: std-lib publishes the hook, std-api honors it, and neither imports the other's types.
 
 A blocking call that does **not** honor the contract — FFI, a third-party binding, a syscall made directly — blocks the entire host thread and every fiber on it. This is not detectable at compile time. Use a dedicated `thread` for such work.
 
@@ -289,7 +289,7 @@ fun worker(token: CancellationToken): void {
 | ----- | -------------- |
 | Core `thread` / `threadlocal` | Parallelism and TLS |
 | `bestie.lib.concurrency` | Fibers, channels, atomics, locks, cancel tokens |
-| `bestie.api.io` / `network` / `http` | Blocking I/O; park a `fiber` or block a `thread` |
+| `bestie.api.io` / `network` / `ipc` / `http` | Blocking I/O; park a `fiber` or block a `thread` |
 | `bestie.framework.*` | Actors, streaming, task groups — if they exist |
 
 ---

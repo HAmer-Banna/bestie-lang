@@ -25,6 +25,7 @@ It is **not** a framework, **not** a runtime, and **not** a replacement for the 
 
 * File system operations (see `bestie.api.fs`)
 * Networking (see `bestie.api.network`)
+* Interprocess communication beyond a child's stdio — pipes, local sockets, shared memory, semaphores (see `bestie.api.ipc`)
 * Console I/O (see `bestie.api.io`)
 * A shell, or any command-string parsing
 * Compile-time platform facts — those are core `target.*` constants (§10)
@@ -58,7 +59,8 @@ No re-exports.
 | Type | Kind | Why |
 | ---- | ---- | --- |
 | `Process` | `class` | Owns a child process handle and its pipe streams. Identity is essential — waiting on "a" process rather than *this* one would be a correctness bug. |
-| `SpawnOptions` | `class` | Owns an optional environment map, and is mutated while being configured. |
+| `SpawnOptions` | `class` | Owns an optional environment map and handle list, and is mutated while being configured. |
+| `HandleToken` | `value class` | The numeric value of a handle passed to a child. A description, not an owner — adopting it is what creates an owner (`bestie.api.ipc` §10). |
 | `Stdio` | `enum` | A closed set of three dispositions for a child stream. |
 | `ExitStatus` | `enum` | A process ends by exiting with a code **or** by being killed by a signal. Two variants, never both. |
 | `Signal` | `enum` | A closed set. |
@@ -88,10 +90,20 @@ class SpawnOptions {
     var stderr: Stdio
     var workingDir: Path ?          // absent means inherit
     val own env: map<str, str> ?    // absent means inherit the parent's environment
+    val own pass: list<HandleToken> ?   // extra handles this child inherits; absent means none
 }
+
+value class HandleToken {
+    raw: uint64                     // the handle's value; identical in parent and child
+    fun toStr(): str
+}
+
+fun parseHandleToken(text: str): HandleToken ! OsError
 ```
 
 An absent `env` **inherits**; a present one **replaces** entirely. There is no merge mode, because "merge" needs a collision rule that differs per use.
+
+**Every handle the standard API creates is non-inheritable.** A child receives its three stdio streams and exactly the handles listed in `pass` — to that child only, so a concurrent `spawn` on another thread cannot pick them up. A `HandleToken` comes from the `token()` method of a `bestie.api.ipc` type; the child learns its value through its arguments or environment (`HandleToken.toStr()` / `parseHandleToken`) and adopts it with `bestie.api.ipc` (§10 there). A token that names no handle open in this process is `OsError.InvalidArgument` at `spawn`.
 
 ### 5.2 `Process`
 
@@ -145,7 +157,8 @@ fun gitRevision(): str ! (OsError | ReadError) {
         stdout: Stdio.Pipe,
         stderr: Stdio.Null,
         workingDir: absent,
-        env: absent
+        env: absent,
+        pass: absent
     )
     defer opts.freeDeep()
 
@@ -221,6 +234,8 @@ enum Signal {
 ```
 
 `Kill` and `Stop` may be **sent** but never handled — the OS does not deliver them to a handler. Registering one is `OsError.Unsupported`.
+
+The hosted runtime sets `Pipe` to **ignored** before `main`. A write to a pipe or socket whose reader is gone therefore fails with `WriteError.Closed` from that write, instead of terminating the process. A program that wants the signal as well registers a handler with `onSignal`.
 
 ### 7.2 Handling
 
@@ -419,6 +434,7 @@ Rules:
 | Concern | Package |
 | ------- | ------- |
 | Process pipe streams | `bestie.api.io` |
+| Pipes, local sockets, shared memory, semaphores | `bestie.api.ipc` |
 | Paths | `bestie.api.fs` |
 | `Instant` and `Duration` | `bestie.lib.datetime` |
 | Atomics used in signal handlers | `bestie.lib.concurrency` |

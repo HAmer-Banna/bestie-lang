@@ -360,7 +360,7 @@ A type marked `@repr(C)` (`std-api/foreign.md` §5.2) is laid out in declaration
 ## 15. Stability Guarantees
 
 * For a given compiler version and target, the same type always gets the same layout: offsets, size, alignment, stride, niche assignment.
-* Layout is **not** stable across compiler versions or targets. Bytes that leave the process — files, network, shared memory between different builds — go through serialization or a `@repr(C)` type.
+* Layout is **not** stable across compiler versions or targets. Bytes that leave the process — files, network, shared memory between different builds — go through serialization or a `@repr(C)` type. `bestie.api.ipc` enforces this for shared memory at compile time (`std-api/ipc.md` §8.2).
 * Type-word values are stable within one linked program only.
 * Sealed and enum tag values are stable within a compilation unit. Persist an `enum as T` discriminant (`oop.md` §3.3), never a compiler-assigned tag.
 * `virtual` slot order is stable within a linked program.

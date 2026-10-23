@@ -157,6 +157,7 @@ Provides **system-level and external interaction**.
 - `http` — HTTP primitives
 - `io` — filesystem & streams
 - `network` — sockets & protocols
+- `ipc` — pipes, local sockets, shared memory, semaphores
 - `os` — operating system
 - `ext.memory` — memory inspection
 - `foreign` — FFI / native interop
