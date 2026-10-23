@@ -55,7 +55,7 @@ In-place algorithms take `ptr<list<T>>`, not `list<T>`: `list<T>` is a `class` a
 ### 3.1 `sort`
 
 ```bestie
-fun <T impl Comparable> sort(data: ptr<list<T>>)
+fun <T impl Comparable> sort(data: slice<var T>)
 ```
 
 Purpose:
@@ -72,9 +72,14 @@ Properties:
 Example:
 
 ```bestie
-var nums = list<int>.new(4, 1, 3)
-sort(nums)
+var nums : list<int> = {4, 1, 3}
+sort(nums[..])
+
+var fixed : array<int>[] = {9, 2, 7}
+sort(fixed[..])          // arrays sort exactly like lists
 ```
+
+The in-place algorithms take `slice<var T>`, not a particular collection: anything contiguous — an `array<T>[N]`, an array-backed `list<T>`, or a sub-range of either — is sorted, partitioned, or searched by the same function. `nums[..]` is how the call site says the callee writes into `nums`.
 
 Use when:
 
@@ -85,7 +90,7 @@ Use when:
 ### 3.2 `stableSort`
 
 ```bestie
-fun <T impl Comparable> stableSort(data: ptr<list<T>>)
+fun <T impl Comparable> stableSort(data: slice<var T>)
 ```
 
 Purpose:
@@ -111,7 +116,7 @@ Use when:
 
 ```bestie
 fun <T impl Comparable> binarySearch(
-    data: list<T>,
+    data: slice<T>,
     target: T
 ): int ?
 ```
@@ -180,7 +185,7 @@ Guarantees:
 
 ```bestie
 fun <T> partition(
-    data: ptr<list<T>>,
+    data: slice<var T>,
     predicate: fn(T) -> bool
 ): int
 ```
@@ -201,7 +206,7 @@ Properties:
 Example:
 
 ```bestie
-val idx = partition(nums, x => x % 2 == 0)
+val idx = partition(nums[..], x => x % 2 == 0)
 ```
 
 ---

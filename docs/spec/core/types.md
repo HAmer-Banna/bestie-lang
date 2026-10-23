@@ -483,6 +483,7 @@ A slice of a `var` array may be taken as `slice<var T>` to write through it. Out
 | `length` | `int` | The element count `N`. A compile-time constant, read like a field — not a method call |
 | `get(index: int)` | `T` | Method form of `arr[i]` |
 | `set(index: int, value: T)` | `void` | Method form of `arr[i] = v`; `var` arrays only |
+| `a == b`, `a != b` | `bool` | Element-wise, when `T` is `Equable` and both have the same `N`. One `memcmp` for primitive elements |
 
 That is the whole core surface. Searching, sorting, and copying between ranges are `bestie.lib.algorithms`; conversions to a growable collection (`toList()`, `toSet()`) are extension functions in `bestie.lib.collections` — the same split core applies to `str`.
 
@@ -537,13 +538,14 @@ That copy is `N * strideOf(T)` bytes. It is what you want for small fixed record
 
 C silently converts an array to a pointer to its first element whenever it is passed or used in an expression, and the length is lost. **Bestie has no array-to-pointer decay.** Every form of passing is written:
 
-| You want | Write | The callee receives |
-| -------- | ----- | ------------------- |
-| Read the elements, any length | `f(arr[..])` | `slice<T>` — base + length, bounds-checked |
-| Write the elements, any length | `f(arr[..])` into a `slice<var T>` parameter | `slice<var T>` |
-| The whole array, exact length | `f(arr.address())` | `ptr<array<T>[N]>` |
-| A pointer to the first element (C interop) | `arr[0].address()` | `ptr<T>` |
-| An independent copy | `f(arr)` into an `array<T>[N]` parameter | a copy |
+| You want | Parameter type | Call | Cost |
+| -------- | -------------- | ---- | ---- |
+| Read the elements, any length | `slice<T>` | `f(arr)` | Two words: base + length |
+| Write the elements, any length | `slice<var T>` | `f(arr[..])` on a `var` array | Two words |
+| Every length, each compiled exactly | `array<T>[N]` with `const N` (`lang.md` §7.2) | `f(arr)` | One pointer for a `val` parameter (`memory.md` §6.1) — no copy |
+| One exact length | `array<T>[8]` | `f(arr)` | One pointer for a `val` parameter — no copy |
+| A private copy to modify | `var xs: array<T>[N]` | `f(arr)` | A real copy, because you asked for one |
+| A pointer to the first element (C interop) | `ptr<T>` | `f(arr[0].address())` | One word |
 
 ```bestie
 fun average(xs: slice<int>): float64 {
@@ -553,8 +555,24 @@ fun average(xs: slice<int>): float64 {
 }
 
 val scores : array<int>[] = {91, 84, 77}
-val avg = average(scores[..])
+val avg = average(scores)         // the array is viewed, not copied
 ```
+
+**An array converts to a read-only `slice<T>` wherever one is expected.** The conversion is a view — it copies nothing and keeps the length — so it is not decay, and it needs no syntax. A *mutable* view is never implicit: passing `arr[..]` to a `slice<var T>` parameter is how a call site says the callee may write the caller's array.
+
+**A `val` array parameter is never copied.** Parameters are `val` unless declared `var` (`memory.md` §6.1), and a `val` parameter of a value type larger than two machine words is passed as a pointer to the caller's storage. The semantics are still those of a copy — the callee cannot modify it — so the pointer is invisible. Only a `var` parameter, which the callee may modify, costs a real copy.
+
+#### Not Go's Arrays
+
+Go also puts the length in the array type, and its arrays are rarely used because of what came with that. Bestie keeps the layout and drops the problems:
+
+| Go | Bestie |
+| -- | ------ |
+| No way to write one function for `[3]int` and `[8]int` — everyone falls back to slices | `fun <const N: int>` (`lang.md` §7.2): one source, compiled exactly for each length |
+| Passing an array copies all of it, silently | A `val` parameter is passed by pointer; only `var` copies |
+| `f(arr[:])` needed everywhere a slice is expected | An array is a `slice<T>` argument as written |
+| No methods — `len()` and loops by hand | `length`, slicing, negative indexing, `for/in`, `==`, and every `bestie.lib.algorithms` function (`sort`, `stableSort`, `binarySearch`, `partition`, `fold`, `zip`, …), which take slices and iterables and so accept arrays directly |
+| Arrays and slices are two different worlds | Every slice operation works on an array; an array is the storage, a slice is the view |
 
 A slice parameter is C's `(T *p, size_t n)` pair, carried as one value that cannot fall out of sync. `ptr<array<T>[N]>` is C's pointer-to-array, `T (*p)[N]`, which C programmers rarely reach for because the decaying form is the default.
 

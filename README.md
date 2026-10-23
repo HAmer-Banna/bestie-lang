@@ -22,6 +22,8 @@ Bestie’s mission:
 
 Bestie is built from first principles — not constrained by C/C++ legacy and not driven by academic ideology.
 
+Where Bestie competes, how it balances speed and elegance, and its roadmap of commitments: [docs/vision.md](docs/vision.md).
+
 ---
 
 ## 💡 Why Bestie (Origin)

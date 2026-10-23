@@ -348,6 +348,15 @@ Call boundaries use **three** modes. There is no function-level `ref`.
 
 Default. The callee receives an independent copy. Mutating the parameter does not affect the caller.
 
+A parameter is a `val` binding unless declared `var` — the same rule as variadic parameters (`fp.md` §9):
+
+```bestie
+fun length(v: Vec3): float32 { ... }           // val: read-only in the body
+fun normalized(var v: Vec3): Vec3 { ... }      // var: a private, modifiable copy
+```
+
+**A `val` parameter is a copy in meaning, not necessarily in machine code.** For a value type larger than two machine words — a big `value class`, an `array<T>[N]` — the compiler passes a pointer to the caller's storage instead of copying it. Nothing can observe the difference: the callee cannot write a `val` parameter, and the caller is suspended for the duration of the call. The one exception is raw-pointer aliasing — writing, through a `ptr<T>`, to storage that was passed as a `val` parameter of the same call is the programmer's responsibility, like every other `ptr<T>` write. A `var` parameter is always a real copy, because the callee may modify it.
+
 Copy is allowed only when `T` is copyable: primitives, `value class`, `data class`, `enum` without `own` payloads, `array` of copyable elements, `ptr<T>` (copies the address), `slice<T>` (copies the view words — the source must still outlive the slice).
 
 ```bestie

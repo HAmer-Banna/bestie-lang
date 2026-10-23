@@ -254,7 +254,7 @@ const BUFFER_SIZE: int = MAX_CONNECTIONS * 64   // other consts allowed
 **Invalid:**
 
 * `const` whose RHS contains a runtime value (`val`, `var`, function return, I/O) — compile error
-* `const` function parameter — parameters are always runtime values; use a type constraint instead
+* `const` function parameter — parameters are always runtime values; use a compile-time value parameter (`fun <const N: int>`, §7.2) instead
 
 **Object file behavior:**
 
@@ -885,6 +885,45 @@ Rules:
 * An argument-less call site that leaves a parameter unconstrained requires an explicit type argument; the compiler never guesses a default.
 
 This is the mechanism that makes generic collection code practical. Because collection variations are invariant (`std-lib/collections.md` §3.3), `fun sum(xs: list<int>)` accepts array-backed lists only; `fun <C impl Iterable<int>> sum(xs: C)` accepts every variation, plus `array<int>`, `slice<int>`, and `range<int>`.
+
+### 7.2 Compile-Time Value Parameters — `const N: int`
+
+A generic parameter may be a **compile-time value** instead of a type. Its main use is the length of an array, so that one function or type serves every length and is still compiled for each one exactly:
+
+```bestie
+fun <T impl Addable, const N: int> sum(xs: array<T>[N]): T {
+    var total = xs[0]
+    for (i in 1..N) { total += xs[i] }
+    return total
+}
+
+val a : array<int>[] = {1, 2, 3}
+val b : array<int>[] = {1, 2, 3, 4, 5, 6, 7, 8}
+sum(a)        // N = 3 — inferred from the argument's type
+sum(b)        // N = 8 — a second instantiation
+```
+
+Each instantiation knows `N` as a constant, so the bounds checks fold away and a small loop may be fully unrolled. This is what a C++ template over `std::array<T, N>` or a Rust `const N: usize` parameter produces — and what Go cannot express at all.
+
+Generic types take value parameters the same way:
+
+```bestie
+value class Vec<T, const N: int> {
+    e: array<T>[N]
+}
+
+type Vec3 as Vec<float32, 3>
+type Mat4 as Vec<float32, 16>
+```
+
+Rules:
+
+* A value parameter is written `const NAME: Type`. `Type` is an integer type, `bool`, or `char` — values with exact equality, so two instantiations are the same type exactly when their arguments are equal.
+* Inside the generic body a value parameter is a `const`: it may size an array, appear in a `when` condition, and be used anywhere a `const` is valid (§4.1).
+* A value parameter is **inferred** only from a bare occurrence in a parameter's type — `array<T>[N]` infers `N`; `array<T>[N * 2]` does not. Otherwise it is given explicitly: `zeros<float32, 16>()`. This keeps inference the single linear pass of §7.1.
+* Arithmetic on value parameters is allowed in types and bodies — `fun <const N: int> halve(xs: array<int>[N]): array<int>[N / 2]` — and is evaluated per instantiation. A result that is not a valid length (negative, overflowing) is a compile-time error at that instantiation.
+* A value parameter may carry a range, with the same `in` syntax as range-constrained types (§6.2): `fun <T impl Addable, const N: int in 1..=4096> sum(...)`. An instantiation outside the range is a compile-time error at the call site — `sum` of an empty array is rejected before it can read `xs[0]`.
+* Each distinct value is a separate instantiation. When a function would be instantiated for many lengths and gains nothing from knowing `N`, take a `slice<T>` instead — one instantiation, one extra length word.
 
 ---
 
