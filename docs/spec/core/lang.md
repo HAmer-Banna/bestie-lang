@@ -580,18 +580,18 @@ Properties:
 Bestie includes exactly one collection in the core language: `array<T>`.
 
 `array<T>` is built-in and available without `import`.
-It provides fixed-capacity contiguous storage, deterministic layout, and index-based access.
+It is a C array: a length fixed at compile time and part of the type, contiguous storage with C's layout, and index-based access (`types.md` §5).
 
 `{1, 2, 3}` is an **array**, not a Python/Java `List`. A growable sequence is `list<T>` in `bestie.lib.collections` — write `val xs: list<int> = {1, 2, 3}`. That annotation is how a newcomer opts into growth; the default stays the cheap form.
 
 Core `array<T>` supports:
 
-* `array<T>[n]` — sized declaration, capacity `n`, initially empty
-* `array<T>[] = {v1, v2, ...}` — capacity and size inferred from a literal
-* Indexing via `arr[i]` — panics on out-of-bounds access
-* Direct index assignment via `arr[i] = value` — panics on out-of-bounds access
-* Core methods: `add`, `get`, `size`, `capacity`, `isEmpty`, `isFull`
-* Capacity is fixed at construction — adding past capacity is a panic
+* `array<T>[] = {v1, v2, ...}` — length inferred from a literal
+* `array<T>[N].fill(v)` / `array<T>[N].from(f)` — length `N`, every element initialized
+* Always full: no uninitialized element, no `add`, no capacity
+* `arr.length` — the element count, a compile-time constant
+* Indexing via `arr[i]` and assignment via `arr[i] = value` on a `var` array — panics on out-of-bounds access, compile error for an out-of-range constant index
+* Multi-dimensional `array<T>[R][C]` — one flat row-major block, identical to C
 
 All dynamic and higher-level collections live in `bestie.lib.collections`, including:
 
@@ -604,15 +604,14 @@ All dynamic and higher-level collections live in `bestie.lib.collections`, inclu
 Example:
 
 ```bestie
-val arr : array<int>[5]
-arr.add(1)
-arr.add(2)
+var arr : array<int>[5] = array<int>[5].fill(0)
 
 // Direct bracket syntax works for both reads and writes —
 // equivalent to calling arr.get(i) and arr.set(i, value)
 arr[0] = 10          // assign directly by index
 val x = arr[2]       // read directly by index
 val first = arr.get(0)   // method form also valid
+val n = arr.length   // 5
 ```
 
 ---
@@ -663,7 +662,7 @@ val h : list<int>.linked  = {1, 2, 3}           // linked list from literal
 * Without a type annotation, `{k: v, ...}` **always** resolves to `map<K,V>` in its default representation
 * The compiler never silently picks a different collection type from a literal — it either uses the annotation or the default
 * A mismatched annotation is a compile-time error: `val x : set<str> = {"a": 1}` is rejected because a map literal cannot satisfy a `set<str>` type
-* Multi-dimensional array literals follow the same rule: `{{1,2},{3,4}}` without annotation infers `array<array<int>>`
+* Multi-dimensional array literals follow the same rule: `{{1,2},{3,4}}` without annotation infers `array<int>[2][2]`. The literal must be rectangular
 
 ---
 
@@ -971,7 +970,7 @@ Ranges are first-class values and can be stored:
 ```bestie
 val r: range<int> = 0..100
 val mid = r.mid()        // 50
-val size = r.size()      // 100
+val n = r.length         // 100
 val has = r.contains(42) // true
 ```
 
@@ -1017,10 +1016,10 @@ fun main() {
 }
 ```
 
-With command-line arguments (fixed argv — not a resizable `list`):
+With command-line arguments — a read-only view, because the count is known only at run time:
 
 ```bestie
-fun main(args: array<str>) {
+fun main(args: slice<str>) {
     println(args[0])
 }
 ```
@@ -1030,11 +1029,11 @@ Both forms are valid. Structured argument parsing lives in `bestie.api.cli`.
 ### 11.2 Rules
 
 * `main` always returns `void` — writing the return type is unnecessary and not idiomatic
-* `main` may declare `args: array<str>` as its only parameter — omitting it is the beginner form
+* `main` may declare `args: slice<str>` as its only parameter — omitting it is the beginner form
 * `main` may be fallible (`! ErrorSet`) for startup errors:
 
 ```bestie
-fun main(args: array<str>): void ! StartupError {
+fun main(args: slice<str>): void ! StartupError {
     val cfg = try loadConfig(args)
     run(cfg)
 }
@@ -1392,7 +1391,8 @@ An operator on a user-defined type lowers to a **method call**, resolved statica
 
 Rules:
 
-* **Primitives never lower.** On `int`, `float64`, `char`, `bool`, `ptr<T>`, and `str`, every operator in §15.1 is emitted directly as machine instructions. The table applies only to user-defined types.
+* **Primitives never lower.** On `int`, `float64`, `char`, `bool`, and `str`, every operator in §15.1 that the type supports is emitted directly as machine instructions. The table applies only to user-defined types.
+* **`ptr<T>` supports only `==`, `!=`, and the ordering operators**, emitted directly as address comparisons (`memory.md` §8.7). It has no arithmetic operators: moving a pointer is `p.offset(n)` and measuring between two is `p.distanceFrom(q)` (`memory.md` §8.5.1 explains why).
 * **Bitwise and logical operators are not overloadable.** The bitwise set is defined on machine integers; `and` / `or` / `not` are boolean control flow whose short-circuiting a method call cannot express. There is no lowering row for them and no protocol to implement.
 * **Overflow-explicit operators are not overloadable.** `+%` / `+\|` / `+!` describe machine-integer behavior; on a user-defined type they are a compile-time error.
 * Using an operator on a type that provides no matching method is a compile-time error, never a fallback.

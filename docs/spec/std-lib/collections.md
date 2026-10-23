@@ -3,7 +3,7 @@
 This document defines the **Bestie collections** provided by the standard library.
 Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
 
-Core Bestie provides `array<T>` — a fixed-capacity built-in collection defined in `core/types.md`.
+Core Bestie provides `array<T>[N]` — a static, C-layout array whose length is part of its type, defined in `core/types.md` §5.
 This document covers the standard-library collection layer: `list<T>`, `set`, `map`, `deque`, and `heap`.
 
 ---
@@ -124,7 +124,6 @@ Indexing, negative indexing, and slicing share one convention with core `array<T
 | `indexOf(value: T)` | `int ?` | Returns index or absent |
 | `size()` | `int` | Current number of elements |
 | `isEmpty()` | `bool` | True when no elements exist |
-| `toArray()` | `array<T>` | New fixed-capacity array with exactly `size()` slots, filled with the list's current elements |
 | `toSet()` | `set<T>` | New hash set containing all elements (deduplicates) |
 
 ### 2a.3 Variations
@@ -148,15 +147,16 @@ val ls  : list<int>    = {10, 20, 30}
 
 arr[0]      // 10
 ls[0]       // 10 — identical syntax
+arr[1..]    // slice<int> — identical slicing
+ls[1..]     // slice<int>
 
-arr.size()  // 3
-ls.size()   // 3 — identical method
+arr.length  // 3 — fixed, a compile-time constant
+ls.size()   // 3 — live, changes as the list grows
 
-arr.add(40) // panics — at capacity
-ls.add(40)  // fine  — list grows
+ls.add(40)  // fine — list grows; an array has no add()
 ```
 
-The key distinction: `array<T>` is **static** (fixed capacity, panics on overflow); `list<T>` is **dynamic** (grows as needed, never overflows on add).
+The key distinction: `array<T>[N]` is **static** — its length is part of its type and never changes, and it has no `add()`; `list<T>` is **dynamic** — it grows as needed. The count is spelled differently on purpose: `length` on a fixed sequence, `size()` on a collection whose count changes (`core/types.md` §5.6). A list of lists, `list<own list<T>>`, reaches each row through a pointer to that row's own object; it is not a flat block — see `core/types.md` §5.12.
 
 ---
 
@@ -290,18 +290,16 @@ val a : set<int> = {1,2,3}
 val b : map<str,int> = {"a": 1, "b": 2}
 ```
 
-> **A literal does not imply immutability.** A bare `{...}` literal produces a **mutable** collection — exactly like a core `array<T>` literal. The literal only supplies the initial elements; it does not freeze them. This is identical to `array<T>`:
+> **A literal does not imply immutability.** A bare `{...}` literal produces a **mutable** collection. The literal only supplies the initial elements; it does not freeze them. A collection is a reference type, so `val` freezes the binding and not the contents — unlike a core `array<T>`, which is a value type and is frozen whole by `val` (`core/types.md` §5.13):
 >
 > ```bestie
-> val xs : array<int>[] = {1, 2, 3}   // binding frozen, elements mutable
-> val ys : list<int>    = {1, 2, 3}   // binding frozen, elements mutable
-> xs[0] = 9   // ✅ allowed
+> val ys : list<int> = {1, 2, 3}   // binding frozen, elements mutable
 > ys.add(4)   // ✅ allowed — list grows
 > ```
 >
-> Immutability is always **opt-in** and explicit, with the same mechanisms across arrays and collections:
+> Immutability is always **opt-in** and explicit:
 > * `val` — freezes the binding only; contents stay mutable
-> * `immutable` — the mutation API is unavailable; a variation on collections, reached via `freeze()` on `array<T>`
+> * `immutable` — the mutation API is unavailable; a variation, reached via `freeze()`
 > * `const` — compile-time constant in read-only memory (requires a literal)
 >
 > See `core/immutability.md` §5 (arrays) and §7 (collections) for the full per-type model.
@@ -428,7 +426,7 @@ for (v in prices.values()) { print(v.toStr()) }
 * `Iterable<T>` does not imply mutability — iterating never modifies the collection
 * Iteration order is defined by the representation: insertion order for linked variants, unspecified for hash-backed, sorted for tree-backed
 * `for/in` is preferred over direct `.next()` calls in user code
-* `array<T>` iterates in index order, from `0` to `size() - 1`
+* `array<T>` iterates in index order, from `0` to `length - 1`
 
 ---
 
@@ -537,10 +535,8 @@ Rows marked **ext** are extension functions on a core type, declared in this pac
 | `array<T>` | `toList()` **ext** | `list<T>` | New array-backed list |
 | `array<T>` | `toSet()` **ext** | `set<T>` | New hash set; deduplicates |
 | `slice<T>` | `toList()` **ext** | `list<T>` | New owned list; O(n) copy |
-| `list<T>` | `toArray()` | `array<T>` | New array with capacity = `size()` |
 | `list<T>` | `toSet()` | `set<T>` | New hash set; deduplicates |
 | `set<T>` | `toList()` | `list<T>` | New list in iteration order |
-| `set<T>` | `toArray()` | `array<T>` | New array in iteration order |
 | `set<T>` | `asMapKeys(default: V)` | `map<T, V>` | Each element becomes a key; all values set to `default` |
 | `map<K,V>` | `keys()` | `set<K>` | Live key set view |
 | `map<K,V>` | `values()` | `list<V>` | Values in iteration order |
@@ -556,8 +552,11 @@ val arr : array<int>[] = {1, 2, 3}
 val ls  : list<int>    = arr.toList()   // new list from array
 
 val ls2 : list<int> = {4, 5, 6}
-val arr2 : array<int> = ls2.toArray()  // fixed array, capacity = 3
+var arr2 : array<int>[3] = array<int>[3].fill(0)
+arr2[..].copyFrom(ls2[..])             // panics if ls2.size() != 3
 ```
+
+There is no `toArray()`. An array's length is a compile-time constant and a list's is not, so the conversion would have to invent a length. Copying into an array you declared states it.
 
 **`list` / `array` → `set`**
 
@@ -590,7 +589,6 @@ val values : list<int> = scores.values()   // [92, 85]
 * All `to*()` methods produce a **new, independent collection** — modifying the result does not affect the source
 * `asMapKeys()` is the only conversion that takes a parameter (the default value for every key)
 * `toSet()` on a source with duplicates silently deduplicates — the resulting set contains only unique elements
-* `toArray()` on a `list<T>` produces an array with `capacity == size()` — the array is full immediately; `add()` would panic unless the caller uses a larger array instead
 * `keys()`, `values()`, and `entries()` on a `map` produce views that reflect the current state of the map at the time of the call
 
 ---
@@ -615,7 +613,7 @@ frozen.add(3)                       // ❌ 'add' is not available
 
 Why ownership must be consumed: a plain `list<int>` → `list<int>.immutable` conversion would leave the caller holding a mutable alias to the same storage, so "immutable" would mean only *"I will not mutate it"* — useless for the thread-safety guarantee that is the point (`core/oop.md` §14). Because `move` invalidates the source, no mutable path survives the call, and the result is safe to share across threads with no lock.
 
-`freeze()` performs **no copy and no allocation**. The storage is unchanged; only the static type of the handle differs. It is available on every collection family and on core `array<T>` (`core/types.md` §5).
+`freeze()` performs **no copy and no allocation**. The storage is unchanged; only the static type of the handle differs. It is available on every collection family. Core `array<T>` does not need it: an array is a value type, and a `val` array is already frozen (`core/types.md` §5.13).
 
 There is no `thaw()`. To get a mutable collection back, copy explicitly — `frozen.toList()` — which allocates and says so.
 
@@ -637,7 +635,7 @@ Bestie collections are:
 
 `list<T>` is the go-to dynamic collection. Its array-backed default is efficient and familiar. Switch to `list<T>.linked` when the access pattern calls for it.
 
-`array<T>` (in `core/types.md`) is the fixed-capacity alternative — same indexing syntax, no dynamic growth, panics on overflow.
+`array<T>[N]` (in `core/types.md`) is the static alternative — same indexing syntax, a length fixed at compile time, C layout, no growth.
 
 Conversions between any two collection types are explicit `to*()`/`as*()` method calls — no implicit coercion, no surprise allocation.
 

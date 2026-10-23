@@ -112,25 +112,27 @@ Example:
 
 ```toml
 [project]
-name = "order-service"
+name = "acme/order-service"
 version = "1.0.0"
+bestie = "1.2"                 # toolchain: language, compiler, std-lib, std-api
 
-[targets]
-type = "executable"
-
-[build]
-opt = "release"
-lto = true
+[[target]]
+name = "order-service"
+kind = "executable"
 
 [dependencies]
-std-lib = "1.0"
-std-api = "1.0"
+"acme/money" = "2.1"
+"bestie/web" = "1.5"
 ```
 
 Rules:
 
 * A project may contain multiple modules
 * A module may belong to exactly one project
+* A project is also the unit that is **versioned and published**. Bestie calls it a *project*, never a *package*, because "package" already means a namespace (§5)
+* `std-lib` and `std-api` are never listed as dependencies — the `bestie` toolchain version selects them
+
+The full manifest format, dependency resolution, and the `bestie` tool are specified in `std-tools/package-manager.md`.
 
 ---
 
@@ -474,22 +476,66 @@ There is:
 
 ---
 
-## 13. Linking Model
+## 13. Libraries, Artifacts, and Linking
 
-Bestie uses a **static linking model**.
+### 13.1 What a Project Can Produce
+
+A project declares one or more **targets** (`std-tools/package-manager.md` §4.2). Each target is one of four kinds:
+
+| Kind | Produces | Consumed by | Interface |
+| ---- | -------- | ----------- | --------- |
+| `executable` | A native program | The OS | `main` |
+| `library` | Nothing on its own — it is **source** plus its module descriptors | Other Bestie projects, which compile it | The module's `exports` (§7) |
+| `staticlib` | `.a` / `.lib` | C, C++, Rust, Zig, any C-ABI linker | `export(c)` functions only (`std-api/foreign.md` §4.3) |
+| `dynlib` | `.so` / `.dylib` / `.dll` | The same, at load time — or `openLibrary` at run time | `export(c)` functions only |
+
+Bestie code reaches other Bestie code as a **`library`**: published and consumed as source. `staticlib` and `dynlib` exist to give **other languages** a Bestie implementation behind a C interface.
+
+### 13.2 Why There Is No Binary Bestie Library (No "Jar")
+
+A Java `.jar` works because bytecode is portable and the JVM links it at run time. Bestie has neither, and three of its core guarantees make a precompiled Bestie-to-Bestie binary format impossible to keep stable:
+
+* **Generics are monomorphized** (`compiler/compiler-architecture.md`). `list<T>` from a library is compiled once for each `T` the *consumer* uses — the library cannot ship code for types it has never seen.
+* **Layout is not stable across compiler versions** (`memory-layout.md` §15). A `value class` compiled by one compiler may have different field offsets under the next; a binary that baked in the old offsets would read the wrong bytes.
+* **Inlining and dead-code elimination cross module boundaries.** That is where "C performance" comes from, and it requires the source of both sides at once.
+
+C++ shows what happens when a language ships binaries anyway: ABI breaks between compiler versions, and libraries pinned to one standard-library build. Bestie avoids it the way Rust, Go, and Zig do — **distribute source, cache compiled output locally**:
+
+* Every dependency is compiled by the consumer's toolchain, for the consumer's target, with the consumer's optimization settings.
+* Compiled modules are cached per (toolchain version, target, profile, source hash), so a dependency is compiled once per machine, not once per build.
+* The cache is local and disposable. It is never published and never treated as an interface.
+
+The one stable binary interface Bestie offers is the C ABI, through `export(c)`. A team that must ship a closed-source component ships a `staticlib` or `dynlib` with a C header, exactly as it would from C.
+
+### 13.3 Linking
+
+**Bestie code is always linked statically.** Every module of the program and of its dependencies is compiled and linked into one artifact; nothing Bestie-written is loaded at run time.
 
 Properties:
 
-* Modules compile to object units
-* Linking is deterministic
-* Dead code elimination is aggressive
-* Unused exports are removed
+* Linking is deterministic — the same sources, lockfile, toolchain, target, and profile produce a bit-identical artifact
+* Dead code elimination is aggressive; unused exports are removed
+* No Bestie runtime library needs to be installed on the machine that runs the program
+
+**System libraries follow the platform.** The C library and OS interfaces are linked the way the platform requires:
+
+| Target | Default | Fully static option |
+| ------ | ------- | ------------------- |
+| Linux | glibc, dynamic | `static = true` links musl statically — one file with no runtime dependencies |
+| macOS | `libSystem`, dynamic (the only supported form) | not available |
+| Windows | system DLLs (`kernel32`, `ucrt`), dynamic | static CRT |
+| Freestanding | none | n/a |
+
+**Native C libraries** used through `foreign fun` are linked as the project declares in `[native]` (`std-api/foreign.md` §11.1) — statically or dynamically, chosen per library and never implied.
+
+**Loading code at run time** is never implicit. A program that needs plugins opens a `dynlib` explicitly with `openLibrary` (`std-api/foreign.md` §11.2) and calls its `export(c)` functions.
 
 This enables:
 
 * Small binaries
 * Fast startup
 * Serverless suitability
+* One-file deployment where the platform allows it
 
 ---
 

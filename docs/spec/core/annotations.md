@@ -118,10 +118,10 @@ public fun rotateLeft(n: int): int { ... }
 
 Records the version of the **declaring layer** in which the symbol first appeared. `platform.md` §6 versions each layer separately, so `@since("1.4")` on a `bestie.lib` symbol means std-lib 1.4.
 
-A project declares the versions it targets (`modules-and-packaging.md` §3.2). Using a symbol newer than the declared floor is a compile-time error, not a link failure:
+A project declares the toolchain it targets (`modules-and-packaging.md` §3.2), which fixes the std-lib and std-api versions; a std-framework dependency declares its own version. Using a symbol newer than that floor is a compile-time error, not a link failure:
 
 ```
-error: 'rotateLeft' requires std-lib >= 1.4, but this project declares lib = "1.2"
+error: 'rotateLeft' requires std-lib >= 1.4, but this project declares bestie = "1.2" (std-lib 1.2)
 ```
 
 This is what makes the version numbers in `platform.md` §6 a contract rather than a label.

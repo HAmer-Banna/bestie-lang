@@ -425,9 +425,7 @@ fun runWorker(job: str): str ! (IpcError | OsError | ReadError) {
     )
     defer opts.freeDeep()
 
-    var args : array<str>[2]
-    args.add(job)
-    args.add(wr.token().toStr())        // the child parses and adopts this
+    val args : array<str>[] = {job, wr.token().toStr()}   // the child parses and adopts the token
 
     val own proc = try spawn("/usr/libexec/worker", args[..], opts.address())
     defer proc.free()

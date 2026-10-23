@@ -173,7 +173,7 @@ Accessors are **typed at the point of retrieval**, so a caller never re-parses a
 import bestie.api.io.println
 import bestie.api.os.exit
 
-fun main(args: array<str>) {
+fun main(args: slice<str>) {
     val spec = buildSpec()
 
     val own parsed = parse(args[1..], spec.address()) catch |e| {

@@ -162,9 +162,7 @@ fun gitRevision(): str ! (OsError | ReadError) {
     )
     defer opts.freeDeep()
 
-    var args : array<str>[2]
-    args.add("rev-parse")
-    args.add("HEAD")
+    val args : array<str>[] = {"rev-parse", "HEAD"}
 
     val own proc = try spawn("/usr/bin/git", args[..], opts.address())
     defer proc.free()

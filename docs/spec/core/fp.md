@@ -798,7 +798,7 @@ Mutable varargs allow modification of elements inside the function body:
 
 ```bestie
 fun normalize(var xs: float64...): void {
-    for (i in 0..xs.size()) {
+    for (i in 0..xs.length) {
         xs[i] = xs[i] / 100.0
     }
 }
@@ -871,7 +871,7 @@ Extension functions add behavior **without modifying types** and **without runti
 
 ```bestie
 fun str.isEmpty(): bool {
-    return this.length == 0
+    return this.byteSize() == 0
 }
 ```
 

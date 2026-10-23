@@ -227,7 +227,8 @@ This package defines **no buffer type**. Buffers are core types:
 
 | Need | Type |
 | ---- | ---- |
-| Owned, fixed-capacity storage | `array<byte>[n]` |
+| Owned storage, length fixed at compile time | `array<byte>[n]` |
+| Owned storage, length chosen at run time | `list<byte>` |
 | A read-only view to send | `slice<byte>` |
 | A writable view to receive into | `slice<var byte>` |
 

@@ -158,27 +158,20 @@ This is consistent with primitives: `val n: int` freezes the number entirely. A 
 
 ## 5. `array<T>`
 
-`array<T>` is a core built-in with value-class semantics at the dispatch level, but at the binding level it behaves as a **fat pointer** (pointer + size + capacity). `val` prevents rebinding that fat pointer; it does **not** prevent element mutation.
+`array<T>[N]` is a **value type**: its elements are stored inline, with no pointer and no header (`types.md` §5.8). The binding *is* the array, so the §4 rule applies unchanged — `val` freezes every element.
 
 | Declaration | Rebind? | Mutate elements? | Notes |
 | ----------- | ------- | ---------------- | ----- |
-| `var arr : array<int>[5]` | ✅ | ✅ | fully mutable |
-| `val arr : array<int>[] = {1,2,3}` | ❌ | ✅ | binding frozen, elements free |
-| `val arr : array<int>.immutable` | ❌ | ❌ | mutation API unavailable |
+| `var arr : array<int>[5] = …` | ✅ | ✅ | fully mutable |
+| `val arr : array<int>[] = {1,2,3}` | ❌ | ❌ | frozen whole — C's `const int a[3]` |
 | `const arr : array<int>[] = {1,2,3}` | ❌ | ❌ | literal only — stored in `.rodata` |
 
-`array<T>` has no builder chain, so `array<T>.immutable` is not constructed directly. It is produced by **`freeze()`**, an ownership-consuming conversion:
-
 ```bestie
-val own arr = array<int>[3]
-arr.add(1)
-arr.add(2)
-
-val own frozen = move arr.freeze()   // array<int>.immutable — arr is now invalid
-frozen[0] = 9                        // ❌ mutation API unavailable
+val arr : array<int>[] = {1, 2, 3}
+arr[0] = 9                           // ❌ compile-time error — val array
 ```
 
-Because `move` invalidates the source, no mutable path to that storage survives. That is what makes the result safe to share across threads with no lock — see §7 and `oop.md` §14.
+There is no `array<T>.immutable` and no `freeze()` for arrays: those exist for reference types, where a binding can only lock a reference. A `val` array has no mutable alias anywhere, so it is safe to share across threads with no lock — see `oop.md` §14.
 
 ---
 
@@ -273,7 +266,7 @@ frozen.add(3)                        // ❌ 'add' is not available
 | `data class` | data class | ❌ none | ✅ | no-op | ❌ |
 | `enum` | enum | ❌ none | ✅ | no-op | ✅ (tag-only) |
 | `value class` | value class | fields only | ✅ freezes all fields | no-op | ❌ |
-| `array<T>` | core built-in | ✅ | ❌ binding only | ✅ via `freeze()` | ✅ literal only |
+| `array<T>[N]` | core value type | ✅ elements (`var`) | ✅ freezes all elements | n/a — `val` is enough | ✅ literal only |
 | `slice<T>` | core view | ❌ (`slice<var T>` ✅) | ✅ | n/a — use `slice<T>` | ❌ |
 | `class` / `open` / `abstract` | class | ✅ | ❌ reference only | ✅ `immutable class` | ❌ |
 | `list<T>` `set<T>` `map<K,V>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ✅ literal only |
@@ -292,4 +285,4 @@ frozen.add(3)                        // ❌ 'add' is not available
 
 **Freeze, never persist.** Removing an operation is honest and free. Redirecting it to allocate is neither — not in a language with explicit ownership and no garbage collector.
 
-**Value types freeze completely; reference types declare it.** For `value class`, `data class`, `enum`, and primitives, `val` is enough because the binding *is* the value. For `class`, `array<T>`, and collections, the binding only locks the reference — the type must say the rest.
+**Value types freeze completely; reference types declare it.** For `value class`, `data class`, `enum`, `array<T>`, and primitives, `val` is enough because the binding *is* the value. For `class` and collections, the binding only locks the reference — the type must say the rest.

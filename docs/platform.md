@@ -205,9 +205,9 @@ Frameworks provide structure — not runtime magic.
 
 ### Properties
 
-- Distributed remotely
-- Downloaded automatically when declared in `bestie-project.toml`
-- Requires compatible compiler version
+- Published to the registry under the reserved `bestie/` namespace
+- Declared in `[dependencies]` like any project and resolved by `bestie` (`std-tools/package-manager.md` §4.3)
+- Each version declares the minimum toolchain it requires
 - Imported via:
 
 ```
@@ -232,15 +232,12 @@ Frameworks are intentionally flexible and allowed to evolve.
 
 Official tooling shipped with Bestie.
 
-- `bestiec` — compiler
-- `bestie test` — test runner
+- `bestiec` — compiler only: no fetching, no resolution
+- `bestie` — project and package manager: `new`, `add`, `build`, `run`, `test`, `task`, `update`, `tree`, `publish` (`std-tools/package-manager.md`)
 - `bestie fmt` — formatter
 - `bestie dbg` — debugger
-- `bestie build` — builder
 - `bestie doc` — documentation generator
-- `bestie mod` — module manager
 - `bestie lint` — static analyzer
-- `bestie make` — automation
 - `bestie heap` — memory inspector
 
 Tools evolve independently from the core language.
@@ -353,35 +350,30 @@ Example:
 
 ```toml
 [project]
-name = "order-processor"
+name = "acme/order-processor"
 version = "1.0.0"
-
-[requirements]
-lang = "1.0"
-api = "2.4"
-
-[std-frameworks]
-web = "1.5"
-test = "1.2"
+bestie = "1.2"                     # language, compiler, std-lib, std-api
 
 [dependencies]
-json_parser = "3.1.0"
-postgres_driver = "0.9.0"
+"bestie/web"      = "1.5"          # std-framework
+"acme/json"       = "3.1"
+"acme/postgres"   = "0.9"
+
+[dev-dependencies]
+"bestie/test" = "1.2"
 ```
+
+The full manifest format is `std-tools/package-manager.md` §4.
 
 ---
 
 ## 10. Dependency Resolution
 
-### Frameworks (Compiler Managed)
+Frameworks and community projects are resolved the same way, by `bestie` (`std-tools/package-manager.md` §5):
 
-* Cached locally
-* Auto-downloaded
-* Verified compatibility
-
-### Community Libraries
-
-* Managed via package manager
+* Minimal version selection — the highest minimum anyone asked for, never a silent upgrade
+* Locked with content checksums in `bestie.lock`
+* Fetched as source, compiled by the consumer's toolchain, cached locally
 * DAG validated
 * Linked statically
 
@@ -391,8 +383,9 @@ postgres_driver = "0.9.0"
 
 * Fully native compilation
 * Deterministic linking
-* Static by default
+* Bestie code always linked statically; system libraries as the platform requires (`modules-and-packaging.md` §13.3)
 * Dead code eliminated aggressively
+* Artifacts: `executable`, source `library`, and C-ABI `staticlib` / `dynlib` (`modules-and-packaging.md` §13.1)
 
 ### Build Steps
 

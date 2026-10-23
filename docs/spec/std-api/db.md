@@ -74,7 +74,7 @@ enum DbValue {
     Real(float64),
     Text(str),
     Bool(bool),
-    Blob(own array<byte>)
+    Blob(own list<byte>)
 }
 ```
 

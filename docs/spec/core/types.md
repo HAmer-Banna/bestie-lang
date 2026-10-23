@@ -391,236 +391,250 @@ If named meaning, invariants, or methods are needed, use a class or a `data clas
 
 ## 5. `array<T>`
 
-`array<T>` is Bestie's built-in fixed-capacity contiguous collection.
+`array<T>[N]` is Bestie's built-in **static array**: exactly `N` elements of `T`, stored contiguously, with `N` fixed at compile time. It is a C array — same layout, same cost — with an API that is easier to use than Java's.
 
-It provides direct element storage, deterministic layout, and index-based access with **no hidden allocation** beyond what the declaration site requests.
+```bestie
+val primes : array<int>[] = {2, 3, 5, 7, 11}     // length 5, inferred from the literal
+var buf    : array<byte>[4096] = array<byte>[4096].fill(0)
 
-`array<T>` is designed to be easy to use for the common case of holding a known number of values without forcing the programmer to reach for a dynamic collection.
+primes.length          // 5 — a compile-time constant
+buf[0] = 0x7F
+```
 
-### Construction Forms
+### 5.1 Length Is Part of the Type
+
+`N` is a compile-time constant — a literal, a `const`, or a `target.*` constant (`constants.md`). It is part of the type: `array<int>[3]` and `array<int>[4]` are different types, exactly as `int[3]` and `int[4]` are in C.
+
+There is **no runtime-length array**. A buffer whose length is known only at run time is a `list<T>` from `bestie.lib.collections`, viewed as a `slice<T>` with `ls[..]` wherever a function only needs the elements. That keeps `array<T>` honest: when you see one, its length, its layout, and its stack footprint are all known to the compiler.
+
+`array<T>` without `[N]` is not a type on its own. It is written only where the length is inferred from a literal on the same line (`array<int>[] = {…}`) or in prose to mean "an array of any length". A function that accepts arrays of any length takes `slice<T>` (§5.10).
+
+### 5.2 Construction — Every Element Is Initialized
+
+An array is always **full**. Every one of its `N` elements holds a value from the moment it exists; there is no empty array, no `add()`, and no uninitialized element.
 
 | Form | Meaning |
 | ---- | ------- |
-| `array<T>[n]` | Fixed-capacity array of `n` elements, initially empty |
-| `array<T>[] = {v1, v2, ...}` | Capacity and initial size inferred from the literal |
-| `array<T>[n].fill(value)` | Fixed-capacity array, all `n` slots pre-filled with `value` |
-
-Examples:
-
-```bestie
-val arr  : array<int>[5]                    // capacity 5, size 0 — fill with add()
-val arr2 : array<int>[] = {1, 2, 3, 4, 5}  // capacity 5, size 5 — initialized from literal
-val arr3 : array<int>[5] = array<int>[5].fill(0)  // capacity 5, size 5 — all zeros
-```
-
-`fill()` is the explicit escape hatch for pre-sized buffers and default-value grids, avoiding the need to write large literals. The value is copied into each slot — no implicit zero-filling ever occurs without it.
-
-**Literal default type:** when a `{v, v, ...}` literal appears without a type annotation, the compiler infers `array<T>`. To obtain a different collection type from the same literal syntax, an explicit type annotation is required — see `lang.md` §5.4.
-
-### Operators
-
-| Operation | Meaning |
-| --------- | ------- |
-| `arr[i]` | Element access — **panics** if index is out of bounds |
-| `arr[-i]` | Access from the end — `arr[-1]` is the last element. Sugar for `arr[arr.size() - i]` |
-| `arr[i] = v` | Element assignment when mutable — **panics** if out of bounds |
-| `arr[-i] = v` | End-relative assignment when mutable — **panics** if out of bounds |
-| `arr[lo..hi]` | Slice — a borrowed `slice<T>` view over `[lo, hi)`; **no copy**. See §6 |
-| `for (x in arr)` | Iterate over all elements |
-
-### Negative Indexing
-
-A negative index counts from the end. `arr[-1]` is the last element, `arr[-2]` the second-to-last, and so on. It is pure syntax — `arr[-i]` lowers to `arr[arr.size() - i]`:
+| `array<T>[] = {v1, v2, ...}` | Length inferred from the literal |
+| `array<T>[N] = {v1, ..., vN}` | Length stated; the literal must have exactly `N` values |
+| `array<T>[N].fill(v)` | All `N` elements set to `v` |
+| `array<T>[N].from(f)` | Element `i` set to `f(i)` |
 
 ```bestie
-val xs : array<int>[] = {10, 20, 30, 40, 50}
-
-val last     = xs[-1]    // 50
-val penult   = xs[-2]    // 40
-xs[-1] = 99              // xs → {10, 20, 30, 40, 99}
+val days    : array<str>[] = {"Mon", "Tue", "Wed", "Thu", "Fri"}
+var counts  : array<int>[26] = array<int>[26].fill(0)
+val squares : array<int>[10] = array<int>[10].from((i: int) => i * i)
 ```
 
 Rules:
 
-* `arr[-i]` is the **same operation** as `arr[size - i]` — one subtraction, then the normal access. There is no extra cost beyond positive indexing, and it is folded at compile time when `size` and the index are both statically known.
-* Out-of-range negative indices **panic**, identical to positive out-of-range access (`arr[-6]` on a 5-element array panics).
-* `0` and `-0` are the same index (the first element).
+* A declaration with no initializer — `val a : array<int>[5]` — is a compile-time error. C leaves those elements as garbage; Java silently zeroes them. Bestie makes you say which value you mean.
+* A literal whose count differs from a stated `N` is a compile-time error.
+* `fill` and `from` cost nothing extra: `fill(0)` lowers to the same `memset` a C compiler emits, and `from` takes a non-capturing lambda that is inlined into the initializing loop. When the compiler can prove every element is overwritten before it is read, the fill is removed.
 
-### Slicing
+### 5.3 Operators
 
-`arr[lo..hi]` produces a **`slice<T>`** — a borrowed, zero-copy view over a contiguous run of the array. It allocates nothing. The bound syntax matches `range<T>` (§7):
+| Operation | Meaning |
+| --------- | ------- |
+| `arr[i]` | Element access — **panics** if out of bounds |
+| `arr[-i]` | Access from the end — `arr[-1]` is the last element. Sugar for `arr[arr.length - i]` |
+| `arr[i] = v` | Element assignment on a `var` array — **panics** if out of bounds |
+| `arr[lo..hi]` | A borrowed `slice<T>` view over `[lo, hi)`; **no copy**. See §6 |
+| `for (x in arr)` | Iterate over all elements |
+
+When the index is a compile-time constant, the bounds check is resolved at compile time: an out-of-range constant index is a compile-time error, and an in-range one emits no check at all.
+
+### 5.4 Negative Indexing
+
+A negative index counts from the end. It is pure syntax — `arr[-i]` lowers to `arr[arr.length - i]`, and because `length` is a constant, that subtraction is folded away:
+
+```bestie
+var xs : array<int>[] = {10, 20, 30, 40, 50}
+
+val last   = xs[-1]    // 50
+val penult = xs[-2]    // 40
+xs[-1] = 99            // xs → {10, 20, 30, 40, 99}
+```
+
+Out-of-range negative indices **panic**, identically to positive ones. `0` and `-0` are the same index.
+
+### 5.5 Slicing
+
+`arr[lo..hi]` produces a **`slice<T>`** — a borrowed, zero-copy view over a contiguous run of the array. The bound syntax matches `range<T>` (§7):
 
 ```bestie
 val xs : array<int>[] = {10, 20, 30, 40, 50}
 
-val a = xs[1..4]     // view over {20, 30, 40}   (half-open)
-val b = xs[1..=3]    // view over {20, 30, 40}   (inclusive end)
-val c = xs[2..]      // view over {30, 40, 50}
-val d = xs[..2]      // view over {10, 20}
-val e = xs[..]       // view over the whole array
-val f = xs[-2..]     // view over the last two: {40, 50}
-val g = xs[..-1]     // everything but the last: {10, 20, 30, 40}
+val a = xs[1..4]     // {20, 30, 40}   (half-open)
+val b = xs[1..=3]    // {20, 30, 40}   (inclusive end)
+val c = xs[2..]      // {30, 40, 50}
+val d = xs[..2]      // {10, 20}
+val e = xs[..]       // the whole array
+val f = xs[-2..]     // {40, 50}
+val g = xs[..-1]     // {10, 20, 30, 40}
 ```
 
-A slice is governed by borrow rules — see §6 for the full semantics. Out-of-range bounds panic; `lo > hi` panics.
+A slice of a `var` array may be taken as `slice<var T>` to write through it. Out-of-range bounds panic; `lo > hi` panics. See §6.
 
-### Methods
+### 5.6 Members
 
-| Method | Returns | Notes |
-| ------ | ------- | ----- |
-| `add(value: T)` | `void` | Appends element — **panics** if at capacity |
-| `get(index: int)` | `T` | Explicit element access — **panics** if out of bounds |
-| `size()` | `int` | Current number of elements |
-| `capacity()` | `int` | Fixed maximum number of elements |
-| `isEmpty()` | `bool` | True when no elements have been added |
-| `isFull()` | `bool` | True when `size() == capacity()` |
+| Member | Type | Notes |
+| ------ | ---- | ----- |
+| `length` | `int` | The element count `N`. A compile-time constant, read like a field — not a method call |
+| `get(index: int)` | `T` | Method form of `arr[i]` |
+| `set(index: int, value: T)` | `void` | Method form of `arr[i] = v`; `var` arrays only |
 
-Accessing a nonexistent index and adding beyond capacity are both **panics** — they represent violated invariants, not recoverable failures. See `exceptions.md`.
+That is the whole core surface. Searching, sorting, and copying between ranges are `bestie.lib.algorithms`; conversions to a growable collection (`toList()`, `toSet()`) are extension functions in `bestie.lib.collections` — the same split core applies to `str`.
 
-**Conversions to std-lib collections** (`toList()`, `toSet()`) are **extension functions** in `bestie.lib.collections`, not core methods — the same split core already applies to `str` (§3: parsing and text operations are lib extensions). They read as methods at the call site and cost nothing extra:
+**Why `length` and not `size()`.** In Bestie, *size* means bytes — `sizeOf(T)`, `str.byteSize()`. An array's element count is a different quantity, and it never changes, so it gets a different word and no call parentheses: `arr.length`, exactly as in Java and C#. Growable collections in `bestie.lib.collections` keep `size()`, because their count is a live, changing value and reading it is a real (if cheap) operation. The distinction is visible at the call site: `length` is fixed, `size()` can change.
 
-```bestie
-import bestie.lib.collections
+### 5.7 Iteration
 
-val ls = arr.toList()   // list<int>
-val xs = arr.toSet()    // set<int>, deduplicated
-```
-
-Core owns `array<T>`'s storage, indexing, and slicing. Everything that produces a *different* collection belongs to the layer that owns that collection — see `std-lib/collections.md` §9.
-
-### Iteration
-
-`array<T>` implements `Iterable<T>`. The `for/in` loop works with arrays naturally, with no import or conversion required:
+`array<T>` implements `Iterable<T>`, and the `for/in` loop over it lowers to a direct index walk with no call:
 
 ```bestie
 val scores : array<int>[] = {91, 84, 77}
 
 for (s in scores) {
-    print(s.toStr())
+    println(s.toStr())
+}
+
+for (i in 0..scores.length) {
+    println("${i}: ${scores[i]}")
 }
 ```
 
-### Class Kind and Performance
+### 5.8 Layout and Performance
 
-`array<T>` has **value-class semantics**: no object header, no vtable, no identity, no inheritance.
-It is a compiler-known built-in, not a user-declared class, but it follows the same rules as a `value class`:
+`array<T>[N]` is laid out as **exactly `N` elements, `strideOf(T)` apart** — `N * strideOf(T)` bytes, aligned to `alignOf(T)` (`memory-layout.md` §3). Nothing else is stored: no header, no length word (the length is in the type), no capacity, no pointer. This is byte-for-byte the layout of a C array `T a[N]`.
 
-* Elements are stored **contiguously in memory** — identical layout to a C array
-* Element access at index `i` lowers to a single multiply-add-load sequence — one instruction, no indirection
-* No bounds-check overhead on the happy path beyond the panic branch (which the CPU branch predictor learns immediately)
-* No allocator metadata, no reference counting, no GC involvement
+It is a value type, so it lives **inline** wherever it is declared — in a stack frame, as a field inside an object, or as an element of another array — and is never separately heap-allocated. An array in a heap-allocated `class` is part of that object's single allocation.
 
-This is what is meant by "C-speed": `array<T>` access is not a method call with overhead — it is pointer arithmetic.
-
-For classification purposes in the type system, `array<T>` behaves as a `value class`:
-
-| Property | `array<T>` |
-| -------- | ---------- |
+| Property | `array<T>[N]` |
+| -------- | ------------- |
 | Object header | ❌ none |
-| Vtable | ❌ none |
+| Stored length | ❌ none — `N` is in the type |
 | Identity | ❌ none |
-| Heap allocation | only when size requires it |
-| Inheritance | ❌ not inheritable |
-| Virtual dispatch | ❌ not applicable |
+| Separate heap allocation | ❌ never |
+| Element access `arr[i]` | one multiply-add-load, plus a bounds branch the predictor learns immediately |
+| Inheritance / virtual dispatch | ❌ not applicable |
 
-Compare to `list<T>` in `std-lib`, which is a `class` (heap-allocated, identity, owned backing buffer).
+Because it lives inline, a very large array declared as a local occupies the stack. The compiler warns when a single frame exceeds the target's stack-size guidance; large buffers belong in a `class` field or a `list<T>`.
 
----
+### 5.9 Copying
 
-### Multi-Dimensional Arrays
-
-Multi-dimensional arrays are expressed by nesting the size brackets.
-`array<int>[rows][cols]` is shorthand for `array<array<int>[cols]>[rows]`.
-
-When all dimensions are compile-time constants, the compiler lays the entire structure out as a **single flat contiguous block** (row-major order) — no pointer-to-pointer indirection, identical to a C 2D array:
+An array is a value: assignment copies every element, exactly like a `value class`.
 
 ```bestie
-val grid  : array<int>[3][3]                           // 3×3, 9 contiguous ints
-val mat   : array<float64>[][] = {{1.0, 2.0}, {3.0, 4.0}}  // inferred from 2D literal
-val cube  : array<int>[4][4][4]                        // 4×4×4, 64 contiguous ints
+var a : array<int>[] = {1, 2, 3}
+var b = a              // b is an independent copy — Java needs a.clone()
+b[0] = 99              // a is still {1, 2, 3}
 ```
 
-Element access uses chained brackets, each level panicking independently on out-of-bounds:
+That copy is `N * strideOf(T)` bytes. It is what you want for small fixed records (a 3-vector, an IPv6 address); for buffers, pass a view instead (§5.10).
+
+### 5.10 Passing Arrays — No Decay
+
+C silently converts an array to a pointer to its first element whenever it is passed or used in an expression, and the length is lost. **Bestie has no array-to-pointer decay.** Every form of passing is written:
+
+| You want | Write | The callee receives |
+| -------- | ----- | ------------------- |
+| Read the elements, any length | `f(arr[..])` | `slice<T>` — base + length, bounds-checked |
+| Write the elements, any length | `f(arr[..])` into a `slice<var T>` parameter | `slice<var T>` |
+| The whole array, exact length | `f(arr.address())` | `ptr<array<T>[N]>` |
+| A pointer to the first element (C interop) | `arr[0].address()` | `ptr<T>` |
+| An independent copy | `f(arr)` into an `array<T>[N]` parameter | a copy |
 
 ```bestie
-grid[1][2] = 42         // row 1, col 2 — single memory location, no indirection
-val v = mat[0][1]       // 2.0
+fun average(xs: slice<int>): float64 {
+    var total = 0
+    for (x in xs) { total += x }
+    return (total as float64) / (xs.length as float64)
+}
+
+val scores : array<int>[] = {91, 84, 77}
+val avg = average(scores[..])
+```
+
+A slice parameter is C's `(T *p, size_t n)` pair, carried as one value that cannot fall out of sync. `ptr<array<T>[N]>` is C's pointer-to-array, `T (*p)[N]`, which C programmers rarely reach for because the decaying form is the default.
+
+### 5.11 Multi-Dimensional Arrays
+
+Multi-dimensional arrays nest the length brackets. `array<int>[R][C]` is `array<array<int>[C]>[R]`: `R` rows, each an `array<int>[C]`.
+
+Because an array stores nothing but its elements, the nested form is **one flat, contiguous, row-major block** of `R * C` elements — identical to C's `int a[R][C]`, with no row pointers and no per-row length:
+
+```bestie
+var grid : array<int>[3][4] = array<int>[3][4].fill(0)    // 12 contiguous ints
+val mat  : array<float64>[][] = {{1.0, 2.0}, {3.0, 4.0}}  // 2×2, inferred
+val cube : array<byte>[4][4][4] = array<byte>[4][4][4].fill(0)
+
+grid[1][2] = 42        // offset (1 * 4 + 2) * strideOf(int) — one address computation
+grid.length            // 3 — rows
+grid[0].length         // 4 — columns
 ```
 
 Rules:
 
-* When all inner dimensions are fixed, the compiler guarantees flat row-major layout
-* `array<T>[][cols]` is legal when the outer size is inferred from a literal
-* Jagged arrays (variable-length rows) require `array<array<T>[]>` with explicit row sizes
+* **Every dimension is a compile-time constant**, so every row has the same length and the element offset is computed with constants. Any or all of them may be inferred from a literal (`[][]`), but only from a **rectangular** literal — rows of different lengths are a compile-time error.
+* `fill` and `from` apply at the innermost element: `array<int>[3][4].fill(0)` sets all 12 ints. `from` on a two-dimensional array receives the row index and returns a row.
+* Indexing chains: `grid[r]` is a row (`array<int>[4]`, a place, not a copy), and `grid[r][c]` an element. Each index is bounds-checked against a constant.
+* `grid[r][..]` is a `slice<int>` over one row. `grid[..]` is a `slice<array<int>[4]>` over the rows — the exact equivalent of C's `int (*p)[4]` plus a row count, and the way to pass a matrix of any height to a function.
+* **There are no jagged arrays.** Rows of different lengths are a list of lists — `list<own list<T>>` in `bestie.lib.collections` — which is a different structure with a different cost (§5.12).
+* A matrix whose dimensions are known only at run time is one `list<T>` of `rows * cols` elements with `r * cols + c` indexing, or a matrix type from `bestie.lib.math` that does that for you.
 
----
+### 5.12 Arrays vs `list<T>`, and Lists of Lists
 
-### Immutability
+`array<T>[N]` and `list<T>` share indexing, negative indexing, slicing, and `for/in`, so moving between them needs no relearning. They differ in what they are:
 
-`array<T>` has no builder chain, so immutability is reached in two ways.
+| | `array<T>[N]` | `list<T>` |
+| - | ------------- | --------- |
+| Kind | Core value type | `class` in `bestie.lib.collections` |
+| Length | Compile-time constant, `arr.length` | Runtime, changes, `ls.size()` |
+| Storage | Inline — no allocation of its own | Heap buffer owned by the list object |
+| Grows | ❌ never | ✅ reallocates as needed |
+| Copy on assignment | ✅ all elements | ❌ — it is an owned object; copying is explicit |
 
-**`const`** — compile-time literal arrays. Stored in `.rodata`. Zero runtime cost. Only valid with a literal right-hand side:
+The difference matters most for nesting:
 
-```bestie
-const DAYS : array<str>[] = {"Mon", "Tue", "Wed", "Thu", "Fri"}
-```
+| Declaration | Memory | Access `x[i][j]` | Like |
+| ----------- | ------ | ---------------- | ---- |
+| `array<int>[R][C]` | One flat block of `R * C` ints | One address computation, one load | C `int[R][C]` |
+| `list<own list<int>>` | An outer buffer of pointers to inner list objects, each pointing to its own buffer | Load the inner list, load its buffer, load the element | Java `int[][]` / `List<List<Integer>>`, minus the object headers |
 
-**`array<T>.immutable`** — a runtime array whose mutation API is unavailable (`immutability.md` §2.1). Because `array<T>` has no builder chain, this type is produced by **`freeze()`**, an ownership-consuming conversion:
+`list<list<int>>` without a qualifier is a compile-time error: `list<int>` is a reference type, so the outer list must say whether it **owns** its rows (`own`) or **borrows** them (`ref`) — `std-lib/collections.md` §0. Unlike C++'s `vector<vector<int>>`, which stores each inner vector's header inline in the outer buffer, each inner `list` is its own object reached through a pointer. Use a list of lists for genuinely jagged or growing data; use a multi-dimensional array, or one flat `list<T>`, for a dense matrix.
 
-```bestie
-val own primes = array<int>[5]
-primes.add(2)
-primes.add(3)
+### 5.13 Immutability
 
-val own frozen = move primes.freeze()   // array<int>.immutable — primes is now invalid
-frozen[0] = 1                           // ❌ compile-time error: 'set' is not available
-frozen.add(5)                           // ❌ compile-time error: 'add' is not available
-```
-
-Full matrix:
+An array is a value type, so it follows the value-type rule (`immutability.md` §4): **the binding freezes the whole value.**
 
 | Declaration | Rebind? | Mutate elements? | Storage |
 | ----------- | ------- | ---------------- | ------- |
-| `var arr : array<int>[5]` | ✅ | ✅ | stack / heap |
-| `val arr : array<int>[] = {1,2,3}` | ❌ | ✅ | stack / heap |
-| `val arr : array<int>.immutable` | ❌ | ❌ | stack / heap |
-| `const arr : array<int>[] = {1,2,3}` | ❌ | ❌ | `.rodata` |
-
-Because `move` invalidates the source, no mutable path to a frozen array's storage survives the call. That is what makes `array<T>.immutable` safe to share across threads with no lock — the compiler's guarantee that nothing mutates it is sufficient.
-
----
-
-### Shared Interface with `list<T>`
-
-`array<T>` shares its indexing syntax and common method names with `list<T>` in `std-lib`, so switching between them requires no interface relearning:
+| `var arr : array<int>[3] = …` | ✅ | ✅ | inline |
+| `val arr : array<int>[3] = …` | ❌ | ❌ | inline |
+| `const arr : array<int>[] = {1, 2, 3}` | ❌ | ❌ | `.rodata`, literal only |
 
 ```bestie
-arr[0]   // array element access
-ls[0]    // list element access — same syntax
-
-arr.size()  // 3
-ls.size()   // 3 — identical method
+val fixed : array<int>[] = {1, 2, 3}
+fixed[0] = 9           // ❌ compile-time error — a val array is frozen, like a val value class
 ```
 
-The difference is that `array<T>` is **static**: its capacity is fixed at construction and never grows. This makes memory layout predictable and eliminates any risk of silent reallocation.
+This is C's `const int a[3]` for a `val`, and a true compile-time table for a `const`. There is no `array<T>.immutable` and no `freeze()` — those exist for heap collections, whose binding freezes only a reference. Sharing a `val` or `const` array across threads needs no lock.
 
-Example:
+### 5.14 Coming from Java
 
-```bestie
-val scores : array<int>[3]
-
-scores.add(91)
-scores.add(84)
-scores.add(77)
-// scores.add(60)  — panic: capacity exceeded
-
-val first = scores[0]
-val n     = scores.size()
-
-for (s in scores) {
-    print(s.toStr())
-}
-```
+| Java | Bestie |
+| ---- | ------ |
+| `int[] a = new int[5];` | `var a : array<int>[5] = array<int>[5].fill(0)` |
+| `int[] a = {1, 2, 3};` | `val a : array<int>[] = {1, 2, 3}` — or just `val a = {1, 2, 3}` |
+| `a.length` | `a.length` |
+| `a.clone()` | `var b = a` |
+| `Arrays.fill(a, 7)` | `a = array<int>[5].fill(7)` |
+| `new int[3][4]` (array of row objects) | `array<int>[3][4]` — one flat block |
+| `int[][]` with ragged rows | `list<own list<int>>` |
+| `final int[] a` (elements still mutable) | `val a` (elements frozen too) |
+| `ArrayIndexOutOfBoundsException` | panic — or a compile error for a constant index |
+| Length chosen at run time | `list<T>` |
 
 ---
 
@@ -665,11 +679,11 @@ Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. W
 
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
-| `size()` | `int` | Number of elements in the view |
-| `isEmpty()` | `bool` | True when `size() == 0` |
-| `toArray()` | `array<T>` | New owned array (O(n) copy — explicit) |
+| `length` | `int` | Number of elements in the view — read like a field, as on `array<T>` (§5.6) |
+| `isEmpty()` | `bool` | True when `length == 0` |
+| `copyFrom(src: slice<T>)` | `void` | On `slice<var T>` only: copies `src` element-wise into this view — **panics** if the lengths differ. One `memmove` |
 
-`toList()` is an extension function in `bestie.lib.collections`, for the same reason as on `array<T>` above.
+An owned, escapable copy of a slice is a `list<T>` — `toList()`, an extension function in `bestie.lib.collections`. There is no `toArray()`: an array's length is a compile-time constant and a slice's is not. To fill an array from a slice, write `arr[..].copyFrom(s)`.
 
 A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing, and re-slicing all behave exactly as they do on `array<T>`. Element access is a single contiguous load — pointer arithmetic, no indirection.
 
@@ -696,14 +710,14 @@ A `slice<var T>` is exclusive: while it is alive, no other access to the overlap
 
 Slicing immutable storage is always safe and never requires a copy:
 
-* A slice over a `str`, a `const` array, or an `array<T>.immutable` is inherently read-only.
+* A slice over a `str`, or over a `val` or `const` array, is inherently read-only.
 * Because the source cannot mutate in place, the "no mutation while borrowed" rule is satisfied for free — the only remaining constraint is lifetime (the slice must not outlive the source).
 
 ### Class Kind and Performance
 
 `slice<T>` has **value-class semantics** — no object header, no vtable, no identity, no heap. It is a fat pointer (base + length) passed in registers. This is what keeps slicing zero-cost: taking a slice is two register writes, and indexing through it is the same single load as indexing the underlying array.
 
-> What slicing does **not** do: it never copies, never allocates, and never owns. To obtain an owned, escapable copy, call `.toArray()` explicitly (or `.toList()`, with `bestie.lib.collections` imported). Only contiguous sources produce a `slice<T>`; non-contiguous collections are covered in `std-lib/collections.md`.
+> What slicing does **not** do: it never copies, never allocates, and never owns. To obtain an owned, escapable copy, call `.toList()` with `bestie.lib.collections` imported, or copy into an array you own with `copyFrom`. Only contiguous sources produce a `slice<T>`; non-contiguous collections are covered in `std-lib/collections.md`.
 
 ---
 
@@ -739,7 +753,7 @@ val r3 = 'a'..='z'
 
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
-| `size()` | `int` | Number of values in the range |
+| `length` | `int` | Number of values in the range — read like a field, as on `array<T>` (§5.6) |
 | `contains(value: T)` | `bool` | Membership test |
 | `mid()` | `T` | Midpoint when meaningful for `T` |
 | `isEmpty()` | `bool` | Empty or reversed range |
@@ -749,7 +763,7 @@ Example:
 ```bestie
 val r: range<int> = 0..100
 
-val n = r.size()
+val n = r.length
 val m = r.mid()
 val ok = r.contains(42)
 ```
@@ -927,8 +941,9 @@ Bestie's core type surface is intentionally compact:
 * Primitive numeric values behave like zero-cost value classes
 * `bool`, `char`, and `str` expose explicit core operations only
 * `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms, each with exactly one spelling
+* `array<T>[N]` is a C array: static length in the type, always fully initialized, flat row-major in every dimension, no decay to a pointer, and `arr.length` rather than `size()`
 * Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
-* `slice<T>` is a borrowed, zero-copy view; owned copies are explicit (`.toArray()`; `.toList()` via `bestie.lib.collections`)
+* `slice<T>` is a borrowed, zero-copy view and the way to pass any-length data; owned copies are explicit (`.toList()` via `bestie.lib.collections`, or `copyFrom` into an array)
 * Conversions are explicit
 * `ptr<T>` remains isolated in `memory.md`
 * `list<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`

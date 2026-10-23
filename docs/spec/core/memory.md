@@ -645,19 +645,40 @@ Do not confuse `p.addr` with `p.address()`: one is the word stored in `p`; the o
 
 ### 8.5 Pointer Arithmetic
 
-Allowed through explicit pointer APIs.
-
-The compiler enforces bounds when provable.
-When not provable, responsibility is explicit on the pointer-using code.
-
-* Compile-time-known safe offsets are accepted
-* Statically provable out-of-bounds is a compile-time error
+Pointer arithmetic is two named operations. There is no `p + n`, `p - n`, `p++`, or `q - p`.
 
 ```bestie
-p.offset(2).val
+fun offset(n: int): ptr<T>             // C: p + n   (n may be negative: p - n)
+fun distanceFrom(base: ptr<T>): int    // C: p - base
 ```
 
-`p.offset(n)` moves by `n * strideOf(T)` bytes — the array element distance, which includes `T`'s tail padding (`memory-layout.md` §3).
+```bestie
+var buf : array<uint32>[8] = array<uint32>[8].fill(0)
+val first: ptr<uint32> = buf[0].address()
+
+val third = first.offset(2)            // two elements on — 8 bytes for uint32
+third.val = 7                          // buf[2] == 7
+val back  = third.offset(-1)           // buf[1]
+val n     = third.distanceFrom(first)  // 2 — counted in elements, not bytes
+```
+
+Rules:
+
+* `p.offset(n)` moves by `n * strideOf(T)` bytes — the array element distance, which includes `T`'s tail padding (`memory-layout.md` §3). `n` is counted in **elements**.
+* `p.distanceFrom(base)` is the element count from `base` to `p`, negative when `p` is below `base`. Both pointers must have the same pointee type; mixing `ptr<T>` and `ptr<const T>` is allowed. Its result is meaningful only when both point into the same allocation — the same rule as pointer ordering (§8.7).
+* Byte-granular movement is a cast to `ptr<byte>`: `p.cast<byte>().offset(k)` moves `k` bytes, and the type in the expression says so.
+* The compiler enforces bounds when provable: compile-time-known safe offsets are accepted, and a statically provable out-of-bounds offset is a compile-time error. When not provable, responsibility is explicit on the pointer-using code.
+
+#### 8.5.1 Why Not `+` and `-`
+
+Operators lower to methods for user-defined types (`lang.md` §15.3), so `ptr<T>` could have had `+`. It does not, for four reasons:
+
+1. **The unit would be invisible.** `p.addr + 4` is integer arithmetic in **bytes**. In C, `p + 4` is pointer arithmetic in **elements** — `4 * sizeof(T)` bytes. Allowing both puts two different units one `.addr` apart behind the same symbol. `p.offset(4)` names the operation, and the operation is documented to count elements.
+2. **It is not arithmetic.** `+` in Bestie combines two values of the same kind (`Addable`). Pointer `+` would be `ptr<T> + int → ptr<T>` only; `int + ptr<T>` (which C accepts) and `ptr<T> + ptr<T>` mean nothing. A method has exactly the one signature that makes sense.
+3. **It keeps raw memory searchable.** Moving a pointer is the point where bounds become the programmer's responsibility. `.offset(` and `.distanceFrom(` can be found with a search, like `@trusted`; `+` cannot.
+4. **One spelling each** (`lang.md` §15). Bestie already chose `.address()` and `.val` over `&` and `*`. Arithmetic on the same pointer follows the same choice.
+
+Most code never needs either operation: walking a buffer is `for (x in xs)` or indexing a `slice<T>`, both bounds-checked. Pointer arithmetic is for FFI, allocators, and data structures that genuinely address raw memory.
 
 ---
 
@@ -792,7 +813,8 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 | `p.addr` | `uint` | §8.4.2 | The address word `p` holds. Not a dereference. Valid on `ptr<const T>`. |
 | `p.toStr()` | `str` | §8.4.2 | Hex address (`0x…`), width = `target.bits`. Interpolation of `p` uses this. |
 | `p.address()` | `ptr<ptr<T>>` | §8.6 | Address of the pointer's own storage slot. Const-ness per binding (§10.1.2). |
-| `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic; strides by `strideOf(T)` (`memory-layout.md` §3). Provable OOB is a compile error. |
+| `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic in elements; strides by `strideOf(T)` (`memory-layout.md` §3). Negative `n` moves back. Provable OOB is a compile error. |
+| `p.distanceFrom(base)` | `int` | §8.5 | Element count from `base` to `p` (C `p - base`). Meaningful only within one allocation. |
 | `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
 | `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
 | `p.isZero()` | `bool` | §8.7 | True if the address is the zero address (FFI / `@trusted` boundary). |
@@ -1166,7 +1188,7 @@ Consequences, all in the explicit low-level domain:
 * **Copying aliases.** `val b = a` on a `list<ptr<T>>` is a shallow copy: `a` and `b` hold the **same addresses**. This is permitted (unlike `list<own T>`, which is move-only — §11.2) and is intentional — it matches C-style pointer arrays. The programmer must not free through one alias while the other is still in use.
 
 ```bestie
-val arr: array<ptr<Node>> = ...
+val arr: array<ptr<Node>>[4] = ...
 
 val n0: ptr<Node> = arr[0]      // a copy of the stored address
 arr[0].val.value = 9            // write through to the pointee (ptr non-const)

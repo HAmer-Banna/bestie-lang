@@ -138,28 +138,22 @@ bestie dbg ./app
 
 ---
 
-### 6.4 `bestie build`
+### 6.4 `bestie build`, `bestie run`, `bestie task`
 
 **Purpose:**
-Project automation and task orchestration.
-
-Intent:
-
-- Bestie-native alternative to Make
-- Cross-platform by default
-- Understands Bestie project structure
+Build the project's targets, run them, and run declared automation.
 
 Examples:
 
 bestie build
-bestie build release
-bestie build clean
+bestie build --release
+bestie run -- --port 8080
+bestie task gen-schema
+bestie clean
 
-Configuration:
+Configuration lives in `bestie-project.toml` — `[[target]]`, `[profile.*]`, and `[tasks]`. There is no separate build file. Tasks run only when invoked, never as a side effect of a build.
 
-bestie.build.toml
-
-Compatibility with `Makefile` is allowed but optional.
+Full specification: `package-manager.md` §3, §4.6, §4.7, §6.
 
 ---
 
@@ -185,27 +179,33 @@ bestie doc
 
 ---
 
-### 6.6 `bestie mod`
+### 6.6 Project and Dependency Management
 
 **Purpose:**
-Dependency and module management.
+Create projects, manage dependencies, and publish.
 
 Responsibilities:
 
-- Initialize projects
-- Fetch third-party libraries
-- Maintain lockfiles
+- Create projects (`bestie new`, `bestie init`)
+- Add, remove, and update dependencies with minimal version selection
+- Maintain and verify `bestie.lock`
+- Publish to and yank from a registry
 
 Rules:
 
-- `std-lib`, `std-api`, and `std-framework` are never fetched remotely
-- Only external libraries are managed
+- `std-lib` and `std-api` ship with the toolchain and are never fetched; the manifest's `bestie` version selects them
+- `std-framework` projects are fetched from the registry under the reserved `bestie/` namespace
+- No code from a dependency runs during fetch or build
 
 Examples:
 
-bestie mod init
-bestie mod add my-lib
-bestie mod update
+bestie new orders --lib
+bestie add acme/money@2.1
+bestie update
+bestie tree
+bestie publish
+
+Full specification: `package-manager.md`.
 
 ---
 
