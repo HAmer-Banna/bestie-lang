@@ -60,7 +60,7 @@ Bestie ships with a set of **built-in annotations** understood by the compiler a
 
 | Annotation | Targets | Effect |
 | ---------- | ------- | ------ |
-| `@trusted` | expression, local binding | Suppresses a compiler-inserted check the programmer undertakes to uphold: range construction (`lang.md` §6.2), checked narrowing (`types.md` §2.1), dropping pointee `const` (`memory.md` §8.8). Searchable by design |
+| `@trusted` | expression, local binding | Suppresses a compiler-inserted check the programmer undertakes to uphold: range construction (`lang.md` §6.2), checked narrowing (`types.md` §2.1), dropping pointee `const` (`memory.md` §8.8), reinterpreting an address as code (`memory.md` §8.9). Searchable by design |
 | `@pure` | function | Side-effect free; callable in `const` initializers (`lang.md` §4.1) |
 | `@noInline` | function | Suppresses inlining for stack-trace and profiling clarity |
 | `@inline` | function | Must be inlined at every call; impossible inlining is a compile-time error (`freestanding.md` §9) |

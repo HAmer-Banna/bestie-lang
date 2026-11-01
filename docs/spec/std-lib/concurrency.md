@@ -107,14 +107,14 @@ fiber.new(...)     // ✅
 
 The same rules as core `thread`:
 
-* Implicit `own` sharing into `fiber.new` is a compile-time error
-* `move` into the fiber body is allowed
+* The body is a generic callable (`core/fp.md` §6.5); it sees only what its capture list names
+* `[move x]` transfers an owner into the fiber; `[x]` copies a copyable value
 * `ref` cannot cross the spawn boundary
-* Immutable values may be shared
+* Deeply immutable values may be shared by address
 * Body returns `void`
 * A panic inside a fiber **terminates the entire program** (same as `thread`)
 
-`fiber.new` is **compiler-known**: the frontend applies the same spawn-site ownership analysis as `thread.new`. It is still a library type — it is not a keyword.
+`fiber.new` is **compiler-known**: the frontend applies the same spawn-site capture checks as `thread.new`. It is still a library type — it is not a keyword.
 
 ### 3.3 Parallel vs concurrent
 

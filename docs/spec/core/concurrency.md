@@ -43,8 +43,12 @@ Cooperative fibers, channels, atomics, and locks live in **`bestie.lib.concurren
 **Construction:**
 
 ```bestie
+fun <F impl fn() -> void> new(own body: F): own thread     // the body is a generic callable (fp.md §6.5)
+
 val t = thread.new(() => work())
 ```
+
+The body is moved into the new thread whole — the lambda's captures travel with it, and nothing is shared that the capture list does not name. A capture list is therefore the thread's entire inbound interface.
 
 **Available methods:**
 
@@ -80,65 +84,69 @@ No inheritance, reflection, or dynamic creation is allowed for the core thread t
 
 ## 4. Ownership & Sharing
 
+A thread body sees only its parameters, module-level bindings, and its captures (`fp.md` §7.3). Each kind of capture has one meaning across the spawn:
+
+| Capture | Crosses as |
+| ------- | ---------- |
+| `[x]`, `[var x]` | A copy owned by the new thread — never shared |
+| `[move x]` | A transfer — the spawning code can no longer use `x` |
+| `[p = x.address()]` | A `ptr<T>` — shared, with races and lifetime programmer-owned (§5) |
+
 ### 4.1 Forbidden
 
 ```bestie
 val own u = User.new()
-thread.new(() => use(u))    // ❌ compile error: implicit ownership sharing
+thread.new(() => use(u))    // ❌ compile error: u is not captured
+thread.new([u]() => use(u)) // ❌ compile error: User is a class — not copyable
 ```
 
 ### 4.2 Explicit Ownership Transfer
 
-Ownership may be moved into a thread explicitly. The source binding becomes invalid immediately.
+Ownership is moved into a thread with a move capture. The source binding becomes invalid immediately, and the thread body discharges the value when it finishes (`fp.md` §7.7).
 
 ```bestie
 val own u = User.new()
-thread.new(move u, (own user: User) => use(user))   // ✅
+thread.new([move u]() => use(u))   // ✅
 
 use(u)    // ❌ compile error: moved value
 ```
 
-### 4.3 Allowed — Immutable Sharing
+### 4.3 Immutable Sharing
 
 Thread safety comes from the **type**, not the binding. `val` makes a binding immutable — it does not make the value deeply immutable or safe to share.
 
-Safe to share across threads — deep immutability must be explicit:
+Safe to copy into a thread — every copy is independent:
 
 * Primitive types (`int`, `float64`, `bool`, `char`, etc.)
 * `data class`, `value class`, `enum` — value semantics by definition
-* `immutable class` — deep immutability enforced by the compiler
 * `const` values
-* Immutable collections — the `immutable` variation: `list<T>.immutable`
 
 ```bestie
 val cfg = Config.new(...)                        // Config is a data class ✅
-val xs : list<int>.immutable = ...               // explicitly immutable ✅
-thread.new(() => read(cfg))                      // ✅ safe
-thread.new(() => process(xs))                    // ✅ safe
+thread.new([cfg]() => read(cfg))                 // ✅ copied
 ```
 
-**Not** safe to share:
+Race-free to share **by address** — no thread can write through any path:
 
-```bestie
-val xs : list<int> = list<int>.new()
-thread.new(() => read(xs))   // ❌ compile error: mutable list, val binding is not enough
-```
-
-The bridge is `freeze()`, which consumes ownership — after the `move` there is no mutable path left to that storage, which is exactly what makes the result shareable:
+* `immutable class` — deep immutability enforced by the compiler
+* Immutable collections — the `immutable` variation: `list<int>.immutable`
 
 ```bestie
 val own ls = list<int>.new()
 ls.add(1)
-val own frozen = move ls.freeze()   // list<int>.immutable
-thread.new(() => process(frozen))   // ✅ safe
+val own frozen = move ls.freeze()                       // list<int>.immutable
+thread.new([xs = frozen.address()]() => process(xs))    // ✅ shared read-only; frozen must outlive the thread
 ```
+
+`freeze()` is the bridge: it consumes ownership, so after the `move` there is no mutable path left to that storage. Sharing the address of a **mutable** collection is allowed — a `ptr<T>` may cross threads — but its races are the programmer's, exactly as in C (§5). To give a thread a mutable collection outright, move it: `[move ls]`.
 
 ---
 
 ## 5. Compile-Time Guarantees
 
 * Implicit ownership sharing across threads is a **compile-time error**
-* `own` cannot be implicitly shared; transfer with `move`
+* `own` cannot be implicitly shared; transfer with a `[move x]` capture
+* A thread body sees nothing its capture list does not name (`fp.md` §7.3)
 * `ptr<T>` may cross thread boundaries; races and lifetime are programmer-owned
 * A `ref` field is not a thread-safe handle — sharing the object it names is done with `ptr<T>`
 
@@ -169,7 +177,7 @@ t.join()
 Core thread bodies return `void`. There is no return value from a thread at the core level.
 
 ```bestie
-thread.new(() => doWork())       // void body
+thread.new(() => doWork())       // void body — a generic callable F impl fn() -> void
 ```
 
 ### Communicating Results and Errors
@@ -180,9 +188,9 @@ To get results or typed errors (`!`) back from a worker thread, use **channels**
 import bestie.lib.concurrency.Channel
 
 val ch = Channel<int ! WorkError>.new(1)
-thread.new(move ch, (ch) => {
+thread.new([c = ch.address()]() => {     // shared: the parent receives on the same channel
     val outcome = try compute()
-    ch.send(outcome)
+    c.val.send(outcome)
 })
 val outcome = try ch.receive()
 ```

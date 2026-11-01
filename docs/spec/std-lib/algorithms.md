@@ -184,9 +184,9 @@ Guarantees:
 ### 6.1 `partition`
 
 ```bestie
-fun <T> partition(
+fun <T, P impl fn(T) -> bool> partition(
     data: slice<var T>,
-    predicate: fn(T) -> bool
+    predicate: P
 ): int
 ```
 
@@ -216,10 +216,10 @@ val idx = partition(nums[..], x => x % 2 == 0)
 ### 7.1 `fold`
 
 ```bestie
-fun <C impl Iterable<T>, T, R> fold(
+fun <C impl Iterable<T>, T, R, F impl fn(R, T) -> R> fold(
     data: C,
     initial: R,
-    op: fn(R, T) -> R
+    op: F
 ): R
 ```
 

@@ -283,7 +283,7 @@ Larger assembly lives in `.S` files compiled with the project (`std-tools/packag
 | `naked` | No prologue or epilogue — the body is assembly (§5.3) |
 | Architecture-qualified | `x86.sysv`, `x86.win64`, `arm.aapcs`, `arm.aapcs-vfp`, `riscv.lp64d`, … — a named convention when the default is not the one you need |
 
-`foreign(<tag>) fun` declares a function with any of these conventions that is defined elsewhere.
+`foreign(<tag>) fun` declares a function with any of these conventions that is defined elsewhere, and `foreign(<tag>) fn(P) -> R` is a pointer to one (`fp.md` §6.6).
 
 ### 5.2 Interrupt Handlers — `export(interrupt)`
 
@@ -307,7 +307,7 @@ when (target.arch == "x86_64") {
 Rules:
 
 * The permitted signatures are defined per architecture by `bestie.api.memory.<arch>` — on x86-64, a frame pointer with or without an error code; on RISC-V, no parameters; on Cortex-M, where the hardware already saves the caller-saved registers, `interrupt` is the C convention and handlers are ordinary `export(c)` functions.
-* An interrupt handler **cannot be called** from Bestie code — that is a compile-time error. It is only referenced by address, to install it: `onTimer.address()` is a `ptr<fn(ptr<const InterruptFrame>) -> void>` for a vector table or an IDT entry.
+* An interrupt handler **cannot be called** from Bestie code — that is a compile-time error. It converts to no callable type; it is only referenced by address, to install it: `onTimer.addr` is its code address as a `uint`, for an IDT entry (`memory.md` §8.9).
 * A handler on a target with `simd-registers = false` or `float = "none"` cannot touch vector or float registers, so it saves none (§10). That is why kernels use those settings.
 * Panicking in a handler calls the panic handler, as anywhere else.
 
@@ -365,10 +365,10 @@ These are linker metadata. They do not change a declaration's type, layout, or d
 
 ```bestie
 @section(".vector_table") @used
-export(c) val VECTORS: array<ptr<fn() -> void>>[] = {
-    reset.address(),
-    defaultHandler.address(),
-    onSysTick.address(),
+export(c) val VECTORS: array<foreign fn() -> void>[] = {
+    reset,
+    defaultHandler,
+    onSysTick,
 }
 ```
 
@@ -597,11 +597,11 @@ foreign var __sbss: byte
 foreign var __ebss: byte
 
 @section(".vector_table") @used
-export(c) val VECTORS: array<ptr<fn() -> void>>[] = {
-    __stack_top.address().cast<fn() -> void>(),   // word 0: initial stack pointer
-    reset.address(),
-    defaultHandler.address(),                     // NMI
-    defaultHandler.address(),                     // HardFault
+export(c) val VECTORS: array<foreign fn() -> void>[] = {
+    @trusted __stack_top.address().toCode<foreign fn() -> void>(),   // word 0: initial stack pointer
+    reset,
+    defaultHandler,                                                   // NMI
+    defaultHandler,                                                   // HardFault
 }
 
 enum GpioMode as uint8 { Input = 0, Output = 1, Alternate = 2, Analog = 3 }

@@ -146,7 +146,7 @@ when        while       _
 | ------- | -------- | ---------- |
 | `get` / `set` | property accessors | `oop.md` §10 |
 | `internal` | visibility modifier | `oop.md` §7 |
-| `fn` | function-type prefix | `fp.md` §6.1 |
+| `fn` | function-type prefix (`fn`, `fn[]`, `foreign fn`) | `fp.md` §6.1 |
 | `immutable` | before `class`; collection variation | `immutability.md` §2 |
 | `virtual` | before `fun` in a class body | `oop.md` §2.3 |
 | `override` | before `fun` in a class body | `oop.md` §6 |
@@ -871,15 +871,16 @@ Rules:
 A type parameter may be named nowhere in the signature except inside another parameter's constraint. It is then **inferred from the constraint**, once the constrained parameter is known:
 
 ```bestie
-fun <C impl Iterable<T>, T, R> map(xs: C, f: fn(T) -> R): list<R>
+fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): list<R>
 
-val ys = map(nums, (x: int) => x * 2)
+val ys = map(nums, x => x * 2)
 // C = list<int>  — from the argument
 // T = int        — from list<int> impl Iterable<int>
+// F = the lambda's own type; its parameter x is typed int from fn(T)
 // R = int        — from the lambda's return type
 ```
 
-Here `T` appears only in `C`'s constraint. Resolution runs in dependency order: `C` is fixed by the argument, then `Iterable<T>` is matched against `C`'s implementation to yield `T`, then `R` follows from `f`.
+Here `T` appears only in `C`'s constraint. Resolution runs in dependency order: `C` is fixed by the argument, then `Iterable<T>` is matched against `C`'s implementation to yield `T`, then the lambda is checked against `fn(T) -> R` — which types its untyped parameter (`fp.md` §7.2) — and `R` follows from its body.
 
 Rules:
 
@@ -1439,6 +1440,7 @@ An operator on a user-defined type lowers to a **method call**, resolved statica
 | `a <= b` | `a.compareTo(b) <= 0` |
 | `a > b` | `a.compareTo(b) > 0` |
 | `a >= b` | `a.compareTo(b) >= 0` |
+| `f(a, b)` | `f.call(a, b)` — only when `f`'s type declares `impl fn(…)` (`fp.md` §6.7) |
 
 Rules:
 
@@ -1504,6 +1506,7 @@ No hidden operator behavior.
 * Compile-time resolvable
 * Local (nested) functions for scoped helpers — no implicit capture
 * Lambdas may capture only with explicit `[...]` lists (no environment closures)
+* One callable form per job: `fn` (function pointer), generic `F impl fn`, `fn[]` (view), `foreign fn` (C)
 
 See `fp.md`.
 
@@ -1526,7 +1529,7 @@ Manual, deterministic memory model:
 * On a **stored slot** (field or collection element): `own` = we free, `ref` = we do not
 * On a **call**: copy a value (`T`), move (`own T`), or point (`ptr<T>`). `class` is not copyable
 * `move` out of an `own T ?` field or element leaves it `absent`; `swap(a, b)` exchanges two places without creating or discharging an ownership obligation (`memory.md` §5.2.1)
-* `slice<T>` is the one fat view that cannot be stored and cannot outlive its source
+* `slice<T>` and `fn[]` are the two fat views — neither can be stored or outlive what it views
 * First-class explicit low-level operations (`ptr`, FFI, manual free) — no `unsafe` block, just visible intent
 
 See `memory.md`.

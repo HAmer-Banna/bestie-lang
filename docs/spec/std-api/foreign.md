@@ -112,7 +112,7 @@ export(c) fun acme_checksum(data: ptr<const byte>, len: uint): uint32 {
 Rules:
 
 * The symbol name is the function name, **unmangled**. It must be unique across everything linked into the artifact, so the C convention of a library prefix (`acme_`) is the idiom.
-* Every parameter and the return type must map to C (§5): primitives, `ptr<T>`, `ptr<T> ?`, non-capturing function pointers, and `@repr(C)` types. `str`, `slice<T>`, collections, error unions, and `own` classes cannot cross — pass a pointer and a length, and return status codes.
+* Every parameter and the return type must map to C (§5): primitives, `ptr<T>`, `ptr<T> ?`, `foreign fn` function pointers (§9), and `@repr(C)` types. `str`, `slice<T>`, collections, error unions, and `own` classes cannot cross — pass a pointer and a length, and return status codes.
 * An `export(c)` function cannot be generic, and must be `public`.
 * **A panic never crosses the boundary.** C has no unwinding contract Bestie can rely on, so a panic that reaches an `export(c)` frame aborts the process. Convert recoverable failure to a status code before returning.
 * The build writes a C header for the target — `include/<project>.h` — declaring every `export(c)` function and the `@repr(C)` types they use. The header is generated, never hand-maintained.
@@ -135,6 +135,7 @@ Rules:
 | `byte` / `uint8` | `uint8_t` |
 | `char`   | `uint32_t` — a Unicode scalar, **not** a C `char`. A C `char*` is `ptr<byte>` (§5.3) |
 | `ptr<T>` | `T*`       |
+| `foreign fn(P) -> R` | `R (*)(P)` — a function pointer (§9) |
 
 ---
 
@@ -278,23 +279,76 @@ No implicit null propagation is possible because null does not exist to propagat
 
 ## 9. Callbacks and Function Pointers
 
-Callbacks are supported **without environment closures**. Only non-capturing callables are valid at the FFI boundary (see `core/fp.md` §7.3).
+Callbacks are supported **without environment closures**. A C function pointer is `foreign fn(P) -> R`: one word, a code address with the C calling convention (`core/fp.md` §6.6). The function-type spelling is core's — there is no separate FFI syntax for it.
+
+### 9.1 Plain Callbacks
 
 ```bestie
-foreign fun registerHandler(
-    handler: fn(int) -> void
-): void
-```
+foreign fun atexit(handler: foreign fn() -> void): int32
+foreign fun signal(sig: int32, handler: foreign fn(int32) -> void): foreign fn(int32) -> void ?
 
-The function-type spelling is core's (`core/fp.md` §6.1) — `fn(P) -> R`. There is no separate FFI syntax for it.
+fun flushLogs() { ... }
+atexit(flushLogs)
+```
 
 Rules:
 
-* Callbacks must be non-capturing (named functions, local functions, or non-capturing lambdas)
-* Fully static
-* ABI-compatible
-* No allocation
-* Capturing lambdas (`[x]` / `[var x]`) are rejected at FFI registration sites
+* A named function, local function, non-capturing lambda, or unbound method reference converts to `foreign fn` when every parameter and the return type are C-representable (§5). The compiler emits a C-ABI entry point for it; no exported symbol is created.
+* A capturing lambda does not convert — it has no single code address. Use a context callback (§9.2).
+* A C function pointer that may be `NULL` is `foreign fn(P) -> R ?` (§8).
+* Other calling conventions take the ABI tags of §4.2: `foreign(system) fn(...)` is a Windows `CALLBACK`.
+* No allocation, no trampolines on the stack, no run-time code generation.
+
+### 9.2 Context Callbacks — the `void* user_data` Pattern
+
+Most C APIs that take a callback also take a `void*` that they pass back to it, so the callback can reach the caller's data. Bestie binds that pair to **one** parameter: a capturing callable.
+
+The declaration states the C shape, and marks the context argument in both places with `@context`:
+
+```bestie
+foreign fun qsort_r(
+    base: ptr<byte>, count: int, size: int,
+    compare: foreign fn(ptr<const byte>, ptr<const byte>, @context ptr<byte>) -> int32,
+    @context(compare) arg: ptr<byte>
+): void
+```
+
+At the call, the program passes any callable of the remaining shape, and omits the context argument:
+
+```bestie
+val key = sortKey
+qsort_r(rows[0].address().cast<byte>(), rows.length, strideOf(Row),
+        [key](a, b) => compareBy(key, a.cast<Row>(), b.cast<Row>()))
+```
+
+What the compiler emits is what a C programmer writes by hand:
+
+* The callable is converted to a `fn[]` view — the lambda's captures stay in the caller's frame (`core/fp.md` §6.4).
+* One **static C-ABI trampoline** per `@context` declaration takes the C arguments, reads the view through the context pointer, and calls it.
+* The trampoline is passed as `compare`, and the address of the view as `arg`.
+
+Rules:
+
+* A `@context` parameter of the callback must be pointer-sized; the matching `@context(name)` parameter of the function supplies it. Each callback has at most one context.
+* The callable is a **view**, so the binding is valid only for C functions that **do not keep the callback after they return** — `qsort_r`, `bsearch_s`, iteration and visitor functions. The binding author asserts this, as with every other fact in a `foreign` declaration.
+* The program may still call the function with an explicit `foreign fn` and an explicit context: passing both arguments disables the conversion.
+
+### 9.3 Retained Callbacks
+
+A C library that stores a callback and calls it later — an event loop, a logger hook — outlives any view. The program owns the context and passes it explicitly:
+
+```bestie
+foreign fun uv_timer_start(timer: ptr<UvTimer>, cb: foreign fn(ptr<UvTimer>) -> void,
+                           timeout: uint64, repeat: uint64): int32
+
+fun onTick(t: ptr<UvTimer>) {
+    val app = t.val.data.cast<App>()       // the context the program stored on the handle
+    app.val.tick()
+}
+uv_timer_start(timer, onTick, 0, 16)
+```
+
+The context's lifetime is the program's responsibility, exactly as in C. A `Closure` from `bestie.lib.functional` can serve as that context when callbacks of different types share one slot (`std-lib/functional.md`).
 
 ---
 
@@ -378,7 +432,7 @@ Loading a library while the program runs — plugins, optional acceleration, a d
 
 ```bestie
 class Library {
-    fun symbol<F>(name: str): ptr<F> ! ForeignError     // F is a fn(...) -> ... type
+    fun symbol<F>(name: str): F ! ForeignError     // F is a foreign fn(...) -> ... type
     fun close(): void
 }
 
@@ -389,14 +443,15 @@ fun openLibrary(path: Path): own Library ! ForeignError
 val own lib = try openLibrary(Path.new("./plugins/libresize.so"))
 defer lib.close()
 
-val resize = try lib.symbol<fn(ptr<byte>, int32, int32) -> int32>("resize_image")
-val status = resize.val(pixels, 640, 480)
+val resize = try lib.symbol<foreign fn(ptr<byte>, int32, int32) -> int32>("resize_image")
+val status = resize(pixels, 640, 480)
 ```
 
 Rules:
 
 * `symbol<F>` trusts that the symbol has type `F` — a shared library carries no type information. It is the FFI boundary, with the same responsibility as a `foreign fun` declaration.
-* A symbol pointer must not be called after `close()`. The library is an `own` value, so `close()` is visible, and the pointer is a raw `ptr`, so the rule is the programmer's — exactly as for any pointer into freed memory.
+* A symbol must not be called after `close()`. The library is an `own` value, so `close()` is visible, and the symbol is a raw `foreign fn`, so the rule is the programmer's — exactly as for any pointer into freed memory.
+* `symbol<F>` on a data symbol is not supported; `F` must be a `foreign fn` type.
 * Errors are `ForeignError.LibraryNotFound` and `ForeignError.SymbolNotFound`.
 * A Bestie `dynlib` loaded this way is used through its `export(c)` functions only (§4.3). Two Bestie libraries in one process each contain their own copy of the standard library; no Bestie object, allocation, or panic crosses between them.
 

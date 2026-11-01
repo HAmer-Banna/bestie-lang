@@ -244,7 +244,7 @@ fun resetSignal(sig: Signal): void ! OsError
 
 **A signal handler runs in a severely restricted context.** It may interrupt the program at any instruction, including partway through an allocation or while a lock is held. Inside a handler:
 
-* Only **non-capturing** lambdas are accepted (`core/fp.md` §7.2) — a capturing `[x]` lambda is rejected, because a capture struct's lifetime is not guaranteed to outlive an asynchronous delivery
+* The handler is a `fn(Signal) -> void` — a plain function pointer (`core/fp.md` §6.3). A capturing lambda does not convert to it, because there is nowhere its captures could safely live during an asynchronous delivery; a handler reaches state through module-level bindings, as below
 * Do not allocate, do not free, do not take a `Lock`, and do not perform I/O
 * Do not `panic` — a panic inside a handler terminates the process from an undefined program point
 
@@ -257,8 +257,8 @@ import bestie.lib.concurrency.Ordering
 val SHUTDOWN = atomic<bool>.new(false)
 
 fun installShutdown(): void ! OsError {
-    try onSignal(Signal.Term, (s: Signal) => SHUTDOWN.store(true, Ordering.Release))
-    try onSignal(Signal.Int,  (s: Signal) => SHUTDOWN.store(true, Ordering.Release))
+    try onSignal(Signal.Term, s => SHUTDOWN.store(true, Ordering.Release))
+    try onSignal(Signal.Int,  s => SHUTDOWN.store(true, Ordering.Release))
 }
 
 fun serveLoop(): void ! OsError {

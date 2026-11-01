@@ -273,7 +273,7 @@ Rules:
 
 * `own` values cannot be copied
 * `own` values cannot be implicitly shared
-* `own` values cannot be captured by lambdas
+* `own` values enter a lambda only by an explicit `[move x]` capture, which makes the lambda an owner (`fp.md` §7.7)
 * Ownership transfer must be explicit
 * Moved-from bindings are invalid and cannot be used
 * Ownership back-links must use a `ref` field or `ptr`, not `own`
@@ -821,18 +821,29 @@ Rules:
 
 ### 8.9 Function Pointers
 
-A high-level callable value (`fn(...) -> ...` / `(...) -> ...`) uses the thin/fat representation defined in `fp.md` §6.2. A **raw function pointer** is the low-level address of executable code, used mainly for FFI:
+Code addresses are not `ptr<T>`. Bestie has no `ptr<fn(...)>`: the function-pointer types are themselves one word, and they are defined with the other callables in `fp.md` §6.
+
+| Type | What it holds | Defined in |
+| ---- | ------------- | ---------- |
+| `fn(P) -> R` | A code address, Bestie calling convention | `fp.md` §6.3 |
+| `foreign fn(P) -> R` | A code address, C calling convention | `fp.md` §6.6 |
+| `fn[](P) -> R` | A code address and a context address — a view, not storable | `fp.md` §6.4 |
+
+A named function, a local function, a non-capturing lambda, or an unbound method reference converts to `fn` directly, and to `foreign fn` when its signature is C-representable. There is no `.address()` step: the name *is* the pointer where one is expected. A capturing lambda has no single code address, so it converts to neither — pass it as `fn[]` or as a generic `F` (`fp.md` §6.5).
 
 ```bestie
-ptr<fn(int) -> int>      // raw code address of a function taking int, returning int
+val handlers: array<fn(Event) -> void>[] = { onOpen, onClose, onError }
+val cb: foreign fn(int32) -> void = onSignalC
 ```
 
 Rules:
 
-* `.address()` on a **named function or a non-capturing lambda** yields a raw `ptr<fn(P) -> R>` — a single code pointer (the thin representation).
-* A **capturing lambda is fat** (code + context); it has no single code address, so taking a raw function pointer to it is a **compile-time error**. Pass the callable value itself, or refactor to a non-capturing form.
-* Calling **through** a raw `ptr<fn(...)>` is unchecked: there is no context word, no capture, and no lifetime guarantee. It exists for C interop — C function pointers map to this form (see `foreign.md`).
-* A raw function pointer's pointee is always `const` — code is not writable through it.
+* A function pointer is never the zero address. A pointer that may be absent is `fn(P) -> R ?` or `foreign fn(P) -> R ?`, still one word — C `NULL` maps to `absent` (`std-api/foreign.md` §8).
+* `f.addr` is the address word as a `uint`, as `p.addr` is for a `ptr<T>` (§8.4.2). `==` and `!=` compare code addresses.
+* Code is never written through a function pointer, and a function pointer has no `.val`, `.offset`, or `.cast`.
+* Calling a `foreign fn` is a foreign call: the compiler trusts its declared type, as it trusts a `foreign fun` declaration.
+* **Raw addresses to code.** Turning a data address or an integer into a code pointer is a reinterpretation, so it is `@trusted`: `p.toCode<F>()` on a `ptr<T>` yields an `F` that must be a `foreign fn` type. This exists for vector tables, run-time loaders, and JITs (`freestanding.md` §6.2).
+* A function that cannot be called from Bestie code — an `export(interrupt)` handler (`freestanding.md` §5.2) — converts to no callable type. Its code address is `handler.addr`.
 
 ---
 
@@ -872,6 +883,7 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 | `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic in elements; strides by `strideOf(T)` (`memory-layout.md` §3). Negative `n` moves back. Provable OOB is a compile error. |
 | `p.distanceFrom(base)` | `int` | §8.5 | Element count from `base` to `p` (C `p - base`). Meaningful only within one allocation. |
 | `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
+| `p.toCode<F>()` | `F` | §8.9 | `@trusted`. Reinterpret the address as a `foreign fn` type `F`. |
 | `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
 | `p.isZero()` | `bool` | §8.7 | True if the address is the zero address (FFI / `@trusted` boundary). |
 | `a == b`, `a != b` | `bool` | §8.7 | Address equality. Provenance not considered. |
@@ -1279,6 +1291,7 @@ The compiler **does** enforce:
 | `own` is discharged exactly once in safe ownership code | Ownership accounting |
 | `own` cannot be implicitly shared across threads | Type system — `move` or explicit `ptr` |
 | `slice<T>` cannot be stored in a field or outlive its source | Type system — see `types.md` |
+| `fn[](P) -> R` cannot be stored in a field or outlive the callable it views | Type system — the same view rules (`fp.md` §6.4) |
 | `ptr<T>` arithmetic that is statically out of bounds | Compile-time reject when provable |
 
 The compiler **does not** enforce:
@@ -1287,7 +1300,7 @@ The compiler **does not** enforce:
 * That a `ptr<T>` is non-null, in-bounds, or still valid — programmer responsibility
 * Aliasing of two `ptr<T>` to the same object — programmer responsibility, same as C
 
-`slice<T>` is the one fat view with a compiler-checked lifetime: it cannot be stored, and it cannot outlive its source. Everything else that needs "look at this object without owning it" at a call boundary is `ptr<T>` — raw, explicit, programmer-owned.
+`slice<T>` and `fn[](P) -> R` are the two fat views with a compiler-checked lifetime, and they follow one set of rules: neither can be stored, and neither can outlive what it views. Everything else that needs "look at this object without owning it" at a call boundary is `ptr<T>` — raw, explicit, programmer-owned.
 
 This is not as strict as Rust’s exclusive `&mut` model. It is safer than C on the `own` axis (no use-after-move, no forgotten `free` in safe ownership code) and as explicit as C on the `ptr` axis.
 
@@ -1378,9 +1391,9 @@ Bestie’s memory and ownership model is:
 `own` answers **who frees** (stored slots, and move at the call boundary)
 `ref` answers **who does not free** (stored slots only — fields and collection elements)
 `ptr<T>` answers **where in memory** (the same object, at calls and across threads)
-`slice<T>` is the one fat view that cannot be stored and cannot outlive its source
+`slice<T>` and `fn[]` are the two fat views — neither can be stored or outlive what it views
 
-`ptr<T>` composes freely — it **nests** (`ptr<ptr<T>>`, with per-level const), lives **in containers** (`array<ptr<T>>`, which own nothing they point through), and **casts** (`cast<U>()`, `@trusted` to drop const) — always as raw, unowned, explicit indirection. Pointer-of-pointers, pointer elements, pointer casts, function pointers, and interior pointers are all the same single primitive used compositionally, never new machinery.
+`ptr<T>` composes freely — it **nests** (`ptr<ptr<T>>`, with per-level const), lives **in containers** (`array<ptr<T>>`, which own nothing they point through), and **casts** (`cast<U>()`, `@trusted` to drop const) — always as raw, unowned, explicit indirection. Pointer-of-pointers, pointer elements, pointer casts, and interior pointers are all the same single primitive used compositionally, never new machinery. Function pointers are the one-word callables `fn` and `foreign fn` (§8.9).
 
 Memory is not managed *for* the developer.
 Memory is managed **with** the developer — explicitly, safely, and predictably.

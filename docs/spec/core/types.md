@@ -430,7 +430,7 @@ Rules:
 
 * A declaration with no initializer — `val a : array<int>[5]` — is a compile-time error. C leaves those elements as garbage; Java silently zeroes them. Bestie makes you say which value you mean.
 * A literal whose count differs from a stated `N` is a compile-time error.
-* `fill` and `from` cost nothing extra: `fill(0)` lowers to the same `memset` a C compiler emits, and `from` takes a non-capturing lambda that is inlined into the initializing loop. When the compiler can prove every element is overwritten before it is read, the fill is removed.
+* `fill` and `from` cost nothing extra: `fill(0)` lowers to the same `memset` a C compiler emits, and `from` takes its lambda as a generic callable (`fp.md` §6.5), so the call is inlined into the initializing loop — captures included. When the compiler can prove every element is overwritten before it is read, the fill is removed.
 
 ### 5.3 Operators
 
@@ -661,7 +661,7 @@ This is C's `const int a[3]` for a `val`, and a true compile-time table for a `c
 
 `slice<T>` is a built-in **borrowed view** over a contiguous run of elements. It is the result of slicing an `array<T>` (or, in `std-lib`, an array-backed `list<T>`), and a `slice<byte>` is the result of slicing a `str`.
 
-A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is the one fat view in core: it cannot be stored, and it cannot outlive its source (`memory.md` §13).
+A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is one of core's two fat views, with the callable view `fn[]` (`fp.md` §6.4): it cannot be stored, and it cannot outlive its source (`memory.md` §13).
 
 ```bestie
 val xs : array<int>[] = {10, 20, 30, 40, 50}
@@ -708,7 +708,7 @@ A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing,
 
 ### View Rules
 
-`slice<T>` is the one fat view with a compiler-checked lifetime (`memory.md` §13). It is not `ref` and not `ptr<T>`.
+`slice<T>` is a fat view with a compiler-checked lifetime (`memory.md` §13). It is not `ref` and not `ptr<T>`. The callable view `fn[](P) -> R` follows the same rules (`fp.md` §6.4).
 
 * It **cannot outlive its source** and **cannot be stored in a field**.
 * It may be passed into calls. Returning a slice is valid only when it is a subview of a slice parameter (the result cannot outlive that parameter's source).

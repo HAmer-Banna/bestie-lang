@@ -35,7 +35,8 @@ Bestie enforces:
 * Ownership-aware functions
 * Deterministic execution
 * Zero-cost abstractions
-* Capture only when written in source (`[x]` / `[var x]` on lambdas — never on local `fun`)
+* Capture only when written in source (a `[...]` list on a lambda — never on local `fun`)
+* One callable form per job, named by its type (§6)
 
 ### Golden Rule
 
@@ -184,7 +185,7 @@ fun outerOk(n: int): int {
 }
 ```
 
-Local functions **do not support capture lists**. Capturing is exclusively the domain of lambdas (`[x]` / `[var x]`, §7) and related callable construction (`bind`, bound method references). If a named capturing callable is needed:
+Local functions **do not support capture lists**. Capturing is exclusively the domain of lambdas (§7). If a named capturing callable is needed:
 
 ```bestie
 fun outer(factor: int): int {
@@ -230,7 +231,7 @@ Local functions use the same declaration surface as other `fun`s:
 
 * Lowered to a **mangled static function** in the enclosing compilation unit
 * Static dispatch; direct `call` (or inline) when the callee is known
-* Taking the address of a local function, storing it, or passing it as `fn(T) -> R` uses the same thin/fat callable model as any named function (§6) — non-capturing, so thin / null-context fat
+* A local function converts to every callable form a named function does (§6.2): `fn(T) -> R`, `fn[](T) -> R`, `foreign fn(T) -> R` when C-representable, and a generic `F`
 * No trampolines, no heap frame, no runtime code generation
 * No hidden allocation
 
@@ -239,9 +240,9 @@ Local functions use the same declaration surface as other `fun`s:
 | | Local `fun` | Lambda |
 | --- | --- | --- |
 | Name | Named, recursive by name | Anonymous (bind to `val`/`var` for a name) |
-| Capture | Never — pass parameters | None by default; explicit `[x]` / `[var x]` |
+| Capture | Never — pass parameters | None by default; explicit `[...]` list (§7.5–§7.8) |
 | Role | Scoped static helper | Inline / first-class behavior value |
-| Lowering | Mangled static function | Thin or fat callable (§6) |
+| Lowering | Mangled static function | A value of its own type holding its captures (§6.2) |
 
 **Design intent:** use local functions for **naming and scope**; use lambdas when you need a **callable value** or **explicit capture**. Nesting must not become a back door into Python-style environment closures.
 
@@ -380,13 +381,16 @@ Lambdas may also be complete or partial.
 Complete lambda:
 
 ```bestie
-val inc = (x: int) => x + 1;
+val inc = (x: int) => x + 1
 ```
 
 Partial lambda:
 
 ```bestie
-val findUser = (x: int): User ? => if (x > 0) return repo.get(x);
+val findUser = (x: int): User ? => {
+    if (x > 0) { return repo.get(x) }
+    return
+}
 ```
 
 ### 3.5 Absence in Data Structures — Where Java Writes `null`
@@ -571,23 +575,22 @@ Rules:
 
 ---
 
-## 6. Function Types
+## 6. Function Types and Callables
 
-Function types are **explicit and structural**. They are written with the `fn` prefix and a single arrow `->` from the parameter list to the return type:
+A **callable** is anything that can be called with `f(args)`. Bestie has one form of callable for each job, and the type says which one you have. An expert C programmer uses the same four things: a function pointer, a template parameter, a `(callback, void*)` pair, and a function pointer with a C calling convention.
 
-```bestie
-fn(int) -> int
-```
+| Form | Size | Carries captures | Storable | Call | Job |
+| ---- | ---- | ---------------- | -------- | ---- | --- |
+| `fn(T) -> R` | 1 word | No | Anywhere | Indirect | A function pointer: dispatch tables, hand-built vtables, plugin entry points, interpreters (§6.3) |
+| `<F impl fn(T) -> R>` | The captures, inline | Yes, by value | Yes, as `F` | Direct, inlinable | Higher-order parameters and generic fields: `map`, `sort`, a widget's handler (§6.5) |
+| `fn[](T) -> R` | 2 words | Yes, by address | No — a view, like `slice<T>` | Indirect | A non-generic parameter that accepts any callable, including capturing lambdas; synchronous C callbacks (§6.4) |
+| `foreign fn(T) -> R` | 1 word | No | Anywhere | Indirect, C ABI | A C function pointer (§6.6, `memory.md` §8.9) |
 
-Usage:
-
-```bestie
-val f: fn(int) -> int = square
-```
+A heap-owned callable that can be stored in a field or a collection and carries captures — Kotlin's `(T) -> R`, C++'s `std::function` — is **not** a core type. It costs an allocation, so it lives in `bestie.lib.functional` as `Closure<fn(T) -> R>` (`std-lib/functional.md`), built from the generic form, the function pointer `fn`, and `ptr<T>` (`vision.md` Rule 4). Creating one is a named `.new()`.
 
 ### 6.1 The `fn` Prefix Is Required
 
-A function type is **always** written with the `fn` prefix. There is no bare form:
+A function type is **always** written with the `fn` prefix and a single arrow `->` from the parameter list to the return type. There is no bare form:
 
 ```bestie
 val f: fn(int) -> int = square      // ✅
@@ -600,82 +603,156 @@ Three shapes use parentheses, and `fn` plus the arrow distinguishes all of them 
 * A **lambda** (a value) — `(x: int) => x * 2`
 * A **tuple type** — `(int, str)`
 
-The arrows alone would be enough to parse, which is why this prefix was once optional. Optional is the wrong setting: a marker that half the code carries is a style argument, not a signal, and Bestie keeps **one spelling per idea** (§11.4 of `oop.md` makes the same call about header constructors). `fn` is now part of the type, so it is greppable, and a higher-order signature reads the same everywhere:
+The arrows alone would be enough to parse, which is why this prefix was once optional. Optional is the wrong setting: a marker that half the code carries is a style argument, not a signal, and Bestie keeps **one spelling per idea** (§11.4 of `oop.md` makes the same call about header constructors). `fn` is part of the type, so it is greppable, and every callable form is built from it:
 
-```bestie
-fun compose(f: fn(int) -> int, g: fn(int) -> int): fn(int) -> int =
-    (x: int) => f(g(x))
-
-fun apply(f: fn(int) -> int, x: int): int = f(x)
-```
+| Spelling | Reads as |
+| -------- | -------- |
+| `fn(int) -> int` | a function pointer |
+| `fn[](int) -> int` | a function with captures — the `[]` echoes the capture list `[x](…) => …` of a lambda |
+| `foreign fn(int32) -> void` | a function with the C calling convention — `foreign` is the keyword of `foreign fun` |
+| `F impl fn(int) -> int` | anything callable with this shape — `impl` is the generic-constraint keyword (`lang.md` §7.1) |
 
 `fn` is a contextual keyword (`lang.md` §3.1.4): it has meaning only at the head of a function type, so `val fn = 3` remains legal.
 
-### 6.2 Lowering Model
+### 6.2 Every Function and Lambda Has Its Own Type
 
-Every callable value has a concrete compile-time lowering. There are two representations:
+Each named function, local function, and lambda expression has its own **anonymous callable type**, created by the compiler. The type of a lambda holds exactly its captures (§7), in declaration order, so its size is the size of its captures — zero for a non-capturing lambda or a named function.
 
----
-
-**Thin callable** — a bare function pointer. One word.
-
-Used when:
-
-* The callable is a named function (top-level, method, extension, or local), or a non-capturing lambda
-* The callee is statically known at the call site and inlined or directly called
-
-```
-[ code_ptr ]   (1 word)
+```bestie
+val double = (x: int) => x * 2         // its own type, 0 bytes
+val k = 3
+val scale = [k](x: int) => x * k       // its own type, 8 bytes: one int
 ```
 
-At a direct call site where the callee is statically known, the compiler emits a direct `call` instruction. No representation is materialized at all.
+The anonymous type cannot be written in source. It is what `val` infers, what a generic `F` is bound to (§6.5), and what converts to the other forms where one is expected:
 
----
+| From | → `fn(T) -> R` | → `fn[](T) -> R` | → `foreign fn(T) -> R` | Binds `F impl fn(T) -> R` |
+| ---- | -------------- | ---------------- | ---------------------- | ------------------------- |
+| Named or local function | ✅ | ✅ | ✅ if the signature is C-representable | ✅ |
+| Non-capturing lambda | ✅ | ✅ | ✅ if the signature is C-representable | ✅ |
+| Capturing lambda | ❌ it carries data | ✅ | ❌ | ✅ |
+| A type that `impl fn(T) -> R` (§6.7) | ❌ | ✅ | ❌ | ✅ |
+| `fn(T) -> R` | — | ✅ | ❌ | ✅ |
+| `foreign fn(T) -> R` | ❌ | ✅ | — | ✅ |
 
-**Fat callable** — a code pointer plus a context pointer. Two words.
+Every conversion is implicit, because none of them allocates or copies anything but a word: each is a compile-time choice of representation. The one conversion that allocates — into a `Closure` — is a call to `.new()`.
 
-Used when:
+### 6.3 `fn(T) -> R` — The Function Pointer
 
-* The callable captures one or more values (explicit `[x]` or `[var x]` captures)
+`fn(T) -> R` is **one word: a code address**, nothing else. It is exactly a C function pointer, with Bestie's calling convention.
 
+```bestie
+val ops: array<fn(int, int) -> int>[] = { add, sub, mul, div }   // 4 words in .rodata
+val r = ops[opcode](a, b)                                        // one indirect call
 ```
-[ code_ptr | context_ptr ]   (2 words)
+
+Rules:
+
+* Only callables with no captures convert to `fn(T) -> R` (§6.2): named functions, local functions, and non-capturing lambdas.
+* A `fn(T) -> R` may be stored in a field, an array, a collection, or a module-level `val`, returned, and sent across threads. It points at code, which is never freed.
+* It is never the zero address. An optional function pointer is `fn(T) -> R ?`, still one word: the zero address is the niche (`memory-layout.md` §11).
+* `==` and `!=` compare code addresses. `f.addr` is the address word as a `uint`, as on `ptr<T>` (`memory.md` §8.4.2).
+* The address of a named function is a **link-time constant**, so a table of them is a valid module-level initializer (`freestanding.md` §6.2).
+
+### 6.4 `fn[](T) -> R` — The Callable View
+
+`fn[](T) -> R` is **two words: a code address and a context address**. It is the C idiom of a function pointer plus a `void*` user-data argument, with the types checked. Any callable converts to it (§6.2), so it is the parameter type for a function that wants to accept capturing lambdas without being generic.
+
+```bestie
+fun forEachLine(text: str, visit: fn[](str) -> void) { ... }
+
+val prefix = "> "
+forEachLine(doc, [prefix](line) => print("${prefix}${line}"))
 ```
 
-`context_ptr` points to the **capture struct**, which is a fixed-size, stack-allocated record holding the captured values in capture-declaration order.
+The context word is the **address of the callable value itself** — the lambda's captures, wherever they already live. Converting a capturing lambda to `fn[]` copies nothing: for a lambda written in an argument list, the captures are a temporary in the caller's frame; for a lambda bound to a local, they are that local.
 
-`context_ptr` is a typed `ptr<CaptureStruct>`. The `CaptureStruct` type is anonymous and compiler-generated — not accessible in user code.
+Because the context points into the caller's storage, `fn[]` follows exactly the **view rules of `slice<T>`** (`types.md` §6, `memory.md` §13):
 
----
+* It **cannot be stored** in a field, a collection element, or a module-level binding.
+* It **cannot outlive** the callable it views. It may be passed into calls and bound to locals; it cannot be returned, except a `fn[]` parameter returned unchanged.
+* It cannot be sent across threads.
+* `fn[](T) -> R ?` is still two words: the code word's zero address is the niche.
 
-**Unification at higher-order function call sites:**
+These are the same checks the compiler already performs for slices, so `fn[]` adds no new analysis. To keep a capturing callable beyond the call, store it as a generic `F` (§6.5) or allocate a `Closure` (`std-lib/functional.md`).
 
-When a callable is passed to or stored in a `fn(T) -> R` typed location, the fat two-word representation is always used. Non-capturing callables placed in this context carry a `context_ptr` of null (zero address). The callee-side calling convention checks `context_ptr != null` before dereferencing.
+### 6.5 Generic Callables — `<F impl fn(T) -> R>`
 
-This means:
+Inside a generic parameter list, `fn(T) -> R` is also a **constraint**: `F impl fn(T) -> R` accepts any callable of that shape — a named function, any lambda, a `fn`, a `fn[]`, a `foreign fn`, or a type that implements `fn(T) -> R` (§6.7). The function is monomorphized for each distinct `F`, exactly like any other generic parameter (`lang.md` §7.1).
 
-* Passing a non-capturing lambda to `fun apply(f: fn(int) -> int)` — `f` is fat with null context
-* Passing a capturing lambda — `f` is fat with a live context pointer
-* The call through `f` uses the indirect calling convention in both cases
+```bestie
+fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): list<R>
 
-When the callee type is fully known at the call site (monomorphic HOF or inlined call), the compiler may specialize and emit a direct call without the fat-pointer indirection.
+val ys = map(nums, x => x * 2)
+```
 
----
+This is the form that compiles to what a C programmer writes by hand. `F` is the lambda's own type, so the call `f(x)` inside `map` is a **direct call to known code**, and the inliner sees `x * 2` in the loop. A non-capturing `F` is zero bytes and passing it costs nothing; a capturing `F` is passed as its captures, like any value.
 
-**Capture struct lifetime:**
+**Storing a generic callable.** A field of type `F` holds the callable's captures inline. There is no indirection and no allocation:
 
-The capture struct is stack-allocated at the lambda's creation site. It lives as long as the callable value is live. The callable may not outlive the scope of its capture struct. The compiler enforces this through the same scope-based liveness analysis used for `ref`.
+```bestie
+class Button<F impl fn() -> void> {
+    val label: str
+    val onClick: F
+}
 
----
+val count = counter.address()
+val own b = Button.new(label: "OK", onClick: [count]() => count.val.increment())
+b.onClick()                  // direct call; the capture lives inside b
+```
 
-**Calling convention summary:**
+**Code size.** Each distinct callable type gives one instantiation — one per lambda, exactly as in a C++ template. That is linear in call sites, never combinatorial (`vision.md` Rule 5). Where code size matters more than the call, take `fn[](T) -> R` instead: one copy of the function, one indirect call per invocation.
 
-| Callable kind | Representation | Call instruction |
-| ------------- | -------------- | ---------------- |
-| Named function (incl. local), statically known | none (direct) | `call fn_ptr` |
-| Non-capturing lambda, statically known | thin (1 word) or none | `call fn_ptr` |
-| Non-capturing lambda, passed as `fn(T)->R` | fat (2 words, null context) | indirect call |
-| Capturing lambda (explicit `[...]` only) | fat (2 words, live context) | indirect call |
+**Which to use for a parameter:**
+
+| Parameter | Choose when |
+| --------- | ----------- |
+| `f: F` with `F impl fn(T) -> R` | The default. The callable runs in a loop or a hot path, or it is stored |
+| `f: fn[](T) -> R` | The function should not be generic — one compiled copy, a stable signature, a large body — and the callable is used only during the call |
+| `f: fn(T) -> R` | Only plain functions make sense, and the value is stored as a pointer: handlers in a table, a signal handler, an entry point |
+
+### 6.6 `foreign fn(T) -> R` — C Function Pointers
+
+`foreign fn(T) -> R` is one word, a code address with the **C calling convention**. It is the type of every C function pointer: a callback a C library takes, a symbol loaded at run time, an entry in a vector table. Its parameter and return types must be C-representable (`std-api/foreign.md` §5).
+
+```bestie
+foreign fun atexit(handler: foreign fn() -> void): int32
+
+fun flushLogs() { ... }
+atexit(flushLogs)          // the compiler emits flushLogs with the C convention
+```
+
+A named function, local function, or non-capturing lambda converts to `foreign fn` when its signature is C-representable; the compiler emits a C-ABI entry point for it (no exported symbol is created). A `foreign fn` is called directly, `cb(x)`, with the trust of any `foreign fun` call. A C function pointer that may be `NULL` is `foreign fn(T) -> R ?` (`std-api/foreign.md` §8). The raw-address operations are in `memory.md` §8.9; callbacks with a user-data argument are in `std-api/foreign.md` §9.
+
+### 6.7 Types That Implement `fn(T) -> R`
+
+A `value class` or `class` may implement a function shape by declaring `impl fn(T) -> R` and a method named `call` with that signature. A call expression on such a value lowers to the method, statically, like every operator (`lang.md` §15.3):
+
+```bestie
+value class Adder impl fn(int) -> int {
+    val n: int
+    fun call(x: int): int = x + this.n
+}
+
+val add5 = Adder.new(n: 5)
+add5(10)                     // add5.call(10) — 15
+```
+
+This is how a library builds a callable with a name: `Closure<fn(T) -> R>` and the result of `compose` (§12) are such types. A type may implement more than one function shape, as long as no call is ambiguous.
+
+### 6.8 Lowering and Calling Convention
+
+| Callable | Representation | Call instruction |
+| -------- | -------------- | ---------------- |
+| Named function, statically known | none | direct `call` (or inline) |
+| Any lambda bound to a generic `F` | its captures (0 bytes if none) | direct `call` (or inline) |
+| `fn(T) -> R` | 1 word — code | indirect `call` |
+| `fn[](T) -> R` | 2 words — code, context | indirect `call`, context in a hidden register |
+| `foreign fn(T) -> R` | 1 word — code | indirect `call`, C convention |
+
+**The context register.** A call through `fn[]` passes the context word in a register that Bestie's calling convention reserves for it and that is not an argument register. A function with no context never reads it. So the code word of a `fn[]` made from a named function is that function's own address — there is no adapter, no thunk, and **no branch on whether a context is present**. A `fn[]` made from a `foreign fn` uses one compiler-emitted adapter per signature, with the `foreign fn` itself as the context word.
+
+There are no trampolines on the stack, no executable stacks, no run-time code generation, and no hidden allocation in any row.
 
 ---
 
@@ -687,18 +764,42 @@ Lambdas are anonymous functions with **explicit and restricted semantics**.
 
 ```bestie
 val f = (x: int): int => x * 2
+val g = (x: int) => x * 2          // return type inferred from the body
+```
+
+A block body uses braces and `return`:
+
+```bestie
+val clamp = (x: int) => {
+    if (x < 0) { return 0 }
+    return x
+}
 ```
 
 Properties:
 
-* Parameter types are explicit
-* Return type inferred from body
+* Return type is inferred from the body, or written after the parameter list
 * No implicit allocation
-* Compile-time lowered
+* Compile-time lowered — each lambda has its own type (§6.2)
 
----
+### 7.2 Inferred Parameter Types
 
-### 7.2 Non-Closure Rule (Core Guarantee)
+Where the lambda is written against an **expected function shape** — an argument to a parameter of type `fn(T) -> R`, `fn[](T) -> R`, `foreign fn(T) -> R`, or `F impl fn(T) -> R`, or a binding with a declared function type — the parameter types may be left out. A single untyped parameter needs no parentheses:
+
+```bestie
+val ys = map(nums, x => x * 2)
+sort(people[..], (a, b) => a.age < b.age)
+val h: fn(int) -> int = x => x + 1
+```
+
+Rules:
+
+* Types come from the expected shape at that one site — the same single, dependency-ordered pass that infers generic parameters (`lang.md` §7.1). There is no inference from how the lambda is later used, and no inference across statements.
+* For a generic `F impl fn(T) -> R`, `T` must already be known from earlier parameters when the lambda is reached; `R` is then inferred from the body.
+* With no expected shape — `val f = x => x * 2` — the types are required. That is a compile-time error, not a guess.
+* Writing some parameter types and omitting others in one lambda is not allowed: either all are written or none are.
+
+### 7.3 Non-Closure Rule (Core Guarantee)
 
 **Bestie does not have environment closures.**
 
@@ -711,13 +812,14 @@ Bestie rejects that model. By default, lambdas and local functions:
 
   * Their parameters
   * Compile-time constants (`const`)
-  * Module-visible pure functions and types
+  * Module-visible functions, types, and module-level bindings
 
 Illegal without an explicit capture list:
 
 ```bestie
 val y = 10
 val f = (x: int) => x + y   // compile-time error — y is not captured
+val g = [y](x: int) => x + y   // ✅
 ```
 
 Guarantees:
@@ -725,35 +827,31 @@ Guarantees:
 * No hidden sharing
 * No outer-frame / upvalue machinery
 * No lifetime complexity beyond ordinary scope rules
-* Concurrency safety
-* Zero allocation by default
+* Zero allocation
 
----
-
-### 7.3 Closures in Bestie — Evaluation and Position
+### 7.4 Closures in Bestie — Evaluation and Position
 
 Bestie’s position is deliberate and locked to the platform pillars (`docs/platform.md`):
 
 | Model | Status in Bestie |
 | --- | --- |
 | Implicit lexical closures (Python / JS / Kotlin default) | **Rejected** |
-| Closures that share / mutate the outer binding by reference | **Rejected** |
-| Closures that heap-allocate an environment object | **Rejected** in core |
+| Closures that share / mutate the outer binding by reference | **Rejected** — capture an address explicitly (§7.8) |
+| Closures that heap-allocate an environment object | **Rejected** in core — `Closure.new` in `bestie.lib.functional`, named at the call |
 | Escaping nested functions via trampolines / executable stacks | **Rejected** |
-| Explicit capture-by-copy on lambdas (`[x]`, `[var x]`) | **Allowed** — the only capturing form |
+| Explicit capture lists on lambdas (`[x]`, `[var x]`, `[move x]`, `[name = expr]`) | **Allowed** — the only capturing form |
 | Local `fun` with free outer locals | **Rejected** — pass parameters (§2.4) |
 
 What Bestie *does* provide is not an environment closure. It is an **explicit capture callable**:
 
 * Every captured name appears in a `[...]` list at the creation site
-* Capture is **by value (copy)** into a fixed-size, stack-allocated capture struct (§6)
+* Every capture is **a value** — a copy, a moved owner, or an address the programmer took — stored in the lambda's own type (§6.2)
 * `[var x]` still copies — it creates **private mutable state inside the callable**, not a live alias to the outer `var`
-* The callable may not outlive its capture struct (same scope liveness analysis as `ref`)
-* Cost and layout are visible and compile-time known
+* The lambda value is an ordinary value: where it lives, and how long, is visible in the code that holds it
 
 ```bestie
 var count = 0
-val counter = [var count](x: int): int => {
+var counter = [var count](x: int): int => {
     count += x
     return count
 }
@@ -764,21 +862,20 @@ counter(1)   // returns 1 — outer `count` was never shared
 **Why this stays pillar-safe**
 
 * **Compilation speed** — no escape-driven environment inference; captures are written in source
-* **Optimizable** — non-capturing path stays a direct/thin call; capturing path is a known fat callable
-* **Layout** — capture struct size and field order are fixed at the creation site
+* **Optimizable** — a lambda bound to a generic `F` is a direct call to known code (§6.5)
+* **Layout** — the lambda's size and field order are fixed at the creation site
 * **Machine code** — no trampolines, no runtime codegen, no hidden heap frames
 
 **Practical rule of thumb**
 
 * Need a scoped helper with a name? → local `fun` (§2.4), pass data as parameters
-* Need a callable value that carries data? → lambda with explicit `[...]` capture
-* Need to share mutable state with the outer scope? → do not capture; pass `ptr<T>` / mutate in the outer function, or redesign — Bestie will not form a live upvalue
+* Need a callable value that carries data? → lambda with an explicit `[...]` capture
+* Need the callable to change outer state? → capture its address: `[total = total.address()]` (§7.8)
+* Need to keep it beyond the current call? → a generic field `F` (§6.5), or `Closure.new` when callables of different types share one slot
 
-Capturing therefore remains a **lambda (and `bind` / bound-method) feature**, never a silent property of nesting.
+Capturing therefore remains a **lambda feature**, never a silent property of nesting.
 
----
-
-### 7.4 Explicit Immutable Capture
+### 7.5 Copy Capture — `[x]`
 
 ```bestie
 val factor: int = 3
@@ -787,17 +884,13 @@ val f = [factor](x: int) => x * factor
 
 Rules:
 
-* Captured values are copied at the point of lambda creation
-* Captures are immutable — cannot be reassigned inside the lambda
-* `own` values cannot be captured
-* Capture layout is compile-time known
-* No heap allocation introduced
+* The value is copied into the lambda at the point of creation
+* The capture is immutable — it cannot be reassigned inside the lambda
+* Only copyable types can be copy-captured (`memory.md` §6.1). A `class` cannot: capture it with `[move x]` or by address (`[x = x.address()]`)
 
----
+### 7.6 Mutable Capture — `[var x]`
 
-### 7.5 Explicit Mutable Capture
-
-Mutable captures are allowed via `[var x]`. The lambda receives a mutable **copy** that persists between calls of that callable value.
+`[var x]` captures a mutable **copy** that persists between calls of that callable value.
 
 ```bestie
 var count = 0
@@ -815,39 +908,84 @@ The original `count` is **unaffected** — the lambda owns its own mutable copy.
 Rules:
 
 * `[var x]` captures a mutable copy — the original binding is unchanged
-* Mutations to `var` captures persist between invocations of that callable
-* Cannot be shared across threads — mutable state forbids it
-* May be passed, stored, and returned as a light callable value (subject to capture-struct lifetime)
-* `own` values cannot be captured as `var`
-* No heap allocation — captured state is inline in the callable value / capture struct
-* Capture layout is compile-time known
+* Mutations persist between invocations of that callable value
+* Calling a lambda with a `[var]` capture mutates it, so it must be held in a `var` binding or a `var` field, and it converts to `fn[]` only from a `var` place
+* It cannot be sent across threads while another thread can call it
 
----
+### 7.7 Move Capture — `[move x]`
 
-### 7.6 Lambda Allocation Model
+`[move x]` moves an `own` value into the lambda. The outer binding is invalid afterward, exactly as after any `move` (`memory.md` §5).
 
-* Lambdas do not heap-allocate — compile-time lowered to inline code or light callable values
-* Immutable captures — part of a zero-size or fixed-size compile-time-known callable context
-* Mutable captures — inline in the callable value / capture struct, no heap
-* Heap allocation for lambdas is **not part of the core language**
-* Environment-style closures (shared outer frames, heap-allocated upvalues) are **not part of the core language**
+```bestie
+val own conn = try Connection.open(addr)
+val own send = [move conn](msg: str) => conn.write(msg)
+send("hello")
+send("world")
+send.freeDeep()              // frees conn with the lambda
+```
+
+Rules:
+
+* The lambda now holds an ownership obligation, so it is itself an `own` value: it is not copyable, it is moved like any owner, and it is discharged with `freeDeep()`, which frees its moved captures in reverse capture order (`memory.md` §7.2). Forgetting to discharge it is the ordinary leak error.
+* Inside the body, a moved capture is a **borrow** of the lambda's field — readable and mutable through, but it cannot be moved out, freed, or stored. The rule is the one for binding a place in `if`-let (§3.3).
+* A callable with a moved capture binds a generic `F` (`own f: F`) or a `Closure`, and converts to `fn[]` like any callable. It never converts to `fn` or `foreign fn`.
+* To hand the value away from inside the body, capture it as `[var move x]` with type `own T ?`, and `move` out of it — leaving it `absent`, as with any optional place (§3.5).
+
+### 7.8 Initialized Capture — `[name = expr]`
+
+A capture may give a new name to the value of any expression, evaluated once when the lambda is created:
+
+```bestie
+var total = 0
+val tally = [t = total.address()](x: int) => t.val += x     // captures a ptr<int>
+for (x in xs) { tally(x) }                                    // total now holds the sum
+
+val self = [s = this.address()]() => s.val.refresh()          // the receiver of a method
+val first = [n = names[0]]() => greet(n)                      // one element, copied
+```
+
+Rules:
+
+* `[name = expr]` copies the result; `[var name = expr]` makes the copy mutable; `[move name = expr]` moves an `own` result in.
+* An initialized capture of `x.address()` is how a lambda reaches outer state. The pointer is a `ptr<T>`, with the same programmer-owned lifetime as any pointer (`memory.md` §13). Nothing is aliased that the source does not show.
+
+### 7.9 Lambda Allocation Model
+
+* Lambdas never heap-allocate. A lambda value is its captures, laid out like a `value class` with those fields.
+* Where the value lives is where it is bound: a local, a field, a temporary in an argument list.
+* Heap allocation for callables is a named library call, `Closure<…>.new(…)` (`std-lib/functional.md`).
+* Environment-style closures (shared outer frames, heap-allocated upvalues) are **not part of the core language**.
 
 ---
 
 ## 8. Higher-Order Functions
 
+A higher-order function takes its callable as a generic parameter by default (§6.5):
+
 ```bestie
-fun apply(f: fn(int) -> int, x: int): int {
+fun <F impl fn(int) -> int> apply(f: F, x: int): int {
     return f(x)
+}
+
+apply(x => x + 1, 41)                 // direct call, inlined
+```
+
+When the function should not be generic, it takes a view:
+
+```bestie
+fun retry(times: int, attempt: fn[]() -> bool): bool {
+    for (i in 0..times) {
+        if (attempt()) { return true }
+    }
+    return false
 }
 ```
 
 Rules:
 
 * Function arguments are explicit
-* No runtime boxing
-* Calls are direct or inlined when the callee is known at compile time
-* Indirect call occurs only when a callable value is actually passed around
+* No runtime boxing, and no allocation in any form
+* A generic callable parameter is a direct call; a `fn[]` or `fn` parameter is one indirect call
 * Fully compatible with ownership and concurrency rules
 
 ---
@@ -915,8 +1053,8 @@ For a value type, the unbound receiver is copied: `fn(Point) -> int`. A `class` 
 
 Rules:
 
-* No instance capture
-* Instance passed explicitly
+* A method reference has no captures, so it converts to every callable form (§6.2), including `fn` and — for a C-representable signature — `foreign fn`
+* The instance is passed explicitly at the call
 * No allocation
 
 ---
@@ -925,14 +1063,16 @@ Rules:
 
 There is no `p::getX` form that binds an instance into a callable. A method reference is always **unbound**: the receiver is passed at the call.
 
-To carry a receiver, write a lambda with an explicit capture:
+To carry a receiver, write a lambda with an explicit capture — a copy for a value type, an address for a `class`:
 
 ```bestie
 val p = Point.new(x: 1, y: 2)
-val f: fn() -> int = [p]() => p.getX()      // p copied into the capture struct
+val f = [p]() => p.getX()                         // p copied into the lambda
+
+val g = [s = server.address()]() => s.val.stop()  // server is a class: capture its address
 ```
 
-A bound reference would have been a third way to build a capturing callable, alongside lambdas and — for `own` receivers — would have needed its own `move` interaction, its own rule for `ptr` receivers, and its own row in the lowering table (§6.2). The capture list already says what is carried and how, at the site where it happens.
+A bound reference would have been a second way to build a capturing callable, with its own rule for value receivers, `class` receivers, and `own` receivers. The capture list already says what is carried and how, at the site where it happens.
 
 ---
 
@@ -1020,32 +1160,38 @@ Rules:
 
 ## 12. Function Composition
 
+A composed function carries the two functions it calls, so it is a value with captures. It cannot be returned as a `fn[]` (a view cannot outlive what it views, §6.4), and a lambda's type cannot be named in a return type. The library therefore returns a named type that implements the composed shape (§6.7):
+
 ```bestie
-fun <A, B, C> compose(
-    f: fn(B) -> C,
-    g: fn(A) -> B
-): fn(A) -> C {
-    return (x: A) => f(g(x))
+value class Composed<A, B, C, F impl fn(B) -> C, G impl fn(A) -> B> impl fn(A) -> C {
+    val f: F
+    val g: G
+    fun call(x: A): C = this.f(this.g(x))
 }
+
+fun <A, B, C, F impl fn(B) -> C, G impl fn(A) -> B> compose(f: F, g: G): Composed<A, B, C, F, G> =
+    Composed.new(f: f, g: g)
 ```
 
-No implicit currying or composition exists.
+`compose(f, g)(x)` is two direct calls, inlined. `compose` is declared in `bestie.lib.functional` (`std-lib/functional.md`); core provides only the pieces. No implicit currying or composition exists.
 
 ---
 
 ## 13. Currying and Partial Application
 
-Neither exists. There is no implicit currying, and there is no `bind`.
+Neither is a language feature. There is no implicit currying, and there is no `bind`.
 
-Partial application is written as a lambda with an explicit capture list, which is what `bind` lowered to anyway:
+Partial application is a lambda with an explicit capture list:
 
 ```bestie
 val n = getUserInput()
-val addN = [n](b: int) => add(n, b)     // n copied into the capture struct
+val addN = [n](b: int) => add(n, b)     // n copied into the lambda
 addN(3)
 ```
 
-A `bind(...)` form would have been a second spelling for exactly this, with the capture hidden behind a method call instead of written in a `[...]` list. The lambda states its captures at the creation site, which is the property §7.3 exists to protect, and it specializes identically when the captured value is a compile-time constant.
+A `bind(...)` form would have been a second spelling for exactly this, with the capture hidden behind a call instead of written in a `[...]` list. The lambda states its captures at the creation site, which is the property §7.4 exists to protect, and it specializes identically when the captured value is a compile-time constant.
+
+To keep a partially applied function beyond the current scope, store the lambda in a generic field (§6.5) or allocate a `Closure` (`std-lib/functional.md`).
 
 ---
 
@@ -1067,9 +1213,10 @@ FP fully respects ownership.
 
 Rules:
 
-* `own<T>` cannot cross boundaries implicitly
-* Ownership passing is explicit
-* Lambdas cannot capture owning references
+* `own T` cannot cross boundaries implicitly
+* Ownership passing is explicit — including into a lambda, with `[move x]` (§7.7)
+* A lambda that holds a moved capture is itself an owner and is discharged with `freeDeep()`
+* `fn[]` follows the view rules of `slice<T>`: it cannot be stored and cannot outlive what it views (§6.4)
 
 Ensures:
 
@@ -1094,7 +1241,7 @@ Bestie has **anonymous functions** (lambdas, section 7) but **no anonymous class
 
 Rationale:
 
-* Lambdas already cover the common case — supplying behavior inline — with explicit, zero-cost, non-closure semantics.
+* Lambdas already cover the common case — supplying behavior inline — with explicit, zero-cost, non-closure semantics. A named type that implements a function shape (§6.7) covers the rest.
 * Anonymous classes introduce unnamed types, implicit captures, and fragile-base-class hazards that conflict with Bestie's explicit, named, compile-time model.
 
 When you need an object that implements a protocol, declare a **named class**. For locality, that class can be file-private or an inner class (see `core/oop.md` §8) — it is still named, still statically dispatched, and still has a compile-time-known layout.
@@ -1116,7 +1263,7 @@ val sorted = sortWith(values, (a: int, b: int) => a - b)
 
 Rules:
 
-* The lambda's parameter and return types must match the SAM method's signature **exactly**.
+* The lambda's parameter and return types must match the SAM method's signature **exactly**. Untyped lambda parameters take the method's types (§7.2).
 * The conversion is performed at **compile time**; it synthesizes an implementer with the same allocation and capture semantics as the lambda (no heap, explicit `[...]` captures only).
 * Dispatch follows normal protocol rules — static by default.
 * Protocols with **two or more** abstract methods are **not** SAM-convertible; implement them with a named class.
@@ -1135,7 +1282,7 @@ Guidelines:
 * Favor transformation over mutation
 
 ```bestie
-val users2 = bestie.lib.functional.map(users, u => u.withName("Alice"))
+val users2 = bestie.lib.functional.map(users, u => u.withName("Alice"))   // u: User, from map's signature (§7.2)
 ```
 
 Enforced by:
@@ -1150,11 +1297,13 @@ Enforced by:
 
 * Implicit currying and any `bind` / partial-application form (§13)
 * Bound method references (§10.2)
+* A heap-allocated callable type in core — `Closure` is a library type with a named `.new()` (§6)
+* Trailing-lambda call syntax — a lambda is an ordinary argument
 * Lazy evaluation by default
 * Runtime monads
 * Hidden effect systems
 * Reflection-based dispatch
-* Environment closures and closure-heavy abstractions (implicit upvalues, shared outer bindings, heap environments, trampolines — see §7.3)
+* Environment closures and closure-heavy abstractions (implicit upvalues, shared outer bindings, heap environments, trampolines — see §7.4)
 * Anonymous classes (lambdas + named classes cover the same ground explicitly — see section 16)
 * Nested methods with implicit outer-`this` capture (local `fun` is unbound — see §2.4)
 
@@ -1171,6 +1320,16 @@ Functional programming in Bestie is:
 * Concurrency-safe
 * Zero-cost by design
 
-Local functions give **named locality** without capture. Lambdas give **callable values** with optional **explicit capture-by-copy**. Neither forms a Python-style environment closure.
+Local functions give **named locality** without capture. Lambdas give **callable values** with an explicit capture list — copy, mutable copy, move, or an initialized name. Neither forms a Python-style environment closure.
+
+Callables come in one form per job:
+
+| Form | Job |
+| ---- | --- |
+| `fn(T) -> R` | Function pointer — one word, storable |
+| `<F impl fn(T) -> R>` | Generic callable — direct call, captures inline, storable as `F` |
+| `fn[](T) -> R` | Callable view — any callable, two words, not storable |
+| `foreign fn(T) -> R` | C function pointer |
+| `Closure<fn(T) -> R>` (library) | Heap-owned callable, created with a named `.new()` |
 
 FP in Bestie exists to **compose behavior clearly**, not to obscure execution.
