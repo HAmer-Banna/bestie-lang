@@ -10,6 +10,10 @@ Bestie is a general-purpose language. Its **home territory** is narrower, and de
 
 Bestie competes with **C++ and Rust**. Its principle is **speed with elegance**: the performance and control of C++, with a language a working engineer can read, write, and hold in their head.
 
+Bestie's motto says the same thing in one line:
+
+> **The speed and control of C, the elegance of Kotlin.**
+
 ### 1.1 Territory One — Software That Must Be Fast and Close to the Machine
 
 Programs where performance *is* the product and the programmer needs control over memory layout, allocation, and the instructions that run:
@@ -47,6 +51,27 @@ Being honest about this keeps effort where it pays:
 ## 2. Speed and Elegance — How Bestie Decides
 
 Speed and elegance are both principles, and they sometimes pull apart. Bestie does not split the difference case by case. It follows five rules, in order.
+
+### Where the Elegance Comes From
+
+Bestie's elegance has two sources, and neither costs anything at run time.
+
+**The compiler does more.** Generics, compile-time value parameters, `when`, range-constrained types, and constant evaluation move work from run time to compile time. Rule 2 governs this.
+
+**The syntax is modern.** Bestie is written the way Kotlin is written, not the way C is written. Syntax is free by construction — it disappears at compile time — so Bestie can take the best of modern syntax without giving up any speed:
+
+| Modern syntax | Instead of |
+| ------------- | ---------- |
+| `val` / `var` with type inference — `val users = loadUsers()` | Repeating the type on both sides of `=` |
+| Statements end at a newline (`lang.md`) | A semicolon on every line |
+| `T ?` with `if (val x = …)` and `else` (`fp.md` §3) | Null checks, sentinels, and out-parameters |
+| String templates — `"${name} is ${age}"` | `printf` format strings or `+` chains |
+| Lambdas — `(x: int) => x * 2` (`fp.md`) | Function pointers plus a `void*` context |
+| Extension functions (`fp.md` §11) | Free functions that read inside-out |
+| Ranges and negative indexing — `xs[1..=3]`, `xs[-1]` | `xs + 1`, `n - 1`, and off-by-one arithmetic |
+| A generated memberwise `init()` (`oop.md` §11.4) | A field list, then a constructor that repeats it |
+
+Kotlin sets the bar for how code should **read**. C sets the bar for what it should **compile to**. A syntax proposal must pass both: it should read like modern code, and it must lower to what Rule 1 requires. Syntax that only works with a runtime behind it — implicit closures, boxing, a garbage collector — fails Rule 2, however Kotlin-like it looks.
 
 ### Rule 1 — The default path compiles to what an expert would write by hand
 
@@ -102,6 +127,7 @@ Bestie must be usable with **no operating system and no runtime**: firmware, boo
 * Atomics with explicit ordering that need no OS (`std-lib/concurrency.md` §5)
 * Compile-time target selection with `when` and `target.*` (`lang.md` §25)
 * Static C-layout arrays in every dimension (`types.md` §5)
+* A fixed-capacity sequence with no heap, `bounded<T, N>` (`std-lib/collections.md` §2b)
 
 **Specified in `core/freestanding.md`** — B1–B8 below are no longer gaps; the table records what each one covers:
 
@@ -167,7 +193,8 @@ Every proposal names which territory it serves. A feature that serves neither �
 
 ## 4. Summary
 
-* **Bestie competes with C++ and Rust**, on speed with elegance.
+* **Bestie competes with C++ and Rust**, on speed with elegance: *the speed and control of C, the elegance of Kotlin.*
+* **Elegance has two sources, both free at run time:** a compiler that does more, and modern syntax.
 * **Home territory one:** software that must be fast and close to the machine — browsers, compilers, engines, VMs, infrastructure, firmware.
 * **Home territory two:** companies that run a high-level language plus C++ can use one language for both.
 * **Speed and elegance are balanced by rule, not by taste:** the default path is what an expert would write; elegance comes from the compiler; every remaining cost is named; when both cannot be had, core is fast and a library is elegant; and complexity is a cost too.

@@ -653,6 +653,7 @@ This is C's `const int a[3]` for a `val`, and a true compile-time table for a `c
 | `final int[] a` (elements still mutable) | `val a` (elements frozen too) |
 | `ArrayIndexOutOfBoundsException` | panic — or a compile error for a constant index |
 | Length chosen at run time | `list<T>` |
+| `a[i] = null` to empty a slot | `array<T ?>[N]` and `a[i] = absent` — or, for a partly filled array, a count and `a[..count]`, or `bounded<T, N>` (`fp.md` §3.5) |
 
 ---
 
@@ -858,8 +859,10 @@ This syntax is sealed with the rest of core, and it is the **only** spelling. Th
 * Signatures, parameters, and fields spelled `T ?`
 * On `fun f(): T ?`: `return value` is present; a bare `return` is absent
 * `absent` — the absent value in expression position, for fields and assignments
-* `if (val x = …)` binds only when present (`fp.md` §3)
+* `if (val x = …)` binds only when present, and `while (val x = …)` repeats until absent (`fp.md` §3.3). Binding an `own` place borrows it for the block
 * `else` supplies a fallback or diverts (`fp.md` §3.3)
+* `move place` on an `own T ?` field or element yields its value and leaves the place `absent` (`memory.md` §5.2.1)
+* `.address()` on a `T ?` place yields `ptr<T> ?` (`memory.md` §8.3)
 * FFI: C `NULL` maps to `ptr<T> ?` (`foreign.md`)
 
 ```bestie

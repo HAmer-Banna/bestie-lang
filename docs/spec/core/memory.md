@@ -307,6 +307,41 @@ After move:
 * `a` becomes invalid
 * Any use is a compile-time error
 
+#### 5.2.1 Moving Out of a Field or Element — the Place Becomes `absent`
+
+A local can be left invalid after a move, because nothing reads it again. A **field** or **collection element** cannot: it lives inside an object that is still in use, and a half-moved object has no meaning. So `move` on a place depends on whether the place can be empty:
+
+| Place | `move place` |
+| ----- | ------------ |
+| Local binding | Yields the value; the binding is invalid afterwards (§5.2) |
+| `own T ?` field, element, or binding | Yields `own T ?`; the place is left **`absent`** and stays valid |
+| `own T` field or element (not optional) | ❌ compile-time error — the object would hold a field with no value. Declare the field `T ?`, or use `swap` |
+
+```bestie
+class Stack {
+    var own top: Node ?          // absent = empty stack
+
+    fun pop(): int ? {
+        val own first = move this.top else { return }   // top is now absent
+        this.top = move first.next                     // first.next is now absent
+        val v = first.value
+        first.free()
+        return v
+    }
+}
+```
+
+This is Bestie's answer to Java's `x.next = null`. In Java, nulling a field does two things: it marks the slot empty, and it lets the garbage collector reclaim the object. Bestie has no garbage collector, so it separates them. `move` empties the slot and hands you the object; you then `free()` it, store it, or return it, and the leak check of §5.1 makes sure you do one of the three.
+
+**Assigning over an occupied `own` place is a leak.** `this.top = x` would lose the object `top` held. Assignment to an `own` field or element is allowed only where the compiler can see that the place is empty on every path: inside `init` before the first assignment, or after a `move` out of it in the same function. Anywhere else it is a leak error. To put a new value in and get the old one back in one step, use `swap`.
+
+**`swap(a, b)`** exchanges the contents of two writable places of the same type. It is a core built-in, like `sizeOf`. No ownership obligation is created or discharged: each object still has exactly one owner, just a different one. It lowers to three register-sized moves.
+
+```bestie
+var own spare: Node ? = Node.new(value: 0)
+swap(this.top, spare)            // spare now holds the old top, which must still be discharged
+```
+
 ---
 
 ### 5.3 `ref` — Stored Non-Owning Slot
@@ -565,6 +600,18 @@ Return type depends on mutability:
 | `val T` binding      | `ptr<T>`       |
 | `const T` binding    | `ptr<const T>` |
 | Runtime resource     | `ptr<const T>` |
+
+**`.address()` on a `T ?` place returns `ptr<T> ?`.** An absent place yields absent; a present place yields a pointer to the inner value. Absence stays absence — there is no zero address to test by hand. This is how a loop walks a chain of `own T ?` links without taking ownership of them (`fp.md` §3.5):
+
+```bestie
+var cur = this.top.address()           // ptr<Node> ?
+while (val n = cur) {
+    total += n.val.value
+    cur = n.val.next.address()
+}
+```
+
+The cursor is a raw pointer, with the usual `ptr<T>` contract: the compiler does not check that the nodes outlive it. Checking that would need a lifetime solver, which Bestie does not have (`vision.md` Rule 5). A hand-written linked structure is low-level code and reads like it; `list<T>.linked` in `bestie.lib.collections` is the checked path.
 
 A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Runtime handles are read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
 

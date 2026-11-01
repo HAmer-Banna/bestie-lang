@@ -22,6 +22,8 @@ They are not `value class` or `data class` because:
 
 The `.immutable` modifier produces a variant that exposes no mutation API, but the underlying type is still a `class`.
 
+The one exception is **`bounded<T, N>`** (§2b), a `value class` with inline storage and no heap allocation. It is a separate type rather than a `list` variation because it is copied on assignment, and a variation may change cost, never semantics (§3.1).
+
 ### Field-level ownership for element types
 
 A collection's ownership of its elements is determined by the element type's `own` qualifier:
@@ -45,6 +47,7 @@ The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for bo
 | `map<K,V>` | `hash` `tree` `linked` | —      | `hash`  |
 | `deque<T>` | —              | `queue` `stack` | full deque |
 | `heap<T>`  | —              | —               | ❌ `max` or `min` required |
+| `bounded<T, N>` | inline, capacity `N` | — | — (a `value class`, §2b) |
 
 Every family also takes the `immutable` variation (§4).
 
@@ -157,6 +160,39 @@ ls.add(40)  // fine — list grows; an array has no add()
 ```
 
 The key distinction: `array<T>[N]` is **static** — its length is part of its type and never changes, and it has no `add()`; `list<T>` is **dynamic** — it grows as needed. The count is spelled differently on purpose: `length` on a fixed sequence, `size()` on a collection whose count changes (`core/types.md` §5.6). A list of lists, `list<own list<T>>`, reaches each row through a pointer to that row's own object; it is not a flat block — see `core/types.md` §5.12.
+
+---
+
+## 2b. `bounded<T, N>` — Fixed Capacity, No Heap
+
+`bounded<T, N>` is a sequence of **up to** `N` elements stored inline, with a live count. It is what C programmers write by hand as `T items[N]; int count;`, packaged so the two cannot fall out of sync. It allocates nothing, so it works in freestanding code with no allocator (`core/freestanding.md`).
+
+```bestie
+var pending : bounded<Packet, 32> = bounded<Packet, 32>.new()
+
+pending.add(p)                 // panics when full
+if (not pending.tryAdd(q)) { dropped += 1 }
+val last = pending.removeLast() // Packet ? — absent when empty
+pending.clear()                // size() becomes 0; nothing is freed or overwritten
+process(pending[..])           // slice<Packet> over the live elements only
+```
+
+| Member | Notes |
+| ------ | ----- |
+| `size()` | Live count, `0..=N` |
+| `capacity` | `N` — a compile-time constant, read like a field (`core/types.md` §5.6) |
+| `add(v)` | Appends; **panics** when full, like an out-of-bounds index |
+| `tryAdd(v): bool` | Appends if there is room; `false` when full |
+| `removeLast(): T ?` | Absent when empty |
+| `clear()` | Sets the count to 0 |
+| `[i]`, `[-i]`, `[lo..hi]`, `for/in` | Over the live elements `0..size()` only; indexing past `size()` panics |
+
+Rules:
+
+* It is a `value class`: assignment copies the count and the live elements, and it lives inline wherever it is declared — in a stack frame, a field, or an array.
+* `T` must be copyable. A `value class` cannot hold `own` fields (`core/memory.md` §10.1.1), so a fixed pool of owned objects is a `list<own T>` backed by a `FixedBuffer` (`allocators.md` §3).
+* Elements past `size()` are never read. `clear()` and `removeLast()` do not overwrite them, so emptying a `bounded` costs one store.
+* Layout is `array<T>[N]` followed by the count, whose type is the smallest unsigned integer that holds `N`.
 
 ---
 
@@ -635,7 +671,7 @@ Bestie collections are:
 
 `list<T>` is the go-to dynamic collection. Its array-backed default is efficient and familiar. Switch to `list<T>.linked` when the access pattern calls for it.
 
-`array<T>[N]` (in `core/types.md`) is the static alternative — same indexing syntax, a length fixed at compile time, C layout, no growth.
+`array<T>[N]` (in `core/types.md`) is the static alternative — same indexing syntax, a length fixed at compile time, C layout, no growth. `bounded<T, N>` sits between them: a capacity fixed at compile time, a count that changes, and no heap.
 
 Conversions between any two collection types are explicit `to*()`/`as*()` method calls — no implicit coercion, no surprise allocation.
 

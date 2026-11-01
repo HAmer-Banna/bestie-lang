@@ -1160,6 +1160,14 @@ while (i < 10) {
 }
 ```
 
+`while` also takes the `if`-let binding form. `while (val x = expr)` evaluates `expr` before every pass and stops at the first absent value, so a loop over a chain or a queue needs no sentinel and no separate test (`fp.md` §3.3):
+
+```bestie
+while (val job = queue.poll()) {
+    run(job)
+}
+```
+
 #### What `for/in` requires
 
 `for (x in xs)` is core syntax, so core defines what `xs` must provide. The loop compiles when `xs` satisfies **one** of the following, checked in this order:
@@ -1517,6 +1525,7 @@ Manual, deterministic memory model:
 
 * On a **stored slot** (field or collection element): `own` = we free, `ref` = we do not
 * On a **call**: copy a value (`T`), move (`own T`), or point (`ptr<T>`). `class` is not copyable
+* `move` out of an `own T ?` field or element leaves it `absent`; `swap(a, b)` exchanges two places without creating or discharging an ownership obligation (`memory.md` §5.2.1)
 * `slice<T>` is the one fat view that cannot be stored and cannot outlive its source
 * First-class explicit low-level operations (`ptr`, FFI, manual free) — no `unsafe` block, just visible intent
 

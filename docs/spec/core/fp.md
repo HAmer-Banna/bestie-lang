@@ -343,6 +343,30 @@ if (val user = getUser(id)) {
 
 There is no `switch` form for `T ?`, because there is nothing a two-arm `switch` would add over `if`-let — and no constructors to name in a `case` pattern.
 
+**`while`-let — core.** Repeat while the expression is present. The expression is evaluated again before every pass, and the loop ends at the first absent value:
+
+```bestie
+while (val job = queue.poll()) {
+    run(job)
+}
+```
+
+`while`-let has no `else`. `break` and `continue` work as in any `while` (`lang.md` §13).
+
+**Binding a place borrows it.** When the expression is a call, `val x` holds the result. When it is a **place** — a field, an element, or a binding — what `x` holds depends on the type:
+
+| Inner type | `if (val x = place)` / `while (val x = place)` |
+| ---------- | ---------------------------------------------- |
+| Copyable (`int`, `value class`, `ptr<T>`, …) | A copy, as with any `val` |
+| `own T` or a `class` | A **borrow** of the value in the place, valid for the block |
+
+A borrow can be read and mutated through, but inside the block it cannot be moved, freed, or stored, and the place it came from cannot be assigned, moved out of, or swapped. The check is local to the block, so it needs no lifetime analysis. Looking inside an optional field never empties it by accident. To take ownership, say so with `move`:
+
+```bestie
+if (val n = this.top) { n.value += 1 }            // borrow; top is unchanged
+if (val own n = move this.top) { n.free() }       // move; top is now absent
+```
+
 Compiler enforces:
 
 * `T ?` cannot be used directly where `T` is expected — unwrapping is required
@@ -364,6 +388,55 @@ Partial lambda:
 ```bestie
 val findUser = (x: int): User ? => if (x > 0) return repo.get(x);
 ```
+
+### 3.5 Absence in Data Structures — Where Java Writes `null`
+
+Java uses `null` for three different jobs, all spelled `x = null`. Bestie gives each job its own spelling:
+
+| Job | Java | Bestie |
+| --- | ---- | ------ |
+| This slot may be empty | `Node next;` … `next = null` | The type says so: `var own next: Node ?`, emptied with `absent` |
+| Take the value out and leave the slot empty | `Node n = head; head = null;` | `val own n = move this.head` — the place becomes `absent` (`memory.md` §5.2.1) |
+| This sequence holds fewer than its capacity | `arr[i] = null`, then skip nulls | Keep a count and view `arr[..count]`, or use `bounded<T, N>` (`std-lib/collections.md` §2b) |
+
+**The end of a linked list** is an absent link. `own Node ?` costs nothing over C: the zero address is a niche of `own T`, so the field is one pointer, and the compiler tests it exactly as C tests `NULL` (`memory-layout.md` §11). The program, though, can never read that zero address:
+
+```bestie
+class Node {
+    var value: int
+    var own next: Node ?             // absent = end of list
+}
+
+class IntList {
+    var own head: Node ?
+
+    fun pushFront(v: int) {
+        val own n = Node.new(value: v, next: move this.head)
+        this.head = move n           // head was emptied by the move above
+    }
+
+    fun sum(): int {
+        var total = 0
+        var cur = this.head.address()                // ptr<Node> ? — memory.md §8.3
+        while (val n = cur) {
+            total += n.val.value
+            cur = n.val.next.address()
+        }
+        return total
+    }
+
+    fun clear() {
+        while (val own n = move this.head) {
+            this.head = move n.next
+            n.free()
+        }
+    }
+}
+```
+
+**An array slot that may be empty** is `array<T ?>[N]`, emptied with `slots[i] = absent`. When `T` has a niche — a `class` reference, `bool`, an `enum`, a range-constrained integer — `T ?` is the same size as `T`. When it has none, as with a plain `int`, every element gains a tag byte; that cost shows in the type, where `?` is written.
+
+**An array that is "partly empty"** is usually a sequence shorter than its storage, and should not be modeled with empty slots at all. Keep a count beside the array and pass `arr[..count]`. This is the C idiom: no flags to scan, no gaps, and every slice and algorithm works on the live part. `bounded<T, N>` in `bestie.lib.collections` packages exactly that.
 
 ---
 
