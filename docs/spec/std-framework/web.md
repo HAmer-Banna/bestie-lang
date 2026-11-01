@@ -174,7 +174,7 @@ class RequestLog impl Middleware {
 
 Controllers are shared by every request, through the `ptr` given to `app.mount`. A controller's mutable state is therefore shared between fibers and must use `bestie.lib.concurrency` types (atomics, locks, channels). The controller must outlive `app.listen`, which it does when both are owned by `main`.
 
-`AppOptions` sets the connection limit, the request size limit, timeouts, and graceful shutdown on `SIGTERM`.
+`AppOptions` sets the connection limit, the request size limit, timeouts, and graceful shutdown on `SIGTERM`, which can also shut down a `bestie/schedule` scheduler (`std-framework/schedule.md` §6).
 
 ## 7. Without Annotations
 
@@ -192,7 +192,7 @@ Both styles share the router, middleware, and execution model.
 ## 8. Also Included
 
 * **Static files** — `app.static("/assets", Path.new("public"))`, with `ETag` and range requests.
-* **Server-sent events** — a handler may return `own SseStream`; each `send` writes one event.
+* **Server-sent events** — a handler may return `own SseStream`; each `send` writes one event, and `SseStream.from(flow)` streams a `bestie/stream` flow (`std-framework/stream.md` §6).
 * **Testing** — `TestClient` sends requests to an `App` in-process without a socket, for use with `bestie.lib.test`.
 
 Server-rendered HTML templates are not in 1.0 (`platform.md` §4).

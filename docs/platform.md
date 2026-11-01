@@ -206,10 +206,12 @@ Bestie's core, std-lib, and std-api are designed for systems programming: bare m
 | Project | Status | Spec |
 | ------- | ------ | ---- |
 | `bestie/web` | **1.0, ready at launch** | `std-framework/web.md` |
+| `bestie/stream` | **1.0, ready at launch** — asynchronous flows with backpressure, Reactor-style | `std-framework/stream.md` |
+| `bestie/schedule` | **1.0, ready at launch** — cron and interval jobs, retries, pluggable `JobStore` | `std-framework/schedule.md` |
 
 Testing is not a framework: it is `bestie.lib.test` in std-lib, because every package — std-lib itself included — needs it and `bestie test` is part of the toolchain.
 
-Further `bestie/` projects (templates, an ORM) may follow after 1.0, under the same rules. Anything that is mainly a matter of taste — DI containers, aspect weaving, reactive streams, GUI toolkits — is left to the community.
+Further `bestie/` projects (templates, an ORM) may follow after 1.0, under the same rules. Anything that is mainly a matter of taste or infrastructure — DI containers, aspect weaving, GUI toolkits, distributed task queues — is left to the community.
 
 ### Third-Party Frameworks Are Expected
 

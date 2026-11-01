@@ -164,7 +164,7 @@ Why these make Bestie faster and smaller than C, and which rule makes each one l
 
 Territory two lives or dies on backend productivity.
 
-**Already in the spec:** streams, files, sockets, HTTP, databases, IPC, processes (`std-api`); an annotation-driven web framework ready at launch (`std-framework/web.md`); testing (`std-lib/test.md`); compile-time reflection and processors so the community can build ORMs, DI containers, and Spring-style frameworks with the same power as the official one (`core/metaprogramming.md`); fibers with I/O parking (`std-lib/concurrency.md`); a package manager with a registry and reproducible builds (`std-tools/package-manager.md`).
+**Already in the spec:** streams, files, sockets, HTTP, databases, IPC, processes (`std-api`); an annotation-driven web framework, Reactor-style streams, and a job scheduler ready at launch (`std-framework/web.md`, `stream.md`, `schedule.md`); testing (`std-lib/test.md`); compile-time reflection and processors so the community can build ORMs, DI containers, and Spring-style frameworks with the same power as the official one (`core/metaprogramming.md`); fibers with I/O parking (`std-lib/concurrency.md`); a package manager with a registry and reproducible builds (`std-tools/package-manager.md`).
 
 **Roadmap:**
 

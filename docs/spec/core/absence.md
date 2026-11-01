@@ -23,6 +23,41 @@ Seeing `?` tells you "may be missing"; seeing `!` tells you "may fail". The two 
 
 ---
 
+## 1a. Why `absent` Is Not `null`
+
+Removing `null` and adding `absent` would be pointless if `absent` failed the same way. It does not, because what made `null` dangerous was never the word. It was four properties, and `absent` has none of them.
+
+| What made `null` dangerous | Java / C | Bestie |
+| -------------------------- | -------- | ------ |
+| **Every reference may be null.** Nothing in a type says "this one never is" | `User u` may hold `null`; so may every field, parameter, and return | `User` is **never** absent. Only `User ?` may be, and the `?` is in the signature |
+| **Using it does not require checking it.** The check is a convention | `u.name` compiles whether or not `u` was checked | `u.name` on a `User ?` is a **compile-time error**. The only ways in are `?:`, `?.`, `if`-let, and `while`-let (§3) |
+| **The failure happens far from the cause.** A `null` stored in one place crashes somewhere else, later | A field set to `null` in a constructor throws `NullPointerException` in a different class, minutes later | `absent` cannot be stored in a `T`, passed as a `T`, or returned as a `T`. It stays inside `T ?` until code handles it, at a place the compiler can point to |
+| **It is the default for "not set yet".** Uninitialized fields, missing map keys, failed lookups, and errors all become `null` | Java zero-initializes fields to `null`; C leaves garbage | Fields and locals must be assigned before use (`lang.md` §4.7, `oop.md` §11.10). Failures are `T ! E`, not absence. Nothing becomes `absent` unless code says so |
+
+So the `NullPointerException` cannot happen in safe Bestie: there is no operation that takes a `T ?` and uses it as a `T` without handling the absent case. The compiler proves this for every program, the same way it proves types.
+
+### What remains — and why it is different
+
+Three things can still end a program around absence. Each is written in the source, at the point of failure, and none can be reached by accident:
+
+* **`x ?: panic("reason")`.** The programmer states that absence is impossible here, and why. That is an assertion, not a hidden crash: it is searchable, it carries a message, and it fails at the line that made the claim, not three calls later.
+* **Raw pointers.** `ptr<T>` may hold the zero address, like any C pointer (`memory.md` §8.7). This is the explicit low-level layer. Safe code meets C's `NULL` only as `ptr<T> ?`, which is absence like any other.
+* **`@trusted` and `foreign` code**, where the programmer has taken responsibility in writing.
+
+### Rules that keep it that way
+
+* **No force-unwrap.** There is no `x!!` or `x.get()`. Asserting presence costs a reason (`?: panic("…")`).
+* **No implicit conversion** from `T ?` to `T`, ever — not in arguments, returns, assignments, string interpolation, or comparisons.
+* **No "null object" default.** A missing value never turns into `0`, `""`, or an empty list by itself. `?: 0` is allowed, but it is written.
+* **No absent-by-default.** A `T ?` field still needs an initializer or an `init` assignment; it does not silently start as `absent`.
+* **Absence is not failure.** "Not found" is absence. "Could not find out" is an error: `T ! E`, or `T ? ! E` when both are possible (`types.md` §8.4). A function that returns `absent` to mean "something went wrong" hides the reason, which is the other half of what made `null` harmful.
+
+### Guidance against overuse
+
+Kotlin code sometimes makes everything nullable and chains `?.` through it, which brings back the problem in a new shape: a value that is "maybe there" at every layer, and an `absent` at the end that nobody can trace. Use `T ?` only where absence is a normal, expected outcome — a lookup miss, an optional field, the end of an iterator. Unwrap it as close to its source as possible. A long `?.` chain that ends in `?: defaultValue` is usually a missing check that belongs earlier. `bestie lint` warns on `?: panic` in library code and on `T ?` parameters that every caller passes as present.
+
+---
+
 ## 2. The Type
 
 ```bestie
@@ -182,5 +217,5 @@ Checking presence is one compare and branch, exactly as a C null check. `?.` cha
 * `T ?` is the type, `absent` the empty value, and a `T` is accepted where a `T ?` is expected.
 * `?:` gives a fallback or diverts; `?.` accesses if present; `if`-let and `while`-let bind.
 * `?` means "may be missing", `!` means "may fail", and the two are never confused.
-* There is no null, no force-unwrap, no truthiness, and no `== absent`.
+* There is no null, no force-unwrap, no truthiness, and no `== absent`. A `T ?` can never be used as a `T` without handling the absent case, so a `NullPointerException` cannot happen in safe code (§1a).
 * With a niche, absence is free; without one, it costs a tag byte, and the `?` in the type says so.

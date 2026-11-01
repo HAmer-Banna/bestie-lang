@@ -40,7 +40,7 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 * Structured concurrency / supervised task groups
 * Actors
 * Futures, promises, `async` / `await`
-* Reactive streams — a third-party concern
+* Reactive streams — `bestie/stream` (`std-framework/stream.md`)
 * A standalone “backpressure” type — bounded `Channel` capacity *is* backpressure
 * Deadlock-freedom proofs — locks can deadlock; that is the programmer’s problem
 * Parallel collections or work-stealing pools (may be added later if justified)
@@ -75,11 +75,12 @@ val f = fiber.new(() => compute())
 | `isCompleted(): bool` | Checks if execution finished                   |
 | `cancel()`            | Cancels execution (explicit handling required) |
 | `id(): int`           | Returns internal fiber identifier              |
+| `fiber.sleep(d: Duration)` | Parks the current fiber for at least `d`; other fibers run meanwhile |
 
 **Yield points** — a `fiber` yields at:
 
 * `await()` calls on other fibers
-* Explicit `fiber.yield()`
+* Explicit `fiber.yield()` and `fiber.sleep(d)`
 * Blocking I/O calls, when the call site cooperates (see below)
 
 **The I/O parking contract.** A fiber can only be parked on a blocking call if the code performing that call tells the scheduler. This package therefore publishes a hook:

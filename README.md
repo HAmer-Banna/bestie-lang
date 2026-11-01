@@ -138,7 +138,7 @@ core → std-lib → std-api → (optional std-framework)
 - **Core** — language structure (syntax, types, ownership, `thread`)
 - **Std-lib** — helpers (collections, `Iterable`/`Comparable`, `map`/`filter`, fibers)
 - **Std-api** — talking to the outside (OS, files, console, HTTP, FFI)
-- **Std-framework** — optional, downloaded with the package manager: `bestie/web`, ready at launch, to show that Bestie builds real web servers
+- **Std-framework** — optional, downloaded with the package manager: `bestie/web`, `bestie/stream`, and `bestie/schedule`, ready at launch, to show that Bestie builds real web servers, streaming pipelines, and scheduled jobs
 
 If a helper in lib and a type in api would share a name, **lib wins**. Specs live under `docs/spec/` (`lang.md` is core syntax, not “the whole language”). The platform contract is `docs/platform.md`.
 

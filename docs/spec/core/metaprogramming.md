@@ -72,6 +72,7 @@ fun <T> writeJson(value: T, out: ptr<StringBuilder>) {
 
 * `value.[f]` reads the field that the constant `f` describes, with that field's static type. Because the loop is unrolled, `value.[f]` is an `int` in one copy and a `str` in the next. There is no boxing and no `any`.
 * `writeJson(user, …)` compiles to a sequence of direct field reads and appends — the code you would write by hand.
+* A single member can be named directly: `reflect<T>().field("email")` returns its `FieldInfo`, and a name that does not exist (or is not visible) is a compile-time error.
 * A `const` loop may iterate only over a compile-time array: `reflect<T>().fields`, `.methods`, `.annotations`, or a `const` array.
 * `when` (`lang.md` §25) works inside the body, so a copy can be erased per field: `when (f.optional) { … } else { … }`.
 
@@ -102,7 +103,33 @@ for (const f in reflect<T>().fields) {
 
 This is all an ORM's row mapper or a validator needs: the annotations are data, and Tier 1 reads them.
 
-### 2.4 Limits
+### 2.4 Java Reflection's Problems, and Why Bestie Does Not Have Them
+
+Java reflection made frameworks possible and also caused many of the JVM's worst failures. Every one of them comes from reflection happening **at run time, by name, with permission to break rules**. Bestie's reflection happens at compile time, by typed constant, inside the rules:
+
+| Java reflection problem | Cause | Bestie |
+| ----------------------- | ----- | ------ |
+| **Slow.** Reflective calls are 10–100× slower and block inlining | Lookups and boxing at run time | Compiled away: `value.[f]` is a direct field access, and an unrolled loop is ordinary code the optimizer sees (§2.2) |
+| **Typos fail at run time.** `getMethod("findByEmial")` throws `NoSuchMethodException` in production | Members are named by strings | Members are named by constants from `reflect<T>()`. `reflect<T>().field("emial")` is a **compile-time error** naming the type and the nearest match |
+| **Breaks on refactoring.** Renaming a field silently breaks a reflective caller | String names are invisible to the compiler | The compiler sees every use. Renaming a field updates or fails every dependent build |
+| **Breaks encapsulation.** `setAccessible(true)` reads private fields and writes `final` ones | Reflection can override access control | Reflection sees only what the calling code could name directly (§2.1). It cannot write a `val` field, read a `private` one, or bypass `immutable` |
+| **Bypasses constructors.** Deserialization and `Unsafe` create objects without running their constructor, so invariants never hold | Objects can be allocated reflectively | Reflection cannot construct anything. A value is built only by calling an `init` the caller can see, so range checks and validation always run |
+| **Deserialization attacks.** A payload names a class, and the framework instantiates it: remote code execution | Types can be looked up by name at run time | There is no lookup by name and no runtime type registry. A decoder only ever builds the **static** type it was instantiated for, so input cannot choose what gets constructed |
+| **Type erasure and unchecked casts.** `List<String>` at run time is a `List` of `Object` | Generics erased; reflection returns `Object` | Generics are monomorphized and each unrolled copy has the field's exact type. There is no `any` and no cast |
+| **Slow startup.** Spring scans the classpath and builds proxies at launch | Discovery happens at run time | Discovery happens at compile time (aggregate processors, §3.2). Startup does no scanning |
+| **Breaks ahead-of-time compilation.** GraalVM native-image needs hand-written reflection config | The set of reflected members is unknown until run time | Every reflected member is known at compile time, and the binary contains no metadata (§1) |
+| **Hidden behaviour.** Proxies and interceptors run code nobody called | Runtime proxies and bytecode weaving | No proxies and no weaving. Generated code is visible with `bestie expand` (§3.6) |
+| **Security-manager holes**, `--add-opens` flags, module-system breakage | Reflection needs permission to cross boundaries | Nothing to open: reflection never crosses a boundary the code could not cross itself |
+
+**The rules that guarantee this** (each is part of §2–§3):
+
+* `reflect<T>()` exists only at compile time. There is no runtime form, no `Class` object, no `Class.forName`.
+* Members are identified by constant descriptors, never by run-time strings.
+* Reflection obeys visibility, `val`, and `immutable` exactly as ordinary code does.
+* Reflection only reads declarations and fields; it never allocates, constructs, or frees. Construction always goes through a visible `init`.
+* Processors only add declarations, and cannot generate code that breaks any of the above — generated code is checked like code you typed.
+
+### 2.5 Limits
 
 * `reflect<T>()` is valid only where a constant is valid. It cannot be called on a run-time value, and it produces nothing at run time.
 * Reflection describes declarations, not function bodies.
