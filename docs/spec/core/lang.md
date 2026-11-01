@@ -150,7 +150,8 @@ when        while       _
 | `immutable` | before `class`; collection variation | `immutability.md` §2 |
 | `virtual` | before `fun` in a class body | `oop.md` §2.3 |
 | `override` | before `fun` in a class body | `oop.md` §6 |
-| `absent` | expression position where a `T ?` is expected | `types.md` §8.3 |
+| `absent` | expression position where a `T ?` is expected | `absence.md` §2 |
+| `processor` | before `fun` | `metaprogramming.md` §3 |
 | `export` | before `fun` or a module-level `val`, with an ABI tag | `std-api/foreign.md` §4.3, `freestanding.md` §5 |
 | `asm` | expression, or module-level declaration | `freestanding.md` §4 |
 | `union` | type declaration | `freestanding.md` §7.1 |
@@ -1161,7 +1162,7 @@ while (i < 10) {
 }
 ```
 
-`while` also takes the `if`-let binding form. `while (val x = expr)` evaluates `expr` before every pass and stops at the first absent value, so a loop over a chain or a queue needs no sentinel and no separate test (`fp.md` §3.3):
+`while` also takes the `if`-let binding form. `while (val x = expr)` evaluates `expr` before every pass and stops at the first absent value, so a loop over a chain or a queue needs no sentinel and no separate test (`absence.md` §3.4):
 
 ```bestie
 while (val job = queue.poll()) {
@@ -1192,12 +1193,12 @@ while (val job = queue.poll()) {
    // for (x in xs) { body }   ⇒
    val it = xs.iterator()
    while (true) {
-       val x = it.next() else { break }
+       val x = it.next() ?: break
        body
    }
    ```
 
-   `next()` returning absent (`T ?`, §21) ends the loop, via the `else` unwrap of `fp.md` §3.3. Because the desugaring is a static call on a concrete type, it is monomorphized and inlined like any other method — there is no dynamic dispatch and no allocation. This is the specified lowering, not a form you write by hand.
+   `next()` returning absent (`T ?`, §21) ends the loop, via `?:` (`absence.md` §3.1). Because the desugaring is a static call on a concrete type, it is monomorphized and inlined like any other method — there is no dynamic dispatch and no allocation. This is the specified lowering, not a form you write by hand.
 
 3. **A type whose `next()` is fallible** — `fun next(): T ? ! E` (`types.md` §8.4). The loop must then be written **`try for`**, and the enclosing function must accept `E`:
 
@@ -1213,12 +1214,12 @@ while (val job = queue.poll()) {
    // try for (x in xs) { body }   ⇒
    val it = xs.iterator()
    while (true) {
-       val x = try it.next() else { break }
+       val x = try it.next() ?: break
        body
    }
    ```
 
-   `try` propagates the error out of the loop and out of the enclosing function; `else` catches the clean end. Plain `for` over a fallible iterator is a compile-time error, and `try for` over an infallible one is too — the marker is required exactly when it means something:
+   `try` propagates the error out of the loop and out of the enclosing function; `?:` catches the clean end. Plain `for` over a fallible iterator is a compile-time error, and `try for` over an infallible one is too — the marker is required exactly when it means something:
 
    ```
    error: 'DirIterator.next' returns 'Path ? ! FsError' — use 'try for' so the
@@ -1372,9 +1373,10 @@ Core owns the operator **inventory**, **precedence**, and **lowering**. Which ty
 | Bitwise | `&` `\|` `^` `~` `<<` `>>` | Integers only; **not** overloadable |
 | Assignment | `=` · `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` | Statement, never an expression |
 | Range | `..` `..=` | §9 |
-| Access | `.` `[]` `()` `::` | Member, index, call, method reference |
+| Access | `.` `[]` `()` `::` · `?.` | Member, index, call, method reference · member if present (`absence.md` §3.2) |
 | Type | `as` `is` | Cast (§6), runtime type test |
-| Error / absence | `try` `catch` `else` | §21, `exceptions.md` |
+| Error | `try` `catch` | §21, `exceptions.md` |
+| Absence | `?:` | Value or fallback — `absence.md` §3.1 |
 
 `not` is boolean negation. `!` is **not** boolean not: it is the error-union operator (`T ! E`) and the overflow-trap suffix (`+!`). `&&` and `||` are not in the language.
 
@@ -1390,7 +1392,7 @@ Highest binding first. Operators in the same row have equal precedence.
 
 | # | Operators | Associativity |
 | - | --------- | ------------- |
-| 1 | `.` `[]` `()` `::` | left |
+| 1 | `.` `[]` `()` `::` `?.` | left |
 | 2 | `as` | left |
 | 3 | `-x` `~x` `not x` · `try` | right (prefix) |
 | 4 | `*` `/` `%` `*%` `*\|` `*!` | left |
@@ -1404,14 +1406,16 @@ Highest binding first. Operators in the same row have equal precedence.
 | 12 | `==` `!=` | none (non-associative) |
 | 13 | `and` | left |
 | 14 | `or` | left |
-| 15 | `catch` `else` | left |
+| 15 | `catch` · `?:` | left · right |
 | 16 | `=` `+=` `-=` … | right (statement) |
 
 Notes:
 
 * **Comparison and equality are non-associative.** `a < b < c` is a compile-time error, not a silently wrong `(a < b) < c`. The same applies to `a == b == c` and `0..5..10`.
 * **`as` binds tighter than arithmetic**, so `x + 10.0 as Meters` is `x + (10.0 as Meters)`.
-* **`try` binds to the following postfix expression**, so `try f(x) + 1` is `(try f(x)) + 1`.
+* **`try` binds to the following postfix expression**, so `try f(x) + 1` is `(try f(x)) + 1`, and `try it.next() ?: break` is `(try it.next()) ?: break`.
+* **`?:` is right-associative and nearly the loosest operator**, so `a ?: b ?: c` tries each in turn and `a ?: b + 1` is `a ?: (b + 1)`.
+* **`?.` short-circuits the rest of the postfix chain**: in `x?.a.b()`, nothing after `?.` runs when `x` is absent.
 * **Bitwise operators bind tighter than comparison** — unlike C, where `a & b == c` means `a & (b == c)`. In Bestie it means `(a & b) == c`, which is what the code looks like it says.
 * Parentheses always override. The formatter (`bestie fmt`) does not insert or remove them.
 
@@ -1490,8 +1494,9 @@ A derived structural `==` requires every field to be comparable; a field whose t
 * `alignOf(T)` — compile-time alignment requirement in bytes
 * `strideOf(T)` — compile-time distance between consecutive `T` elements in an array: `sizeOf(T)` rounded up to `alignOf(T)`. `sizeOf` excludes tail padding, so the two differ for aggregates (`memory-layout.md` §3)
 * `offsetOf(T, field)` — compile-time byte offset of a field within `T`'s packed layout (`memory-layout.md` §4)
+* `reflect<T>()` — compile-time description of `T`'s fields, methods, and annotations, for generic code and processors (`metaprogramming.md` §2)
 
-All six are resolved by the compiler and emit no code. `sizeOf`, `alignOf`, `strideOf`, and `offsetOf` are valid in `const` initializers and `when` conditions (§25.2).
+All seven are resolved by the compiler and emit no code. `sizeOf`, `alignOf`, `strideOf`, and `offsetOf` are valid in `const` initializers and `when` conditions (§25.2).
 
 `offsetOf` reports the **compiler-chosen** offset, not the source declaration index — fields are reordered and packed (`memory-layout.md` §4). It is the supported way to compute a field address without hand-arithmetic, and it is what allocators, MMIO regions, and `@repr(C)` interop need.
 
@@ -1550,9 +1555,9 @@ See `concurrency.md`.
 
 ## 20. Annotations
 
-Compile-time only, zero runtime cost.
+Compile-time only, zero runtime cost. Declared annotations are inert data until compile-time reflection reads them or a processor turns them into generated declarations — the mechanism third-party frameworks are built on.
 
-See `annotations.md`.
+See `annotations.md` and `metaprogramming.md`.
 
 ---
 
@@ -1562,12 +1567,12 @@ Bestie avoids hidden null-like states and hidden exception flow.
 
 Mechanisms:
 
-* `T ?` — absence (core syntax)
-* `T ! E` — recoverable failure (core syntax)
+* `T ?` — absence (core syntax), handled with `?:`, `?.`, and `if`-let — `absence.md`
+* `T ! E` — recoverable failure (core syntax), handled with `try` and `catch` — `exceptions.md`
 
 There is no second, named spelling. `T ?` and `T ! E` are the only forms — Bestie does not also ship `option<T>` / `result<T,E>` types, because two vocabularies for one representation is exactly the duplication the syntax exists to avoid.
 
-See `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/utils.md`.
+See `absence.md`, `exceptions.md`, `types.md` §8.3–8.4, and `std-lib/utils.md`.
 
 ---
 
@@ -1723,7 +1728,7 @@ Variants without payloads match directly, as `Message.Close` does above.
 
 Exhaustiveness is enforced — all variants must be covered or a wildcard must be present.
 
-**Absence and failure are not matched this way.** `T ?` and `T ! E` are core syntax, not enums with constructors you name: unwrap `T ?` with `if`-let or `else` (`fp.md` §3.3), and handle `T ! E` with `try` / `catch` (`exceptions.md` §2). Matching an *error set* with `switch` inside a `catch` is the exception, and that matches the error enum directly (`exceptions.md` §3.4).
+**Absence and failure are not matched this way.** `T ?` and `T ! E` are core syntax, not enums with constructors you name: unwrap `T ?` with `?:`, `?.`, or `if`-let (`absence.md` §3), and handle `T ! E` with `try` / `catch` (`exceptions.md` §2). Matching an *error set* with `switch` inside a `catch` is the exception, and that matches the error enum directly (`exceptions.md` §3.4).
 
 ---
 

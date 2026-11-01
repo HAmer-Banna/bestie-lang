@@ -92,7 +92,7 @@ data class ArgSpec {
 }
 ```
 
-`short` is `char ?` rather than a sentinel — an argument that has no short form has no short form, and `core/types.md` §8.3 already spells that.
+`short` is `char ?` rather than a sentinel — an argument that has no short form has no short form, and `core/absence.md` already spells that.
 
 ### 5.3 `Command`
 
@@ -189,10 +189,10 @@ fun main(args: slice<str>) {
     }
 
     val verbose = parsed.flag("verbose")
-    val out     = parsed.option("out") else { "a.out" }
+    val out     = parsed.option("out") ?: "a.out"
 
     for (i in 0..parsed.positionalCount()) {
-        val path = parsed.positional(i) else { continue }
+        val path = parsed.positional(i) ?: continue
         if (verbose) { println("formatting ${path}") }
         format(path, out)
     }

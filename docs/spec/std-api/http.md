@@ -136,7 +136,7 @@ class HttpResponse {
 There is **no `HttpBody` type**. A body is an `InputStream` from `bestie.api.io`:
 
 ```bestie
-val own body = req.body else { return emptyResponse() }
+val own body = move req.body ?: return emptyResponse()
 val own text = TextReader.new(move body, Encoding.Utf8)
 val json = try text.readAll()
 ```
@@ -146,7 +146,7 @@ A dedicated `HttpBody` protocol would be `InputStream` under another name — on
 ```bestie
 // Stream a response body straight to a file. No HTTP-specific code.
 fun save(resp: ptr<HttpResponse>, out: ptr<File>): int ! IoError {
-    val own body = resp.val.body else { return 0 }
+    val own body = move resp.val.body ?: return 0
     return try copy(body.address(), out)
 }
 ```

@@ -222,7 +222,7 @@ class CBuffer {
     }
 
     init(n: uint): ! ForeignError {
-        val p = malloc(n) else { return ForeignError.AllocationFailed }
+        val p = malloc(n) ?: return ForeignError.AllocationFailed
         this.init(p, n)
     }
 

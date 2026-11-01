@@ -1,207 +1,205 @@
 # `bestie.framework.web`
 
-HTTP web framework with annotation-driven routing and a servlet-style execution model.
+An HTTP framework with annotation-driven routing, built on `bestie.api.http` and core metaprogramming.
+
+```toml
+[dependencies]
+"bestie/web" = "1.0"
+```
+
+```bestie
+import bestie.framework.web
+```
 
 ## Purpose
 
-`web` provides structured request/response handling on top of `bestie.api.http`. Its primary value over the raw HTTP API is **annotation-driven routing and controller dispatch**: route registration, path/query/body parameter binding, middleware composition, and response serialization are all handled by compile-time code generation — no boilerplate, no runtime reflection.
+`web` exists to show that Bestie is a first-class language for backend servers, and to let a team write a real REST service on day one. It is **not** a Spring or Django competitor. It is a small, fast, complete web layer: routing, parameter binding, JSON, middleware, errors, static files, and server-sent events.
 
-It is designed for:
+It is also a **reference for framework authors**. Everything `web` does is done with public mechanisms — compile-time reflection and processors (`core/metaprogramming.md`) over `bestie.api.http`. A third-party framework has exactly the same power; nothing here is privileged.
 
-- REST APIs and server-rendered web applications
-- Predictable, auditable middleware pipelines
-- Controller-style service organization
-- Easy integration with `di`, `template`, and `orm`
+Rules it follows (`vision.md` §2):
 
-## Layering and Dependencies
+* Routing and binding are generated at compile time. There is no runtime scanning and no reflection.
+* A request costs what the hand-written `bestie.api.http` loop costs, plus the work your handler does.
+* Where concurrency happens is stated: one fiber per request (§6).
 
-This framework sits in `std-framework` and depends on lower layers only:
+## Layering
 
-- `core`
-- `std-lib`
-- `bestie.api.http`
-- `bestie.api.io` (optional, for static files and streaming bodies)
-- `bestie.api.network` (optional, for lower-level transport tuning)
+| Depends on | For |
+| ---------- | --- |
+| `core` | Metaprogramming, ownership, `T ?`, `T ! E` |
+| `bestie.lib.format` | JSON encoding and decoding of bodies |
+| `bestie.lib.concurrency` | Fibers |
+| `bestie.api.http` | The server, requests, responses |
+| `bestie.api.fs` | Static files (only when used) |
 
-Import style (explicit per-symbol):
-
-```bestie
-import bestie.framework.web.App
-import bestie.framework.web.Request
-import bestie.framework.web.Response
-import bestie.framework.web.Context
-```
-
-## Core Concepts
-
-- `Controller`: class whose methods are compiled into route handlers.
-- `Request` / `Response`: explicit values passed through handlers.
-- `Router`: generated at compile time from controller annotations.
-- `Middleware`: composable interception step; applied via annotation or explicit registration.
-- `Context`: per-request scoped values (trace id, auth principal, locale, etc.).
-- `App`: owns listener lifecycle and graceful shutdown hooks.
-
-## Annotation-Driven Routing
-
-Route registration is generated entirely at compile time from annotations on controller classes and their methods. There is no runtime scanning.
-
-### Controller Annotations
-
-| Annotation | Target | Effect |
-|---|---|---|
-| `@Controller(prefix)` | class | Groups routes under a path prefix |
-| `@RestController(prefix)` | class | Like `@Controller` but auto-serializes return values to JSON |
-| `@Get(path)` | method | Registers a GET route |
-| `@Post(path)` | method | Registers a POST route |
-| `@Put(path)` | method | Registers a PUT route |
-| `@Delete(path)` | method | Registers a DELETE route |
-| `@Patch(path)` | method | Registers a PATCH route |
-
-### Parameter Injection Annotations
-
-| Annotation | Target | Effect |
-|---|---|---|
-| `@PathParam(name)` | parameter | Binds a path segment (e.g. `/users/:id`) |
-| `@QueryParam(name)` | parameter | Binds a query string value |
-| `@Body` | parameter | Deserializes the full request body |
-| `@Header(name)` | parameter | Binds a specific request header value |
-| `@Ctx` | parameter | Injects the current request `Context` |
-
-### Middleware and Security Annotations
-
-| Annotation | Target | Effect |
-|---|---|---|
-| `@Use(MiddlewareType)` | class or method | Applies a middleware to the controller or a single route |
-| `@Auth` | class or method | Requires an authenticated principal in `Context` |
-| `@Roles(roles...)` | class or method | Requires one of the listed roles on the principal |
-
-All of these are compile-time — the compiler plugin validates bindings and generates the dispatch wiring. Missing path params, type mismatches, or unknown middleware types are compile-time errors.
-
-## Execution Model
-
-1. Accept connection and parse request (`bestie.api.http`)
-2. Build request `Context`
-3. Run middleware chain (in declaration order)
-4. Dispatch to matched controller method
-5. Serialize return value to `Response`
-6. Write response to socket
-7. Finalize request-scoped resources
-
-All phases are explicit and observable in user code.
-
-## Controller Example
+## 1. A Controller
 
 ```bestie
-import bestie.framework.web.RestController
-import bestie.framework.web.Use
-import bestie.framework.web.Auth
-import bestie.framework.web.Roles
-import bestie.framework.web.Get
-import bestie.framework.web.Post
-import bestie.framework.web.Delete
-import bestie.framework.web.PathParam
-import bestie.framework.web.QueryParam
-import bestie.framework.web.Body
-import bestie.framework.web.NoContent
+import bestie.framework.web
 
-@RestController("/users")
-@Use(LoggingMiddleware)
-@Auth
-class UserController(val service: UserService) {
+data class UserDto {
+    id: int
+    email: str
+}
 
-    @Get("/")
-    fun list(@QueryParam("page") page: int): list<UserDto> {
-        return service.listUsers(page)
+data class CreateUser {
+    email: str
+}
+
+@Controller("/users")
+class UserController {
+    val ref service: UserService
+
+    @Get("/{id}")
+    fun get(@Path id: int): UserDto ? {
+        return service.find(id)                 // absent → 404
     }
 
-    @Get("/:id")
-    fun get(@PathParam("id") id: str): UserDto {
-        return service.findById(id)
+    @Get("/")
+    fun list(@Query page: int ?): list<UserDto> {
+        return service.page(page ?: 1)
     }
 
     @Post("/")
-    fun create(@Body req: CreateUserRequest): UserDto {
-        return service.createUser(req)
-    }
-
-    @Delete("/:id")
     @Roles("admin")
-    fun delete(@PathParam("id") id: str): NoContent {
-        service.deleteUser(id)
-        return NoContent.new()
+    fun create(@Body req: CreateUser): UserDto ! UserError {
+        return try service.create(req.email)
+    }
+}
+
+fun main() {
+    val own service = UserService.new(db: openDb())
+    val own users   = UserController.new(service: service)
+
+    val own app = App.new()
+    app.use(RequestLog.new())
+    app.onError((e: UserError) => Response.status(409, e.toStr()))
+    app.mount(users.address())
+
+    app.listen(SocketAddress.parse("0.0.0.0:8080")) catch |e| panic(e.toStr())
+}
+```
+
+Dependencies are plain `ref` fields filled by the memberwise `init` (`core/oop.md` §11.4). Wiring happens in `main`, where you can read it. A third-party DI package can generate that wiring (`core/metaprogramming.md` §3.2); `web` does not need one.
+
+## 2. Annotations
+
+All are declared annotations with processors in `bestie.framework.web` (`core/annotations.md`).
+
+| Annotation | Target | Effect |
+| ---------- | ------ | ------ |
+| `@Controller(prefix: str)` | class | Groups the class's routes under `prefix` |
+| `@Get(path)` `@Post(path)` `@Put(path)` `@Patch(path)` `@Delete(path)` | method | Declares a route |
+| `@Path` | parameter | Binds the path segment `{name}` with the parameter's name |
+| `@Query` | parameter | Binds the query value with the parameter's name. `T ?` makes it optional |
+| `@Header(name: str)` | parameter | Binds a request header. `T ?` makes it optional |
+| `@Body` | parameter | Decodes the body as JSON into the parameter's type |
+| `@Auth` | class or method | The route requires an authenticated principal |
+| `@Roles(roles: str...)` | class or method | The route requires one of the roles |
+
+A parameter of type `ptr<Request>` receives the request itself, and one of type `ptr<Context>` the per-request context.
+
+**Checked at compile time**, at the user's annotation:
+
+* A `{name}` in the path with no matching `@Path` parameter, or the reverse
+* A parameter with no binding annotation and no recognised type
+* A `@Path`, `@Query`, or `@Header` parameter whose type cannot be parsed from text (it must be a primitive, `str`, a newtype of one, or have `fromStr`)
+* A `@Body` or return type with no JSON codec (`std-lib/format.md` §11.2)
+* Two routes with the same method and path in one module
+
+## 3. Return Types
+
+| Handler returns | Response |
+| --------------- | -------- |
+| A serializable `T` | `200` with a JSON body |
+| `T ?` | `200` with `T`, or `404` when absent |
+| `T ! E` | `200` with `T`, or the response `app.onError` maps `E` to; `500` if no mapping is registered |
+| `own Response` | Exactly that response |
+| `void` | `204 No Content` |
+
+Absence and errors are the language's own (`core/absence.md`, `core/exceptions.md`), so a handler never builds a 404 by hand.
+
+## 4. What Is Generated
+
+The `@Controller` processor emits, for each controller, one dispatch function per route and an `App.mount` overload. `bestie expand UserController` shows it:
+
+```bestie
+// @generated by bestie.framework.web for UserController
+
+fun App.mount(c: ptr<UserController>) {
+    this.route(HttpMethod.Get,  "/users/{id}", RouteInfo.new(auth: false, roles: {}), c, UserController_get)
+    this.route(HttpMethod.Get,  "/users/",     RouteInfo.new(auth: false, roles: {}), c, UserController_list)
+    this.route(HttpMethod.Post, "/users/",     RouteInfo.new(auth: false, roles: {"admin"}), c, UserController_create)
+}
+
+fun UserController_get(c: ptr<UserController>, req: ptr<Request>): own Response {
+    val id = req.val.pathParam(0).toInt() catch |e| return Response.badRequest("id")
+    val dto = c.val.get(id) ?: return Response.notFound()
+    return Response.json(dto)
+}
+```
+
+The router is a compile-time table: route lookup is a match over path segments with no allocation, and each handler call is a direct call. The JSON encoder for `UserDto` comes from Tier 1 reflection and is equally direct.
+
+## 5. Middleware
+
+```bestie
+protocol Middleware {
+    fun handle(req: ptr<Request>, route: ptr<const RouteInfo>, next: Next): own Response
+}
+
+class RequestLog impl Middleware {
+    fun handle(req: ptr<Request>, route: ptr<const RouteInfo>, next: Next): own Response {
+        val start = Instant.now()
+        val own res = next.call(req)
+        log("${req.val.method} ${req.val.path} ${res.status} ${Instant.now() - start}")
+        return move res
     }
 }
 ```
 
-The compiler generates all route registrations, parameter extraction, and response serialization from the annotations above.
+* Middleware runs in the order it is registered with `app.use`, around every route.
+* `RouteInfo` carries the route's constant metadata — `auth` and `roles` from `@Auth` and `@Roles` — so an authorization middleware reads policy without any lookup.
+* `web` ships `Cors`, `RequestLog`, `Compress`, and `BearerAuth`. Anything else is a class implementing `Middleware`.
 
-## Minimal Imperative Example
+## 6. Execution Model
 
-For simple scripts or cases where annotation-style is unnecessary:
+`app.listen` runs the loop of `bestie.api.http` §8.1:
 
-```bestie
-import bestie.framework.web.App
-import bestie.framework.web.Request
-import bestie.framework.web.Response
-import bestie.framework.web.Context
+1. Accept a request.
+2. Move it into a **new fiber** (`std-lib/concurrency.md`). The fiber owns it from here.
+3. Run the middleware chain, then the matched handler.
+4. Respond, consuming the request.
 
-fun main(): void {
-    val app = App.new()
+Controllers are shared by every request, through the `ptr` given to `app.mount`. A controller's mutable state is therefore shared between fibers and must use `bestie.lib.concurrency` types (atomics, locks, channels). The controller must outlive `app.listen`, which it does when both are owned by `main`.
 
-    app.get("/health", fun(req: Request, ctx: Context): Response {
-        return Response.new(200, "ok")
-    })
+`AppOptions` sets the connection limit, the request size limit, timeouts, and graceful shutdown on `SIGTERM`.
 
-    app.listen("0.0.0.0", 8080)
-}
-```
+## 7. Without Annotations
 
-## Custom Middleware
+For a small service, routes can be registered with lambdas:
 
 ```bestie
-import bestie.framework.web.Middleware
-import bestie.framework.web.Request
-import bestie.framework.web.Response
-import bestie.framework.web.Context
-import bestie.framework.web.Next
-
-class LoggingMiddleware impl Middleware {
-    fun handle(req: Request, ctx: Context, next: Next): Response {
-        print("→ ${req.method} ${req.path}")
-        val res = next.call(req, ctx)
-        print("← ${res.status}")
-        return res
-    }
-}
+val own app = App.new()
+app.get("/health", req => Response.text("ok"))
+app.get("/time",   req => Response.json(Instant.now().toStr()))
+app.listen(SocketAddress.parse("127.0.0.1:8080")) catch |e| panic(e.toStr())
 ```
 
-## Server Bootstrap with DI
+Both styles share the router, middleware, and execution model.
 
-```bestie
-import bestie.framework.web.App
-import bestie.framework.di.Container
+## 8. Also Included
 
-fun main(): void {
-    val container = buildContainer()
-    val app = App.new()
+* **Static files** — `app.static("/assets", Path.new("public"))`, with `ETag` and range requests.
+* **Server-sent events** — a handler may return `own SseStream`; each `send` writes one event.
+* **Testing** — `TestClient` sends requests to an `App` in-process without a socket, for use with `bestie.lib.test`.
 
-    app.register(container.get(UserController))
-    app.register(container.get(ProductController))
+Server-rendered HTML templates are not in 1.0 (`platform.md` §4).
 
-    app.listen("0.0.0.0", 8080)
-}
-```
+## 9. Non-Goals
 
-## Non-Goals
-
-- No runtime annotation scanning or reflection
-- No controller auto-discovery from classpath
-- No hidden global mutable state
-- No implicit thread-per-request guarantee (strategy is configurable)
-
-## Integration Notes
-
-- Use `di` for constructor injection into controllers (controllers are resolved through the container).
-- Use `template` for MVC server-rendered views (return a `View` from a `@Controller` method).
-- Use `orm` for repository access inside controller services.
-- Use `stream` for chunked or SSE response bodies.
+* No runtime annotation scanning, reflection, or classpath discovery
+* No built-in DI container — wiring is code in `main`, or a third-party package
+* No aspect weaving — cross-cutting behaviour is middleware
+* No hidden global state; no implicit thread-per-request

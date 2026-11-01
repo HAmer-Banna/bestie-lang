@@ -852,18 +852,12 @@ fun connect(host: str, port: int ?)
 val token: str ?
 ```
 
-This syntax is sealed with the rest of core, and it is the **only** spelling. There is no named `option<T>` type: a second vocabulary for one representation would mean two ways to write every optional signature, and the whole surface below needs no import.
+It is the only spelling: there is no `option<T>`. **`absence.md` is the full definition** — the `absent` value, the `?` family of operators (`?:`, `?.`, `if`-let, `while`-let), optional places, boundaries, and cost. In brief:
 
-**The complete surface:**
-
-* Signatures, parameters, and fields spelled `T ?`
-* On `fun f(): T ?`: `return value` is present; a bare `return` is absent
-* `absent` — the absent value in expression position, for fields and assignments
-* `if (val x = …)` binds only when present, and `while (val x = …)` repeats until absent (`fp.md` §3.3). Binding an `own` place borrows it for the block
-* `else` supplies a fallback or diverts (`fp.md` §3.3)
-* `move place` on an `own T ?` field or element yields its value and leaves the place `absent` (`memory.md` §5.2.1)
-* `.address()` on a `T ?` place yields `ptr<T> ?` (`memory.md` §8.3)
-* FFI: C `NULL` maps to `ptr<T> ?` (`foreign.md`)
+* A `T` is accepted wherever a `T ?` is expected; `absent` (or a bare `return`) is the empty case
+* `x ?: fallback` gives the value or a fallback, or diverts with `?: return` / `?: break` / `?: panic(…)`
+* `x?.member` accesses a member when present
+* `if (val v = x)` and `while (val v = x)` bind when present
 
 ```bestie
 class Session {
@@ -880,10 +874,6 @@ class Session {
     }
 }
 ```
-
-`absent` is a contextual keyword valid only where a `T ?` is expected. It is not a null literal: it has no type of its own, cannot be compared with `==`, cannot be stored in a `T`, and cannot be dereferenced. Presence needs no constructor — a `T` is accepted wherever a `T ?` is expected, exactly as `return value` already works.
-
-Default parameters (`x: int = 0`) are a different tool: the caller may omit the argument and the compiler fills a compile-time constant. `x: int ?` means the value may be absent at runtime. Both are valid; they are not interchangeable.
 
 `?` binds to the immediately preceding type: `list<str ?>` is a list of optional strings; `list<str> ?` is an optional list.
 
@@ -937,13 +927,13 @@ fun f(): int ? ! IoError    // ✅ a value, or nothing, or a failure
 fun g(): int ! IoError ?    // ❌ 'T ! E ?' is not a type
 ```
 
-**Unwrapping composes with no special case.** `try` handles the failure, `else` handles the absence, and each keeps its ordinary meaning:
+**Unwrapping composes with no special case.** `try` handles the failure, `?:` handles the absence, and each keeps its ordinary meaning:
 
 ```bestie
-val entry = try it.next() else { break }
+val entry = try it.next() ?: break
 ```
 
-`try` propagates the `FsError` to the caller; `else` catches the clean end. A `try` on a `T ? ! E` yields `T ?`, which is then unwrapped like any other optional (`fp.md` §3.3).
+`try` propagates the `FsError` to the caller; `?:` catches the clean end. A `try` on a `T ? ! E` yields `T ?`, which is then unwrapped like any other optional (`absence.md` §3).
 
 **Why permit it.** The forcing case is a fallible iterator: `bestie.api.fs`'s `DirIterator.next()` must express the next entry, a clean end of directory, and a read error, and collapsing any two loses information. Every workaround under a strict reading is worse — an `End` error variant misrepresents normal termination as failure, a separate `hasNext()` needs lookahead and races, and a stateful `error()` checked after the loop is the `feof`/`ferror` model Bestie rejects elsewhere.
 

@@ -93,7 +93,9 @@ fun str.lastIndexOf(needle: str): int ?
 fun str.count(needle: str):       int     // non-overlapping occurrences
 ```
 
-`indexOf` / `lastIndexOf` return `int ?` (`option<int>`) — absence is explicit, never a `-1` sentinel.
+`indexOf` / `lastIndexOf` return `int ?` — absence is explicit, never a `-1` sentinel.
+
+Every needle and separator in this module is a **literal** `str`. Nothing here interprets its argument as a pattern; pattern search is `bestie.lib.regex` (`regex.md` §7).
 
 ```bestie
 if (val i = path.indexOf("/")) {
@@ -197,6 +199,7 @@ val ok = c.isAscii()
 | Raw byte access, codepoint access, iteration, byte slicing | core `str` (`core/types.md` §3, §6) |
 | Parsing, substring, search, split, trim, case, transforms | `bestie.lib.strings` (this document) |
 | Efficient repeated concatenation | `StringBuilder` (`std-lib/utils.md` §1) |
+| Pattern matching, pattern split and replace | `Regex` (`std-lib/regex.md`) — a `str` argument is always literal, a `Regex` always a pattern |
 
 For building strings in a loop, prefer `StringBuilder` over repeated `+` or `join` to avoid intermediate allocations:
 
@@ -223,17 +226,17 @@ errors ParseError {
 }
 ```
 
-Non-parsing operations do not fail: out-of-range substring indices **panic** (invariant violation), and search returns `option` rather than erroring.
+Non-parsing operations do not fail: out-of-range substring indices **panic** (invariant violation), and search returns `int ?` rather than erroring.
 
 ---
 
 ## 11. Intentional Non-Features
 
 * No implicit locale or culture
-* No regular-expression engine (a separate library concern)
+* No regular expressions, and no `str` argument ever read as a pattern — that is `bestie.lib.regex` (`regex.md`)
 * No implicit trimming inside parse functions
 * No mutation of `str` (it is immutable by definition)
-* No `-1` sentinels — absence is always `option`
+* No `-1` sentinels — absence is always `T ?`
 
 ---
 
@@ -244,6 +247,6 @@ Non-parsing operations do not fail: out-of-range substring indices **panic** (in
 * **Extension-based** — keeps core `str` minimal while offering method-style ergonomics
 * **Immutable** — every result is a new `str`
 * **Codepoint-correct** — indices are Unicode scalars, never byte offsets that split characters
-* **Explicit** — parsing is fallible and visible; absence is `option`; allocation is at the call site
+* **Explicit** — parsing is fallible and visible; absence is `T ?`; allocation is at the call site
 
 It is the practical text-processing layer on top of Bestie's deliberately small core string type.

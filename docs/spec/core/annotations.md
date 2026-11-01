@@ -26,7 +26,9 @@ This design aligns annotations with Bestie’s philosophy of *compile-time deter
 Bestie distinguishes **annotations the compiler acts on** from **annotations that are inert data**.
 
 * **Compiler annotations** are the closed set listed under *Predefined Annotations* below. That list is complete: an annotation the compiler acts on is defined there, or it is not one. It cannot be extended.
-* **Declared annotations** may be written by any layer or by user code. The compiler checks their targets and their argument types and then records them for external tools. They have **no compiler behavior whatsoever** — they generate nothing, validate nothing beyond their own arguments, and change no declaration's meaning.
+* **Declared annotations** may be written by any layer or by user code. On their own they are **inert data**: the compiler checks their targets and argument types, and nothing else. They gain behavior in exactly two ways, both defined in `metaprogramming.md`:
+  * **Compile-time reflection** — generic code reads them as constant values (`f.annotation<Column>()`, `metaprogramming.md` §2.3).
+  * **A processor** — a `processor fun` declared beside the annotation runs on each declaration that carries it and **adds** new declarations (`metaprogramming.md` §3).
 
 ```bestie
 annotation ValidateRange(min: int, max: int);
@@ -40,17 +42,25 @@ fun setScore(score: int): void;
 * Applying one to a target its declaration does not permit is a compile-time error
 * A declared annotation may not carry a compiler annotation — that would be a way to acquire compiler behavior indirectly
 
-### No compiler plugins
+### Extension without compiler plugins
 
-**There is no compiler-plugin mechanism.** A declared annotation cannot be given behavior by supplying code that runs during compilation. This follows from the platform pillars rather than from caution:
+Bestie must be extensible by third parties — a Spring-style web stack, an ORM, a DI container, a driver's register map — without any of it shipping with the compiler. It is, through `metaprogramming.md`. What it does not have is **native compiler plugins**: shared libraries loaded into the compiler that can do anything.
 
-* **Compilation speed is a hard constraint** (`platform.md` §1). A plugin is unbounded third-party work inside the build, which no amount of care in the compiler can bound.
-* **Core defines the meaning of its own syntax** (`platform.md` §12). A plugin that synthesizes fields or methods decides what a declaration *means* — the delegation that rule exists to forbid.
-* **"If something can be resolved at compile time, it must be"** (`lang.md` §2) is a promise about *the compiler*, not about a pipeline whose behavior varies per project.
+| | Native plugin | Bestie processor |
+| - | ------------- | ---------------- |
+| Written in | Compiler internals, any language | Bestie |
+| Can perform I/O during a build | Yes | No — pure, like `@pure` constant evaluation |
+| Can change what a declaration means | Yes | No — it can only **add** declarations |
+| Bounded | No | Step budget per run; one round; cached |
+| Output visible | Rarely | Real source, shown by `bestie expand` |
 
-Frameworks that need generated code use an explicit generator that emits `.bst` source you can read, diff, and step through — not an invisible phase that makes the file on disk differ from the program that runs. The annotation is the generator's input; the generated source is a file in your repository.
+The reasons follow from the platform pillars:
 
-In particular there is no Lombok-style field synthesis. `oop.md` §11.10's rule that every field must be explicitly initialized has no opt-out, because an escape hatch from an explicitness rule is just the rule being false.
+* **Compilation speed is a hard constraint** (`platform.md` §1). A processor is bounded, runs once over user source, sees only declarations, and is cached by its inputs.
+* **Core defines the meaning of its own syntax** (`platform.md` §12). A processor adds declarations beside the user's; it never rewrites one.
+* **Builds are reproducible and safe.** A dependency's processor cannot read your files or reach the network while you compile.
+
+**No Lombok-style member synthesis.** A processor cannot add fields or methods *inside* a declaration, because then a class would not show what it is. It can add a separate type, extension functions, or a protocol implementation beside it — `@Builder` produces `UserBuilder` and `User.builder()`. Most of what Lombok generates is unnecessary in Bestie anyway: fields are read directly, `val` makes them read-only, and the memberwise `init` exists already (`oop.md` §11.4). `oop.md` §11.10's rule that every field is explicitly initialized has no opt-out.
 
 ---
 
@@ -88,7 +98,7 @@ All three are contextual keywords: they carry meaning in exactly one position an
 
 For the same reason there are no `@noNew` / `@noInit` / `@noConstruct` annotations. Restricting construction is a **visibility** question, and visibility already answers it: an `init` declared without `public` is `internal`, so `Type.new(...)` is unavailable outside the module, and `private init` narrows it to the declaring type. Declaring any `init` at all removes the compiler-generated memberwise one (`oop.md` §11.4), so one existing rule covers what three annotations used to.
 
-**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory-layout.md` §13). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — `@Reflectable`, framework routing and test annotations — is declared by a higher layer and is an unknown annotation to a plain core build.
+**Not core annotations.** `@repr(C)` belongs to `bestie.api.foreign` — matching a C header's declared layout is an FFI contract, not a language mode (`memory-layout.md` §13). `@layout` and `@stable` do not exist at any layer: the compiler always packs to the minimum valid representation and there is no opt-out (`lang.md` §6.3). Anything else — framework routing, test, and mapping annotations — is a declared annotation from a higher layer or a third-party package, given behavior by its processor (`metaprogramming.md`).
 
 ---
 
@@ -204,7 +214,7 @@ Because annotations are compile-time only, these frameworks achieve:
 * Strong static guarantees
 * Predictable performance characteristics
 
-When a framework genuinely needs to introspect types, it uses `bestie.framework.reflection`, which is **compile-time first** and only materializes runtime metadata for types explicitly marked `@Reflectable` (see `std-framework/reflection.md`).
+Frameworks read annotations with compile-time reflection and generate code with processors (`metaprogramming.md`). There is no runtime reflection at any layer.
 
 ---
 
@@ -214,6 +224,6 @@ Bestie annotations are designed to be:
 
 * Static rather than reflective
 * Explicit rather than magical
-* Extensible without compiler modification
+* Extensible without compiler modification — by anyone, through `metaprogramming.md`
 
 This ensures annotations remain a **language-level tool**, not a runtime liability.

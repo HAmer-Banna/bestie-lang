@@ -263,7 +263,8 @@ Rationale:
 
 ### 11.2 Auto-Derivation and Custom Codecs
 
-* A type is **auto-serializable** (compiler-derivable `Serializer<T>` / `Parser<T>`) when every serialized field is itself serializable — i.e. value fields and `own` fields of serializable types. `data class`es are the common case and derive trivially.
+* A type is **auto-serializable** when every serialized field is itself serializable — i.e. value fields and `own` fields of serializable types. `data class`es are the common case.
+* Derivation is **library code, not compiler magic**: the codecs are generic functions that walk `reflect<T>().fields` with a compile-time loop (`core/metaprogramming.md` §2). `json.serialize(user)` unrolls into direct field writes, and `json.parse<User>` into direct field reads, with no runtime metadata. Field names can be overridden with `@Name("email_address")`, and fields skipped with `@Skip`, both declared annotations of `bestie.lib.format` that the codecs read as constants (§2.3 there). A third-party codec (`acme.format.properties`, §9) derives the same way.
 * `ref` and `ptr<T>` fields are **skipped**. If a type cannot be validly reconstructed without them, the compiler cannot derive a `Parser` for it — the programmer must supply a **custom `Parser<T>`** (§9) that re-establishes those links after the owned fields are built.
 * There is **no `Serializable` marker protocol** — serialization capability is expressed by satisfying `Serializer<T>` / `Parser<T>` (method-bearing), exactly as duplication is expressed by `Copyable` / `DeepCopyable` (`utils.md` §7). Capability is always a real method, never an empty tag.
 

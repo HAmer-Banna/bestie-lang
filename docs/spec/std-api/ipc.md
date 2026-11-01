@@ -412,8 +412,8 @@ import bestie.api.io.Encoding
 fun runWorker(job: str): str ! (IpcError | OsError | ReadError) {
     val own p = try pipe()
     defer p.free()
-    val own rd = p.reader else { return IpcError.Closed }
-    val own wr = p.writer else { return IpcError.Closed }
+    val own rd = move p.reader ?: return IpcError.Closed
+    val own wr = move p.writer ?: return IpcError.Closed
 
     var passed = list<HandleToken>.new()
     passed.add(wr.token())

@@ -302,7 +302,7 @@ fun scanLogs(): void ! FsError {
 ```bestie
 val it = dir.iterator()
 while (true) {
-    val entry = try it.next() else { break }
+    val entry = try it.next() ?: break
     process(entry)
 }
 ```

@@ -120,6 +120,9 @@ Provides **high-level utilities** without system dependency.
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
 - `format` — formatting and templates
+- `strings` — parsing, search, split, trim, case conversion
+- `regex` — linear-time regular expressions, compiled at compile time when constant
+- `test` — `@Test` functions and assertions, run by `bestie test`
 - `concurrency` — fibers, channels, atomics, locks (built on core `thread`)
 - `utils` — `Iterator`/`Iterable`, `Equable`/`Comparable`/`Hashable`, the operator protocols, `StringBuilder`, copy helpers
 
@@ -188,26 +191,38 @@ import bestie.api.<api>
 
 ## 4. Standard Framework (`std-framework`)
 
-High-level abstractions built **strictly on std-api and core**.
+### Purpose
 
-Frameworks provide structure — not runtime magic.
+Bestie's core, std-lib, and std-api are designed for systems programming: bare metal, kernels, engines, and hot paths. A backend engineer recognises Bestie through its syntax — Kotlin-like, with annotations — but a language is only credible for backends when someone can build a real server in it.
+
+`std-framework` exists to make that case on day one. It is a **showcase and a starting point**, not a platform:
+
+* It proves that Bestie is excellent at web servers, with annotation-driven routing that compiles to direct calls.
+* It is a reference implementation for framework authors: it uses only public mechanisms (`core/metaprogramming.md`), so anything it does, a third-party package can do as well.
+* It is deliberately small. Bestie does not try to compete with Spring or Django.
 
 ### Frameworks
 
-- `web` — HTTP-based web (servlet-style, minimal core)
-- `template` — MVC template engine
-- `orm` — database abstraction
-- `gui` — desktop UI
-- `stream` — streaming / reactive
-- `test` — testing
-- `aop` — aspect utilities (compile-time only)
-- `di` — dependency injection / IoC
+| Project | Status | Spec |
+| ------- | ------ | ---- |
+| `bestie/web` | **1.0, ready at launch** | `std-framework/web.md` |
+
+Testing is not a framework: it is `bestie.lib.test` in std-lib, because every package — std-lib itself included — needs it and `bestie test` is part of the toolchain.
+
+Further `bestie/` projects (templates, an ORM) may follow after 1.0, under the same rules. Anything that is mainly a matter of taste — DI containers, aspect weaving, reactive streams, GUI toolkits — is left to the community.
+
+### Third-Party Frameworks Are Expected
+
+**Bestie encourages users to build and publish their own libraries and frameworks** — a Spring-style application framework, an ORM, a DI container, serializers, validation, a register-map generator for a driver. The language is designed so that they are first-class:
+
+* **Compile-time reflection** lets a library read a user's types and annotations and compile to direct code (`core/metaprogramming.md` §2).
+* **Processors** let a library turn annotations into generated declarations — route tables, containers, builders — that are visible, cached, and bounded (`core/metaprogramming.md` §3).
+* **The package manager** publishes and resolves them exactly like `bestie/web` (`std-tools/package-manager.md`). The `bestie/` namespace is reserved; nothing else about official projects is privileged.
 
 ### Properties
 
-- Published to the registry under the reserved `bestie/` namespace
-- Declared in `[dependencies]` like any project and resolved by `bestie` (`std-tools/package-manager.md` §4.3)
-- Each version declares the minimum toolchain it requires
+- Not shipped with the compiler. Published to the registry under the reserved `bestie/` namespace and declared in `[dependencies]` like any project (`std-tools/package-manager.md` §4.3)
+- Versioned separately from the toolchain; each version declares the minimum toolchain it needs
 - Imported via:
 
 ```
@@ -216,8 +231,8 @@ import bestie.framework.<framework>
 
 ```
 
-- Built **on APIs, not on runtime**
-- No reflection-based magic
+- Built only on core, std-lib, std-api, and the public metaprogramming mechanism
+- No runtime reflection, no runtime scanning
 - Optional layer
 
 ### Stability Target
@@ -360,8 +375,6 @@ bestie = "1.2"                     # language, compiler, std-lib, std-api
 "acme/json"       = "3.1"
 "acme/postgres"   = "0.9"
 
-[dev-dependencies]
-"bestie/test" = "1.2"
 ```
 
 The full manifest format is `std-tools/package-manager.md` §4.
@@ -451,7 +464,7 @@ These are **important architectural clarifications**, not cosmetic:
 
 1. Explicit **layering contract**
 2. Stability targets per layer (98 / 80 / 60 / 40)
-3. Clear **no-runtime-magic rule** for frameworks
+3. Clear **no-runtime-magic rule** for frameworks, with compile-time metaprogramming as the extension mechanism for everyone
 4. Deterministic binary model clarified
 5. Strict dependency direction defined
 6. Clear distinction between **core guarantees vs framework flexibility**

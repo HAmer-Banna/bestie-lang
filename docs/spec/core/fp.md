@@ -283,7 +283,7 @@ fun f(): int {
 
 ### 3.2 Partial Functions
 
-`T ?` is core syntax (see `types.md` §8.3). On a function return it is the natural spelling: a partial function either returns a value or returns nothing.
+`T ?` is core syntax (`absence.md`). On a function return it is the natural spelling: a partial function either returns a value or returns nothing.
 
 ```bestie
 fun getUser(id: int): User ?
@@ -309,59 +309,31 @@ Rules:
 * No implicit exceptions, no sentinel values
 * Optional **parameters and fields** use the same syntax: `fun connect(host: str, port: int ?)`, `val token: str ?`. `?` is not return-only.
 
-There is no named `option<T>` type and no constructors to import — `T ?` is the only spelling. In expression position the absent value is written `absent` (`types.md` §8.3); presence needs no constructor, since a `T` is accepted wherever a `T ?` is expected.
+There is no named `option<T>` type and no constructors to import — `T ?` is the only spelling. In expression position the absent value is written `absent` (`absence.md` §2); presence needs no constructor, since a `T` is accepted wherever a `T ?` is expected.
 
 ---
 
 ### 3.3 Calling Partial Functions
 
-The result of a partial function is `T ?`. It must be explicitly handled. There is no truthiness check — Bestie has no null and no implicit presence test.
-
-**`if`-let — core, no import.** Bind and enter the block only when present:
+The result of a partial function is `T ?`, and the caller must handle the absent case. The operators are defined in `absence.md` §3:
 
 ```bestie
+val user = getUser(id) ?: return                 // absent → return
+val user = getUser(id) ?: User.anonymous()       // absent → fallback
+val city = getUser(id)?.address.city             // str ?
+
 if (val user = getUser(id)) {
-    sendEmail(user)   // user is User here, not User ?
-}
-```
-
-**`else` unwrap — core.** Provide a fallback or divert:
-
-```bestie
-val user = getUser(id) else { return }           // absent → early return
-val user = getUser(id) else { User.anonymous() } // absent → fallback value
-```
-
-**Both cases — core.** `if`-let with an `else` covers the two-branch form:
-
-```bestie
-if (val user = getUser(id)) {
-    sendEmail(user)
+    sendEmail(user)                              // user: User
 } else {
     println("user not found")
 }
+
+while (val job = queue.poll()) { run(job) }
 ```
 
-There is no `switch` form for `T ?`, because there is nothing a two-arm `switch` would add over `if`-let — and no constructors to name in a `case` pattern.
+There is no `switch` form for `T ?`: a two-arm `switch` would add nothing over `if`-let, and there are no constructors to name in a `case` pattern.
 
-**`while`-let — core.** Repeat while the expression is present. The expression is evaluated again before every pass, and the loop ends at the first absent value:
-
-```bestie
-while (val job = queue.poll()) {
-    run(job)
-}
-```
-
-`while`-let has no `else`. `break` and `continue` work as in any `while` (`lang.md` §13).
-
-**Binding a place borrows it.** When the expression is a call, `val x` holds the result. When it is a **place** — a field, an element, or a binding — what `x` holds depends on the type:
-
-| Inner type | `if (val x = place)` / `while (val x = place)` |
-| ---------- | ---------------------------------------------- |
-| Copyable (`int`, `value class`, `ptr<T>`, …) | A copy, as with any `val` |
-| `own T` or a `class` | A **borrow** of the value in the place, valid for the block |
-
-A borrow can be read and mutated through, but inside the block it cannot be moved, freed, or stored, and the place it came from cannot be assigned, moved out of, or swapped. The check is local to the block, so it needs no lifetime analysis. Looking inside an optional field never empties it by accident. To take ownership, say so with `move`:
+**Binding a place borrows it.** When the expression is a field, an element, or a binding rather than a call, binding a copyable value copies it, and binding an `own` value or a `class` **borrows** it for the block. A borrow can be read and mutated through, but inside the block it cannot be moved, freed, or stored, and the place cannot be assigned, moved out of, or swapped. The check is local to the block and needs no lifetime analysis. To take ownership, say so with `move`:
 
 ```bestie
 if (val n = this.top) { n.value += 1 }            // borrow; top is unchanged
@@ -491,7 +463,7 @@ C functions that return nullable pointers are mapped to `ptr<T> ?` at the FFI bo
 
 ### 4.5 The Structural Guarantee
 
-No code path in a Bestie program — core, std-lib, third-party, or FFI wrapper — can return a value typed as something the caller must null-check. Every absent case is `T ?`, handled at the call site through `if-let`, `else` unwrap, or (with std-lib names) pattern matching. The compiler enforces this exhaustively.
+No code path in a Bestie program — core, std-lib, third-party, or FFI wrapper — can return a value typed as something the caller must null-check. Every absent case is `T ?`, handled at the call site through `?:`, `?.`, `if`-let, or `while`-let (`absence.md` §3). The compiler enforces this exhaustively.
 
 ---
 

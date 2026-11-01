@@ -290,7 +290,7 @@ panic("unreachable state reached")
 Some expressions cannot complete. `panic()` is one; so are `return`, `break`, and `continue`. An expression that provably does not complete **satisfies any expected type**, because it never produces a value for the type to describe:
 
 ```bestie
-val port = config.port else { panic("no port configured") }   // port: int
+val port = config.port ?: panic("no port configured")   // port: int
 val mode = if (ok) Mode.Fast else panic("unreachable")        // mode: Mode
 ```
 
@@ -351,9 +351,9 @@ fun readConfig(path: str): str ! IoError {
 
 `T ?` is absence. `T ! E` is success-or-error. There are exactly two, each with exactly one spelling — no named `option<T>` / `result<T,E>` aliases, and nothing to import.
 
-Matching a failure matches the **error set** directly inside a `catch` (§3.4); absence is unwrapped with `if`-let or `else` (`fp.md` §3.3). Neither has constructors to destructure.
+Matching a failure matches the **error set** directly inside a `catch` (§3.4); absence is unwrapped with `if`-let or `?:` (`absence.md` §3). Neither has constructors to destructure.
 
-See `types.md` §8.3 and §8.4.
+See `absence.md` and `types.md` §8.4.
 
 ---
 

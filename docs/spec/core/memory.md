@@ -322,7 +322,7 @@ class Stack {
     var own top: Node ?          // absent = empty stack
 
     fun pop(): int ? {
-        val own first = move this.top else { return }   // top is now absent
+        val own first = move this.top ?: return   // top is now absent
         this.top = move first.next                     // first.next is now absent
         val v = first.value
         first.free()

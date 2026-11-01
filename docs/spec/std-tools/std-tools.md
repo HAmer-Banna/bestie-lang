@@ -89,7 +89,7 @@ Execute tests defined in the project.
 Behavior:
 
 - Discovers tests under `/test`
-- Uses `bestie.framework.test`
+- Uses `bestie.lib.test` (`std-lib/test.md`)
 - Fails on first error by default
 
 Examples:

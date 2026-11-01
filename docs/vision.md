@@ -157,7 +157,7 @@ Section 2 is the commitment. Every new spec document states which rules it relie
 
 Territory two lives or dies on backend productivity.
 
-**Already in the spec:** streams, files, sockets, HTTP, databases, IPC, processes (`std-api`); web, ORM, DI, templates, testing, streaming (`std-framework`); fibers with I/O parking (`std-lib/concurrency.md`); a package manager with a registry and reproducible builds (`std-tools/package-manager.md`).
+**Already in the spec:** streams, files, sockets, HTTP, databases, IPC, processes (`std-api`); an annotation-driven web framework ready at launch (`std-framework/web.md`); testing (`std-lib/test.md`); compile-time reflection and processors so the community can build ORMs, DI containers, and Spring-style frameworks with the same power as the official one (`core/metaprogramming.md`); fibers with I/O parking (`std-lib/concurrency.md`); a package manager with a registry and reproducible builds (`std-tools/package-manager.md`).
 
 **Roadmap:**
 
@@ -165,7 +165,7 @@ Territory two lives or dies on backend productivity.
 | - | --- | --- |
 | E1 | **Scalable I/O under fibers** — specify the scheduler's poller on io_uring, epoll, kqueue, and IOCP | Hundreds of thousands of connections per process |
 | E2 | **Official TLS project** (`bestie/tls`) | Every backend speaks TLS; `http.md` defers it today |
-| E3 | **Observability** — structured logging, metrics, tracing in std-framework | Production services need them on day one |
+| E3 | **Observability** — structured logging, metrics, tracing (std-lib API, with `bestie/web` integration) | Production services need them on day one |
 | E4 | **Fault containment for services** — guidance and support for supervisor processes, since a panic ends the process | One bad request must not take down a gateway; `ipc` provides the channel |
 | E5 | **Zero-copy serialization** in `bestie.lib.format` | Message-heavy systems (trading, ad-tech) |
 

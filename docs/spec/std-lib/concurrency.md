@@ -40,7 +40,7 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 * Structured concurrency / supervised task groups
 * Actors
 * Futures, promises, `async` / `await`
-* Reactive streams (see `std-framework/stream.md` if that layer exists)
+* Reactive streams — a third-party concern
 * A standalone “backpressure” type — bounded `Channel` capacity *is* backpressure
 * Deadlock-freedom proofs — locks can deadlock; that is the programmer’s problem
 * Parallel collections or work-stealing pools (may be added later if justified)

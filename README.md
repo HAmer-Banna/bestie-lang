@@ -136,9 +136,17 @@ core → std-lib → std-api → (optional std-framework)
 - **Core** — language structure (syntax, types, ownership, `thread`)
 - **Std-lib** — helpers (collections, `Iterable`/`Comparable`, `map`/`filter`, fibers)
 - **Std-api** — talking to the outside (OS, files, console, HTTP, FFI)
-- **Std-framework** — optional real-world stacks
+- **Std-framework** — optional, downloaded with the package manager: `bestie/web`, ready at launch, to show that Bestie builds real web servers
 
 If a helper in lib and a type in api would share a name, **lib wins**. Specs live under `docs/spec/` (`lang.md` is core syntax, not “the whole language”). The platform contract is `docs/platform.md`.
+
+---
+
+## 🧩 Build Your Own Frameworks
+
+Bestie ships a small official web framework, not a platform. The ecosystem is meant to be built by its users: **we encourage you to create and publish your own libraries and frameworks** — a Spring-style application framework, an ORM, a DI container, serializers, validators.
+
+You get the same tools the official framework uses: compile-time reflection and annotation processors written in plain Bestie, generating visible code with no runtime reflection ([`core/metaprogramming.md`](docs/spec/core/metaprogramming.md)), and a package manager to publish them.
 
 ---
 
@@ -147,7 +155,7 @@ If a helper in lib and a type in api would share a name, **lib wins**. Specs liv
 - Not a garbage-collected language
 - Not a scripting or VM-based runtime language
 - Not a C++ successor or compatibility layer
-- Not a framework-heavy ecosystem
+- Not a framework-heavy standard distribution — frameworks come from the community
 - Not designed to solve every problem domain
 
 Bestie is focused: **deterministic, native, explicit, and stable.**

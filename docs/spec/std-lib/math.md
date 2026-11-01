@@ -63,7 +63,7 @@ val y = x + x   // compile-time error or explicit overflow handling
 
 Core has no matrix type. Compile-time grids that are **storage only** stay as nested `array<T>` (`array<int>[3][3]` in `core/types.md`). Algebra is not a language primitive.
 
-`matrix<T>` lives in `bestie.lib.math`. It is a **`class`**, lowercase like `list` and `option`: a foundational library type, not a nominal domain object.
+`matrix<T>` lives in `bestie.lib.math`. It is a **`class`**, lowercase like `list` and `set`: a foundational library type, not a nominal domain object.
 
 ### 4.1 Class kind
 

@@ -50,6 +50,7 @@ Flags that are not declared are `false` by default — **no runtime check, no li
 | ------------- | ------ | ----------------------- |
 | `build.mode`  | `str`  | `"debug"`, `"release"`, `"safe"` |
 | `build.debug` | `bool` | `true` in debug builds  |
+| `build.test`  | `bool` | `true` when built by `bestie test` (`std-lib/test.md`) |
 
 `build.mode` is selected by the toolchain and is the same switch that governs signed-overflow trapping (`core/lang.md` §22.2). It is most useful for guarding debug-only code so it is *eliminated* from release binaries:
 

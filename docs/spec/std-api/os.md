@@ -167,7 +167,7 @@ fun gitRevision(): str ! (OsError | ReadError) {
     val own proc = try spawn("/usr/bin/git", args[..], opts.address())
     defer proc.free()
 
-    val own out = proc.stdout else { return OsError.NoPipe }
+    val own out = move proc.stdout ?: return OsError.NoPipe
     val own text = TextReader.new(move out, Encoding.Utf8)
     defer text.close()
 

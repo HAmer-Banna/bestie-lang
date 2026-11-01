@@ -19,7 +19,7 @@ This document defines the **Bestie Standard Database API (`bestie.api.db`)**.
 
 ### 1.2 What This API Does *Not* Provide
 
-* ORM abstractions (see `bestie.framework.orm`)
+* ORM abstractions — a job for third-party packages built with `core/metaprogramming.md`
 * ActiveRecord patterns
 * Caching layers
 * Async query frameworks
@@ -90,7 +90,7 @@ A column value is **typed**. An earlier shape returned `map<str, str>` — every
 val name : DbValue ? = try row.get("name")
 ```
 
-SQL `NULL` means *this column has no value*, which is exactly what `T ?` means in Bestie (`core/types.md` §8.3). Adding a `DbValue.Null` variant would create a second absence vocabulary alongside the one core already has, and callers would have to handle both.
+SQL `NULL` means *this column has no value*, which is exactly what `T ?` means in Bestie (`core/absence.md`). Adding a `DbValue.Null` variant would create a second absence vocabulary alongside the one core already has, and callers would have to handle both.
 
 ---
 
@@ -157,8 +157,8 @@ fun listUsers(conn: ptr<DbConnection>): void ! DbError {
 
     try for (row in cur) {
         defer row.freeDeep()
-        val id    = try row.get("id")    else { continue }
-        val email = try row.get("email") else { continue }
+        val id    = try row.get("id")    ?: continue
+        val email = try row.get("email") ?: continue
         println("${id} ${email}")
     }
 }
@@ -181,7 +181,7 @@ class Row {
 Reading a typed value is an ordinary exhaustive `switch`:
 
 ```bestie
-val v = try row.get("age") else { return }
+val v = try row.get("age") ?: return
 
 switch (v) {
     case DbValue.Integer(val n) => useAge(n)
@@ -293,7 +293,7 @@ Rules:
 
 * `bestie.api.network` — drivers connect over sockets from that package
 * `bestie.api.io` — a `Blob` streamed rather than materialized uses the stream protocols
-* `bestie.framework.orm` — builds on this package; nothing here knows it exists
+* ORMs and query builders — third-party packages build on this one; nothing here knows they exist
 
 Driver implementations for specific servers (PostgreSQL, SQLite, MySQL) are **separate packages**, not part of this API. This document defines the shape every driver presents.
 
