@@ -201,6 +201,11 @@ The compiler can perform:
 * Cross-module inlining
 * Global dead code elimination
 * Data layout optimization
+* A private calling convention for functions no foreign code can call
+
+### 5.3 Where Bestie Beats C
+
+The language rules that let this compiler generate faster code and smaller data than a C compiler — no-alias facts, the private calling convention, tagged pointers, and the proposals that follow from them — are collected in `codegen-advantages.md`.
 
 ---
 

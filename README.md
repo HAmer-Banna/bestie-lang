@@ -123,6 +123,8 @@ Bestie guarantees **C/Zig-class performance** at the core level:
 
 Higher-level frameworks may trade performance for productivity, but never change the core cost model.
 
+Bestie's rules also let the compiler do what a C compiler may not: assume no aliasing, use a private calling convention for code no C can call, and pack tags into unused bits. How that turns into faster code and smaller data: [docs/compiler/codegen-advantages.md](docs/compiler/codegen-advantages.md).
+
 ---
 
 ## 🧱 Architecture

@@ -152,6 +152,13 @@ Section 2 is the commitment. Every new spec document states which rules it relie
 | P2 | **Allocator-aware collections and `new`** — an arena per frame, request, or message | Game engines, trading gateways, compilers |
 | P3 | **Fallible element access** — `xs.at(i): T ?` beside panicking `xs[i]`, for indices from untrusted input | Backend services, parsers |
 | P4 | **Profile-guided and link-time optimization** in the toolchain | Every hot path |
+| P5 | **No-alias code generation** — `own`, `val`, and `const` lowered to `noalias`/`readonly` facts (`compiler/codegen-advantages.md` §2.1) | Every loop; vectorization |
+| P6 | **Private calling convention** for non-`export` functions — results, `T ! E`, and `T ?` in registers (§2.2 there) | Every call |
+| P7 | **`@checkFree`** — a compile-time error if a bounds check survives in a function (§2.6 there) | Engines, codecs, trading hot paths |
+| P8 | **Compressed references** — `rel<T>`, a 32-bit offset into an arena or region (§3.3 there) | Compilers, graphs, shared memory, zero-copy formats |
+| P9 | **`list<T>.soa`** — struct-of-arrays collections built with compile-time reflection (§3.4 there) | Game and physics engines, analytics |
+
+Why these make Bestie faster and smaller than C, and which rule makes each one legal, is in `compiler/codegen-advantages.md`.
 
 ### 3.3 Extending Easily for Backend Needs
 
