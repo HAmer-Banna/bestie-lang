@@ -84,7 +84,7 @@ The **unified part** of `bestie.lib.format` is the codec interface:
 * shared error handling
 * shared explicitness rules
 
-The unified part is **not** a mandatory in-memory tree such as "everything is `map<str, X>`".
+The unified part is **not** a mandatory in-memory tree such as "everything is `Map<str, X>`".
 Bestie avoids flattening structurally different formats into one lossy representation.
 
 Examples:
@@ -92,7 +92,7 @@ Examples:
 * JSON may map naturally to a user type or a `map`
 * CSV naturally maps to rows
 * XML naturally maps to an explicit document/tree model
-* `.properties` naturally maps to `map<str, str>`
+* `.properties` naturally maps to `Map<str, str>`
 
 Formats share one codec model while preserving their own structure.
 
@@ -112,7 +112,7 @@ Rules:
 * No dynamic typing
 * No implicit number coercion
 * No silent field dropping
-* Parsing into `map<str, T>` is allowed when the target shape is explicitly requested
+* Parsing into `Map<str, T>` is allowed when the target shape is explicitly requested
 
 ---
 
@@ -139,7 +139,7 @@ Rules:
 ```bestie
 import bestie.lib.format.csv
 
-val rows = try csv.parse<list<Row>>(input)
+val rows = try csv.parse<List<Row>>(input)
 val text = csv.serialize(rows)
 ```
 
@@ -168,7 +168,7 @@ Rules:
 * Field names must match
 * Missing fields are errors — **unless** the field declares a default, which makes it optional on deserialize (see §11.9 for schema evolution)
 * Extra fields are errors unless explicitly allowed (opt-in per call, §11.9)
-* Generic container targets such as `map<str, str>` or `list<Row>` are valid only when explicitly requested by the caller
+* Generic container targets such as `Map<str, str>` or `List<Row>` are valid only when explicitly requested by the caller
 * Construction always runs the target type's constructor, so type invariants are enforced (see §11.7)
 
 ---
@@ -211,14 +211,14 @@ Custom codecs may target:
 
 * user-defined data classes
 * explicit document models
-* explicit container shapes such as `map<str, str>` when the format naturally fits them
+* explicit container shapes such as `Map<str, str>` when the format naturally fits them
 
 Example:
 
 ```bestie
 import acme.format.properties
 
-own props = properties.parse<map<str, str>>(input)
+own props = properties.parse<Map<str, str>>(input)
 own text = properties.serialize(props)
 ```
 
@@ -274,9 +274,9 @@ A container serializes element-by-element, following the element kind from §11.
 
 | Container | Serialization |
 | --------- | ------------- |
-| `list<value T>` / `list<own T>` | every element serialized; deserializes to an **owning** container the caller owns |
-| `list<ref T>` | elements are non-owning handles → **not serializable** (a custom codec must decide how to resolve them) |
-| `list<ptr<T>>` | raw addresses → **not serializable** |
+| `List<value T>` / `List<own T>` | every element serialized; deserializes to an **owning** container the caller owns |
+| `List<ref T>` | elements are non-owning handles → **not serializable** (a custom codec must decide how to resolve them) |
+| `List<ptr<T>>` | raw addresses → **not serializable** |
 
 A deserialized collection always **owns** its elements and its buffer — there is no way to deserialize into a non-owning collection.
 
@@ -315,22 +315,22 @@ Deserialization in Bestie treats input as **untrusted data, never as instruction
 
 > Contrast with `deepCopy` (`utils.md` §7.7): `deepCopy` duplicates *already-valid in-program data* and so copies fields directly without re-running constructors. Deserialization handles *untrusted external data* and therefore must go through the constructor. The asymmetry is deliberate.
 
-### 11.8 Excluding Fields (`@transient`)
+### 11.8 Excluding Fields (`@Transient`)
 
-`ref` and `ptr<T>` fields are excluded automatically (§11.1). A **value or `own` field** can be excluded explicitly with `@transient` — the Bestie answer to "don't put this in the payload" (secrets, caches, derived data):
+`ref` and `ptr<T>` fields are excluded automatically (§11.1). A **value or `own` field** can be excluded explicitly with `@Transient` — the Bestie answer to "don't put this in the payload" (secrets, caches, derived data):
 
 ```bestie
 data class Session {
     userId: int
-    @transient token: str      // never serialized
-    @transient cache: Digest    // derived; rebuilt, not stored
+    @Transient token: str      // never serialized
+    @Transient cache: Digest    // derived; rebuilt, not stored
 }
 ```
 
 Rules:
 
-* A `@transient` field is **omitted on serialize** and **not read on deserialize**.
-* Because deserialization goes through the constructor (§11.7), a `@transient` field must be supplied by the constructor — typically via a default or a derived value. A type whose constructor *requires* a transient field with no default cannot be auto-derived and needs a custom `Parser<T>`.
+* A `@Transient` field is **omitted on serialize** and **not read on deserialize**.
+* Because deserialization goes through the constructor (§11.7), a `@Transient` field must be supplied by the constructor — typically via a default or a derived value. A type whose constructor *requires* a transient field with no default cannot be auto-derived and needs a custom `Parser<T>`.
 * Exclusion is **opt-out per field and visible at the declaration site** — there is no way to accidentally serialize a field you marked transient, and no hidden global "skip" list.
 
 ### 11.9 Versioning and Schema Evolution

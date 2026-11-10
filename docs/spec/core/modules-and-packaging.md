@@ -495,7 +495,7 @@ Bestie code reaches other Bestie code as a **`library`**: published and consumed
 
 A Java `.jar` works because bytecode is portable and the JVM links it at run time. Bestie has neither, and three of its core guarantees make a precompiled Bestie-to-Bestie binary format impossible to keep stable:
 
-* **Generics are monomorphized** (`compiler/compiler-architecture.md`). `list<T>` from a library is compiled once for each `T` the *consumer* uses — the library cannot ship code for types it has never seen.
+* **Generics are monomorphized** (`compiler/compiler-architecture.md`). `List<T>` from a library is compiled once for each `T` the *consumer* uses — the library cannot ship code for types it has never seen.
 * **Layout is not stable across compiler versions** (`memory-layout.md` §15). A `value class` compiled by one compiler may have different field offsets under the next; a binary that baked in the old offsets would read the wrong bytes.
 * **Inlining and dead-code elimination cross module boundaries.** That is where "C performance" comes from, and it requires the source of both sides at once.
 

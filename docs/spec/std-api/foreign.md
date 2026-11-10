@@ -174,13 +174,13 @@ foreign fun strlen(s: ptr<byte>): uint
 Conversion is explicit in both directions, because both directions have a cost and a failure mode:
 
 ```bestie
-fun toCStr(s: str): own list<byte>           // appends a NUL; caller owns the buffer
+fun toCStr(s: str): own List<byte>           // appends a NUL; caller owns the buffer
 fun fromCStr(p: ptr<byte>): own str ! ForeignError    // scans to NUL, validates UTF-8
 ```
 
 Rules:
 
-* `toCStr` allocates a NUL-terminated copy in a `list<byte>`; `c[0].address()` is the `ptr<byte>` to hand to C, and it converts to `ptr<const byte>` implicitly because adding `const` is always allowed (`core/memory.md` §8.8). A Bestie `str` is **not** NUL-terminated and may contain interior NUL bytes — one that does is `ForeignError.InteriorNul`, because truncating it silently is how injection bugs start.
+* `toCStr` allocates a NUL-terminated copy in a `List<byte>`; `c[0].address()` is the `ptr<byte>` to hand to C, and it converts to `ptr<const byte>` implicitly because adding `const` is always allowed (`core/memory.md` §8.8). A Bestie `str` is **not** NUL-terminated and may contain interior NUL bytes — one that does is `ForeignError.InteriorNul`, because truncating it silently is how injection bugs start.
 * `fromCStr` is fallible: C makes no UTF-8 guarantee, and invalid bytes are `ForeignError.InvalidUtf8` rather than a replacement character.
 * `fromCStr` **copies**. The returned `str` does not alias foreign memory, so it stays valid after the foreign buffer is freed.
 * Neither function frees anything on the C side. If the C API says the caller must free the returned pointer, call its free function (§6).

@@ -42,6 +42,8 @@ fun setScore(score: int): void;
 * Applying one to a target its declaration does not permit is a compile-time error
 * A declared annotation may not carry a compiler annotation — that would be a way to acquire compiler behavior indirectly
 
+**Case says which kind it is.** Compiler annotations are `@camelCase` (`@trusted`, `@repr`, `@noInline`); declared annotations are `@PascalCase` (`@Test`, `@Transient`, `@Get`, `@ValidateRange`). A reader can tell at a glance whether the compiler acts on an annotation or a library reads it (`lang.md` §3.1.3a).
+
 ### Extension without compiler plugins
 
 Bestie must be extensible by third parties — a Spring-style web stack, an ORM, a DI container, a driver's register map — without any of it shipping with the compiler. It is, through `metaprogramming.md`. What it does not have is **native compiler plugins**: shared libraries loaded into the compiler that can do anything.

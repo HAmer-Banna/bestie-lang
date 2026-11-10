@@ -124,6 +124,29 @@ An identifier starts with a Unicode letter or `_`, followed by any number of Uni
 * Identifiers are compared by exact code points. Bestie does **not** apply Unicode normalization, so two identifiers that render identically but differ in code points are different identifiers; the compiler warns when a file contains such a pair.
 * There is no length limit and no sigil or prefix convention carrying meaning.
 
+#### 3.1.3a Naming Conventions
+
+Case in Bestie carries one fact a reader can check at a glance: **where a name comes from**. A lowercase type is built into core and needs no import; a PascalCase type was imported or declared. The conventions are the same in every layer and in user code, and the compiler warns on a violation.
+
+| Kind | Convention | Examples |
+| ---- | ---------- | -------- |
+| Core built-in types — no import | `lowercase` | `int`, `uint128`, `float16`, `bool`, `char`, `str`, `byte`, `array<T>`, `slice<T>`, `range<T>`, `tuple`, `ptr<T>`, `fn`, `thread`, `global<T>`, `never` |
+| Every other type — std-lib, std-api, std-framework, user code; classes, protocols, enums, error sets, newtypes, unions, bitfields | `PascalCase` | `List<T>`, `Map<K,V>`, `PriorityQueue<T>`, `Atomic<T>`, `Fiber`, `Decimal128`, `Heap`, `Comparable`, `Ordering`, `IoError`, `Port` |
+| Functions, methods, fields, properties, parameters, local bindings (including a local `const`) | `camelCase` | `toStr`, `createSlice`, `readUnaligned`, `count` |
+| Module-level `const` and `val`, and constants on a type | `UPPER_SNAKE_CASE` | `UART_BASE`, `MAX_RETRIES`, `HEAP`, `SHUTDOWN`, `int32.MAX`, `float64.NAN` |
+| Enum variants and error-set members | `PascalCase` | `Ordering.Relaxed`, `IoError.NotFound` |
+| Type parameters | One capital letter, or `PascalCase` when one letter is unclear; compile-time value parameters in `UPPER_SNAKE_CASE` | `T`, `K`, `V`, `E`, `F`, `N`, `BITS` |
+| Variations of a type family | `lowercase` | `List<T>.linked`, `PriorityQueue<T>.max`, `.immutable` |
+| Annotations the compiler defines (core, `annotations.md`) | `@camelCase` | `@trusted`, `@repr`, `@noInline`, `@globalAllocator` |
+| Annotations a library or framework declares | `@PascalCase` | `@Test`, `@Transient`, `@Get`, `@Scheduled` |
+| Packages and modules | `lowercase`, dot-separated | `bestie.lib.collections`, `bestie.api.foreign.c` |
+
+Rules:
+
+* **Acronyms are words.** `HttpClient`, `IpAddress`, `IoError`, `toUInt8` — never `HTTPClient` or `IOError`.
+* **A value takes its own case, not its type's.** `val ls = List<int>.new()` is camelCase; the module-level `HEAP` (`std-lib/allocators.md` §4a.3) is UPPER_SNAKE like every module-level `val`; its type `Heap` is PascalCase.
+* **Promotion keeps the name stable.** A type that moves between layers keeps its spelling except for this one rule; that is why std-lib types are PascalCase even when used everywhere — they need an import, and the case says so.
+
 #### 3.1.4 Reserved Words
 
 Reserved in every position. None may be used as an identifier:
@@ -288,11 +311,11 @@ Properties:
 * Preferred default
 * Encourages value-oriented programming
 
-**File-level `val` must have an immutable type** — a naturally immutable type (§4.2 of `immutability.md`), an `immutable class`, or an `immutable` collection variation. `var` is forbidden at file scope entirely (§4.3), so this closes the remaining path to shared mutable module state: a file-level `val list<int>` would be a rebinding-proof name pointing at a freely mutable object visible to every function in the file.
+**File-level `val` must have an immutable type** — a naturally immutable type (§4.2 of `immutability.md`), an `immutable class`, or an `immutable` collection variation. `var` is forbidden at file scope entirely (§4.3), so this closes the remaining path to shared mutable module state: a file-level `val List<int>` would be a rebinding-proof name pointing at a freely mutable object visible to every function in the file.
 
 ```bestie
-val LIMITS : list<int>.immutable = ...   // ✅ mutation API unavailable
-val CACHE  : list<int>           = ...   // ❌ file-level val must be immutable
+val LIMITS : List<int>.immutable = ...   // ✅ mutation API unavailable
+val CACHE  : List<int>           = ...   // ❌ file-level val must be immutable
 ```
 
 > **Two axes of `val` — binding vs. field.** The `val` keyword is used in two distinct positions, and they mean different things:
@@ -591,7 +614,7 @@ Bestie includes exactly one collection in the core language: `array<T>`.
 `array<T>` is built-in and available without `import`.
 It is a C array: a length fixed at compile time and part of the type, contiguous storage with C's layout, and index-based access (`types.md` §5).
 
-`{1, 2, 3}` is an **array**, not a Python/Java `List`. A growable sequence is `list<T>` in `bestie.lib.collections` — write `val xs: list<int> = {1, 2, 3}`. That annotation is how a newcomer opts into growth; the default stays the cheap form.
+`{1, 2, 3}` is an **array**, not a Python/Java `List`. A growable sequence is `List<T>` in `bestie.lib.collections` — write `val xs: List<int> = {1, 2, 3}`. That annotation is how a newcomer opts into growth; the default stays the cheap form.
 
 Core `array<T>` supports:
 
@@ -604,11 +627,11 @@ Core `array<T>` supports:
 
 All dynamic and higher-level collections live in `bestie.lib.collections`, including:
 
-* `list<T>` — dynamic, resizable, with `linked` and future sequence variations
-* `set<T>`
-* `map<K,V>`
-* `deque<T>`
-* `priorityQueue<T>` — `max` or `min` ordering
+* `List<T>` — dynamic, resizable, with `linked` and future sequence variations
+* `Set<T>`
+* `Map<K,V>`
+* `Deque<T>`
+* `PriorityQueue<T>` — `max` or `min` ordering
 
 Example:
 
@@ -634,11 +657,11 @@ Bestie uses the **binding's declared type** to resolve what a `{...}` or `{k: v,
 | Literal form | Inferred type | Example |
 | ------------ | ------------- | ------- |
 | `{v, v, ...}` | `array<T>` | `val s = {1, 2, 3}` → `array<int>` |
-| `{k: v, k: v, ...}` | the default `map<K,V>` | `val m = {1: "a", 2: "b"}` → `map<int,str>` |
+| `{k: v, k: v, ...}` | the default `Map<K,V>` | `val m = {1: "a", 2: "b"}` → `Map<int,str>` |
 
-`{1, 2, 3}` without a type annotation is always an `array<int>`, never a `list` or `set`. This is intentional: the default is the most efficient, lowest-overhead form.
+`{1, 2, 3}` without a type annotation is always an `array<int>`, never a `List` or `Set`. This is intentional: the default is the most efficient, lowest-overhead form.
 
-A key-value literal infers `map<K,V>` in its **default representation**. Core fixes that the type is `map<K,V>` and that `K` must satisfy the cited `hash()` (§27); *which* representation is the default, and what other representations exist, is `bestie.lib.collections`' decision — see `std-lib/collections.md` §3.1. Core does not name the variation menu, so lib can extend it without a language change.
+A key-value literal infers `Map<K,V>` in its **default representation**. Core fixes that the type is `Map<K,V>` and that `K` must satisfy the cited `hash()` (§27); *which* representation is the default, and what other representations exist, is `bestie.lib.collections`' decision — see `std-lib/collections.md` §3.1. Core does not name the variation menu, so lib can extend it without a language change.
 
 #### Explicit disambiguation
 
@@ -646,12 +669,12 @@ When the desired type differs from the default, an explicit type annotation on t
 
 ```bestie
 val a = {1, 2, 3}                       // array<int>   — default
-val b : list<int>    = {1, 2, 3}        // list<int>    — explicit
-val c : set<int>     = {1, 2, 3}        // set<int>     — explicit (deduplicates)
-val d : deque<int>   = {1, 2, 3}        // deque<int>   — explicit
+val b : List<int>    = {1, 2, 3}        // List<int>    — explicit
+val c : Set<int>     = {1, 2, 3}        // Set<int>     — explicit (deduplicates)
+val d : Deque<int>   = {1, 2, 3}        // Deque<int>   — explicit
 
-val e = {1: "a", 2: "b"}               // map<int,str> — default representation
-val f : map<int,str>.linked = {1: "a"} // explicit variation (see std-lib/collections.md)
+val e = {1: "a", 2: "b"}               // Map<int,str> — default representation
+val f : Map<int,str>.linked = {1: "a"} // explicit variation (see std-lib/collections.md)
 ```
 
 The annotation drives the entire resolution — no ambiguity, no implicit coercion between types.
@@ -661,16 +684,16 @@ The annotation drives the entire resolution — no ambiguity, no implicit coerci
 When only a variation needs to change (not the full type), the annotation can target just the variation:
 
 ```bestie
-val g : map<str,int>.tree = {"x": 1, "y": 2}   // tree-backed map from literal
-val h : list<int>.linked  = {1, 2, 3}           // linked list from literal
+val g : Map<str,int>.tree = {"x": 1, "y": 2}   // tree-backed map from literal
+val h : List<int>.linked  = {1, 2, 3}           // linked list from literal
 ```
 
 #### Rules
 
-* Without a type annotation, `{v, ...}` **always** resolves to `array<T>` — never `list`, `set`, or `deque`
-* Without a type annotation, `{k: v, ...}` **always** resolves to `map<K,V>` in its default representation
+* Without a type annotation, `{v, ...}` **always** resolves to `array<T>` — never `List`, `Set`, or `Deque`
+* Without a type annotation, `{k: v, ...}` **always** resolves to `Map<K,V>` in its default representation
 * The compiler never silently picks a different collection type from a literal — it either uses the annotation or the default
-* A mismatched annotation is a compile-time error: `val x : set<str> = {"a": 1}` is rejected because a map literal cannot satisfy a `set<str>` type
+* A mismatched annotation is a compile-time error: `val x : Set<str> = {"a": 1}` is rejected because a map literal cannot satisfy a `Set<str>` type
 * Multi-dimensional array literals follow the same rule: `{{1,2},{3,4}}` without annotation infers `array<int>[2][2]`. The literal must be rectangular
 
 ---
@@ -820,8 +843,8 @@ Generic type parameters may be constrained using `ext` and `impl`, consistent wi
 **Protocol constraint:**
 
 ```bestie
-fun <T impl Comparable> sort(xs: list<T>): list<T>
-fun <T impl Hashable> dedupe(xs: list<T>): list<T>
+fun <T impl Comparable> sort(xs: List<T>): List<T>
+fun <T impl Hashable> dedupe(xs: List<T>): List<T>
 ```
 
 **Class constraint:**
@@ -845,7 +868,7 @@ fun <T ext Animal impl Printable, Serializable> describe(t: T): str
 **Multiple type parameters:**
 
 ```bestie
-fun <K impl Hashable, V> lookup(m: map<K, V>, key: K): V ?
+fun <K impl Hashable, V> lookup(m: Map<K, V>, key: K): V ?
 ```
 
 **Constraints on types and protocols:**
@@ -876,11 +899,11 @@ Rules:
 A type parameter may be named nowhere in the signature except inside another parameter's constraint. It is then **inferred from the constraint**, once the constrained parameter is known:
 
 ```bestie
-fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): list<R>
+fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): List<R>
 
 val ys = map(nums, x => x * 2)
-// C = list<int>  — from the argument
-// T = int        — from list<int> impl Iterable<int>
+// C = List<int>  — from the argument
+// T = int        — from List<int> impl Iterable<int>
 // F = the lambda's own type; its parameter x is typed int from fn(T)
 // R = int        — from the lambda's return type
 ```
@@ -894,7 +917,7 @@ Rules:
 * A cycle among constraints (`<A impl P<B>, B impl Q<A>>`) is a compile-time error, not a fixpoint search.
 * An argument-less call site that leaves a parameter unconstrained requires an explicit type argument; the compiler never guesses a default.
 
-This is the mechanism that makes generic collection code practical. Because collection variations are invariant (`std-lib/collections.md` §3.3), `fun sum(xs: list<int>)` accepts array-backed lists only; `fun <C impl Iterable<int>> sum(xs: C)` accepts every variation, plus `array<int>`, `slice<int>`, and `range<int>`.
+This is the mechanism that makes generic collection code practical. Because collection variations are invariant (`std-lib/collections.md` §3.3), `fun sum(xs: List<int>)` accepts array-backed lists only; `fun <C impl Iterable<int>> sum(xs: C)` accepts every variation, plus `array<int>`, `slice<int>`, and `range<int>`.
 
 ### 7.2 Compile-Time Value Parameters — `const N: int`
 
@@ -1998,9 +2021,9 @@ What it does do is **freeze the name**. A symbol that a normative core rule depe
 | `get(index)` / `set(index, value)` | §15.3 — `a[i]` and `a[i] = v` | `bestie.lib.utils` |
 | `equal(other): bool` | §15.3, §15.4 — `==` and `!=` | `bestie.lib.utils` (`Equable<T>`) |
 | `compareTo(other): int` | §15.3 — `<` `<=` `>` `>=`; §9.4 — `range<T>` bounds | `bestie.lib.utils` (`Comparable<T>`) |
-| `hash(): int` | §5.4 — default `map` literal inference | `bestie.lib.utils` (`Hashable<T>`) |
-| `list<T>` | §5.3, §5.4 — literal type annotation | `bestie.lib.collections` |
-| `map<K,V>` | §5.3, §5.4 — default inference for `{k: v}` literals | `bestie.lib.collections` |
+| `hash(): int` | §5.4 — default `Map` literal inference | `bestie.lib.utils` (`Hashable<T>`) |
+| `List<T>` | §5.3, §5.4 — literal type annotation | `bestie.lib.collections` |
+| `Map<K,V>` | §5.3, §5.4 — default inference for `{k: v}` literals | `bestie.lib.collections` |
 
 ### 27.2 What freezing does and does not mean
 
@@ -2011,8 +2034,8 @@ What it does do is **freeze the name**. A symbol that a normative core rule depe
 
 **Not frozen:**
 
-* Everything else about the declaring protocol or type. `Iterable<T>` may gain methods; `list<T>` may gain variations and operations; `Comparable<T>` may grow helpers. Additive change is always allowed.
-* Any symbol **not** on this list. `Arena`, `FixedBuffer`, `matrix<T>`, `StringBuilder`, `Channel<T>`, every algorithm and every codec — none is cited by a core rule, so all of them may be deprecated and removed under the ordinary std-lib policy.
+* Everything else about the declaring protocol or type. `Iterable<T>` may gain methods; `List<T>` may gain variations and operations; `Comparable<T>` may grow helpers. Additive change is always allowed.
+* Any symbol **not** on this list. `Arena`, `FixedBuffer`, `Matrix<T>`, `StringBuilder`, `Channel<T>`, every algorithm and every codec — none is cited by a core rule, so all of them may be deprecated and removed under the ordinary std-lib policy.
 
 That asymmetry is the point. `ptr<T>` and `Iterator.next()` are permanent because core depends on them by name. `Arena` is not, and can be dropped in a later release without touching the language.
 

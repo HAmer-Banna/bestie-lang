@@ -174,7 +174,7 @@ class Headers {
 
 An empty set is `Headers.new()`; one parsed from the wire is produced by `accept()` or `send()`.
 
-**Headers are not a `map<str, str>`.** HTTP permits a field to appear more than once — `Set-Cookie` routinely does, and `Accept-Encoding` and `Via` may — so a map keyed by name silently discards data. This API's first principle is protocol correctness, and a model that cannot represent a valid message fails it.
+**Headers are not a `Map<str, str>`.** HTTP permits a field to appear more than once — `Set-Cookie` routinely does, and `Accept-Encoding` and `Via` may — so a map keyed by name silently discards data. This API's first principle is protocol correctness, and a model that cannot represent a valid message fails it.
 
 Rules:
 
@@ -211,7 +211,7 @@ class HttpRequest {
 `accept()` blocks and returns one request. There is **no `serve(handler)` loop**: a callback-driven server hides where concurrency happens, and this API's job is to leave that decision with the caller. The loop is short, and you can see the fiber:
 
 ```bestie
-import bestie.lib.concurrency.fiber
+import bestie.lib.concurrency.Fiber
 
 fun run(addr: SocketAddress): void ! HttpError {
     val own server = try bind(addr)
@@ -221,7 +221,7 @@ fun run(addr: SocketAddress): void ! HttpError {
         val own req = try server.accept()
 
         // The request is moved into the fiber, which owns it from here.
-        fiber.new([move req]() => {
+        Fiber.new([move req]() => {
             val own resp = handle(req.address())
             req.respond(move resp) catch |e| { logFailure(e) }
         })

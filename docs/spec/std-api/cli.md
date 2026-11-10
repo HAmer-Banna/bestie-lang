@@ -100,8 +100,8 @@ data class ArgSpec {
 data class Command {
     name:        str
     help:        str
-    args:        list<ArgSpec>.immutable
-    subcommands: list<Command>.immutable
+    args:        List<ArgSpec>.immutable
+    subcommands: List<Command>.immutable
 }
 ```
 
@@ -109,11 +109,11 @@ Both collection fields use the `immutable` variation, which `data class` require
 
 ```bestie
 fun buildSpec(): Command {
-    val own args = list<ArgSpec>.new()
+    val own args = List<ArgSpec>.new()
     args.add(VERBOSE)
     args.add(OUTPUT)
 
-    val own subs = list<Command>.new()
+    val own subs = List<Command>.new()
 
     return Command.new(
         name: "fmt",

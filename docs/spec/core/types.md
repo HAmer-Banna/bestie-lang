@@ -136,7 +136,7 @@ fun mulHigh(a: uint64, b: uint64): uint64 {
 * They have every operator and conversion of the other integers. Overflow follows the same rules (`lang.md` §15.1).
 * On 64-bit targets they live in register pairs. Addition, subtraction, comparison, shifts, and bitwise operations are a few instructions; multiplication of two widened 64-bit values is one. Division and remainder call a compiler support routine (`freestanding.md` §10.5), as C's `__int128` does.
 * On 32-bit targets every operation is a support routine or a short instruction sequence. The type is the same; the cost is the target's.
-* `atomic<T>` does not accept them: they are wider than a machine word (`std-lib/concurrency.md` §5).
+* `Atomic<T>` does not accept them: they are wider than a machine word (`std-lib/concurrency.md` §5).
 * At the C boundary, `int128` is `__int128` and `uint128` is `unsigned __int128` on the targets whose C compilers define them (`std-api/foreign.md` §5.1).
 
 ---
@@ -225,7 +225,7 @@ Half precision halves the memory and bandwidth of `float32` where 11 bits of pre
 * Conversions follow §2.1: `float16` → `float32` / `float64` is widening and exact; the other direction is a narrowing conversion, with the same rules as `float64` → `float32`.
 * At the C boundary, `float16` is `_Float16` (`std-api/foreign.md` §5.1).
 
-`bfloat16`, the truncated-`float32` format used in training, is not a core type yet; it belongs with portable SIMD (`vision.md` P1). There is no `float128` or 80-bit float: few targets compute them in hardware, so arbitrary precision is a third-party package's job and exact decimals are `decimal64` / `decimal128` in `bestie.lib.math` (`std-lib/math.md` §4b), and C's `long double` exists only at the boundary (`std-api/foreign.md` §5.4).
+`bfloat16`, the truncated-`float32` format used in training, is not a core type yet; it belongs with portable SIMD (`vision.md` P1). There is no `float128` or 80-bit float: few targets compute them in hardware, so arbitrary precision is a third-party package's job and exact decimals are `Decimal64` / `Decimal128` in `bestie.lib.math` (`std-lib/math.md` §4b), and C's `long double` exists only at the boundary (`std-api/foreign.md` §5.4).
 
 ---
 
@@ -439,7 +439,7 @@ buf[0] = 0x7F
 
 `N` is a compile-time constant — a literal, a `const`, or a `target.*` constant (`constants.md`). It is part of the type: `array<int>[3]` and `array<int>[4]` are different types, exactly as `int[3]` and `int[4]` are in C.
 
-There is **no runtime-length array**. A buffer whose length is known only at run time is a `list<T>` from `bestie.lib.collections`, viewed as a `slice<T>` with `ls[..]` wherever a function only needs the elements. That keeps `array<T>` honest: when you see one, its length, its layout, and its stack footprint are all known to the compiler.
+There is **no runtime-length array**. A buffer whose length is known only at run time is a `List<T>` from `bestie.lib.collections`, viewed as a `slice<T>` with `ls[..]` wherever a function only needs the elements. That keeps `array<T>` honest: when you see one, its length, its layout, and its stack footprint are all known to the compiler.
 
 `array<T>` without `[N]` is not a type on its own. It is written only where the length is inferred from a literal on the same line (`array<int>[] = {…}`) or in prose to mean "an array of any length". A function that accepts arrays of any length takes `slice<T>` (§5.10).
 
@@ -554,7 +554,7 @@ It is a value type, so it lives **inline** wherever it is declared — in a stac
 | Element access `arr[i]` | one multiply-add-load, plus a bounds branch the predictor learns immediately |
 | Inheritance / virtual dispatch | ❌ not applicable |
 
-Because it lives inline, a very large array declared as a local occupies the stack. The compiler warns when a single frame exceeds the target's stack-size guidance; large buffers belong in a `class` field or a `list<T>`.
+Because it lives inline, a very large array declared as a local occupies the stack. The compiler warns when a single frame exceeds the target's stack-size guidance; large buffers belong in a `class` field or a `List<T>`.
 
 ### 5.9 Copying
 
@@ -632,14 +632,14 @@ Rules:
 * `fill` and `from` apply at the innermost element: `array<int>[3][4].fill(0)` sets all 12 ints. `from` on a two-dimensional array receives the row index and returns a row.
 * Indexing chains: `grid[r]` is a row (`array<int>[4]`, a place, not a copy), and `grid[r][c]` an element. Each index is bounds-checked against a constant.
 * `grid[r][..]` is a `slice<int>` over one row. `grid[..]` is a `slice<array<int>[4]>` over the rows — the exact equivalent of C's `int (*p)[4]` plus a row count, and the way to pass a matrix of any height to a function.
-* **There are no jagged arrays.** Rows of different lengths are a list of lists — `list<own list<T>>` in `bestie.lib.collections` — which is a different structure with a different cost (§5.12).
-* A matrix whose dimensions are known only at run time is one `list<T>` of `rows * cols` elements with `r * cols + c` indexing, or a matrix type from `bestie.lib.math` that does that for you.
+* **There are no jagged arrays.** Rows of different lengths are a list of lists — `List<own List<T>>` in `bestie.lib.collections` — which is a different structure with a different cost (§5.12).
+* A matrix whose dimensions are known only at run time is one `List<T>` of `rows * cols` elements with `r * cols + c` indexing, or a matrix type from `bestie.lib.math` that does that for you.
 
-### 5.12 Arrays vs `list<T>`, and Lists of Lists
+### 5.12 Arrays vs `List<T>`, and Lists of Lists
 
-`array<T>[N]` and `list<T>` share indexing, negative indexing, slicing, and `for/in`, so moving between them needs no relearning. They differ in what they are:
+`array<T>[N]` and `List<T>` share indexing, negative indexing, slicing, and `for/in`, so moving between them needs no relearning. They differ in what they are:
 
-| | `array<T>[N]` | `list<T>` |
+| | `array<T>[N]` | `List<T>` |
 | - | ------------- | --------- |
 | Kind | Core value type | `class` in `bestie.lib.collections` |
 | Length | Compile-time constant, `arr.length` | Runtime, changes, `ls.size()` |
@@ -652,9 +652,9 @@ The difference matters most for nesting:
 | Declaration | Memory | Access `x[i][j]` | Like |
 | ----------- | ------ | ---------------- | ---- |
 | `array<int>[R][C]` | One flat block of `R * C` ints | One address computation, one load | C `int[R][C]` |
-| `list<own list<int>>` | An outer buffer of pointers to inner list objects, each pointing to its own buffer | Load the inner list, load its buffer, load the element | Java `int[][]` / `List<List<Integer>>`, minus the object headers |
+| `List<own List<int>>` | An outer buffer of pointers to inner list objects, each pointing to its own buffer | Load the inner list, load its buffer, load the element | Java `int[][]` / `List<List<Integer>>`, minus the object headers |
 
-`list<list<int>>` without a qualifier is a compile-time error: `list<int>` is a reference type, so the outer list must say whether it **owns** its rows (`own`) or **borrows** them (`ref`) — `std-lib/collections.md` §0. Unlike C++'s `vector<vector<int>>`, which stores each inner vector's header inline in the outer buffer, each inner `list` is its own object reached through a pointer. Use a list of lists for genuinely jagged or growing data; use a multi-dimensional array, or one flat `list<T>`, for a dense matrix.
+`List<List<int>>` without a qualifier is a compile-time error: `List<int>` is a reference type, so the outer list must say whether it **owns** its rows (`own`) or **borrows** them (`ref`) — `std-lib/collections.md` §0. Unlike C++'s `vector<vector<int>>`, which stores each inner vector's header inline in the outer buffer, each inner `List` is its own object reached through a pointer. Use a list of lists for genuinely jagged or growing data; use a multi-dimensional array, or one flat `List<T>`, for a dense matrix.
 
 ### 5.13 Immutability
 
@@ -683,17 +683,17 @@ This is C's `const int a[3]` for a `val`, and a true compile-time table for a `c
 | `a.clone()` | `var b = a` |
 | `Arrays.fill(a, 7)` | `a = array<int>[5].fill(7)` |
 | `new int[3][4]` (array of row objects) | `array<int>[3][4]` — one flat block |
-| `int[][]` with ragged rows | `list<own list<int>>` |
+| `int[][]` with ragged rows | `List<own List<int>>` |
 | `final int[] a` (elements still mutable) | `val a` (elements frozen too) |
 | `ArrayIndexOutOfBoundsException` | panic — or a compile error for a constant index |
-| Length chosen at run time | `list<T>` |
-| `a[i] = null` to empty a slot | `array<T ?>[N]` and `a[i] = absent` — or, for a partly filled array, a count and `a[..count]`, or `bounded<T, N>` (`fp.md` §3.5) |
+| Length chosen at run time | `List<T>` |
+| `a[i] = null` to empty a slot | `array<T ?>[N]` and `a[i] = absent` — or, for a partly filled array, a count and `a[..count]`, or `Bounded<T, N>` (`fp.md` §3.5) |
 
 ---
 
 ## 6. `slice<T>`
 
-`slice<T>` is a built-in **borrowed view** over a contiguous run of elements. It is the result of slicing an `array<T>` (or, in `std-lib`, an array-backed `list<T>`), and a `slice<byte>` is the result of slicing a `str`.
+`slice<T>` is a built-in **borrowed view** over a contiguous run of elements. It is the result of slicing an `array<T>` (or, in `std-lib`, an array-backed `List<T>`), and a `slice<byte>` is the result of slicing a `str`.
 
 A `slice<T>` is exactly two words — a base and a length — with **no heap allocation, no copy, and no ownership of the underlying storage**. Creating one is O(1). It is one of core's two fat views, with the callable view `fn[]` (`fp.md` §6.4): it cannot be stored, and it cannot outlive its source (`memory.md` §13).
 
@@ -737,7 +737,7 @@ Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. W
 | `copyFrom(src: slice<T>)` | `void` | On `slice<var T>` only: copies `src` element-wise into this view — **panics** if the lengths differ. One `memmove` |
 | `base()` | `ptr<const T>` · `ptr<T>` on `slice<var T>` | Address of element 0; the inverse is `p.toSlice(n)` (`memory.md` §8.5.2). Non-zero even on an empty slice, but not to be read through then |
 
-An owned, escapable copy of a slice is a `list<T>` — `toList()`, an extension function in `bestie.lib.collections`. There is no `toArray()`: an array's length is a compile-time constant and a slice's is not. To fill an array from a slice, write `arr[..].copyFrom(s)`.
+An owned, escapable copy of a slice is a `List<T>` — `toList()`, an extension function in `bestie.lib.collections`. There is no `toArray()`: an array's length is a compile-time constant and a slice's is not. To fill an array from a slice, write `arr[..].copyFrom(s)`.
 
 A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing, and re-slicing all behave exactly as they do on `array<T>`. Element access is a single contiguous load — pointer arithmetic, no indirection.
 
@@ -747,7 +747,7 @@ A `slice<T>` implements `Iterable<T>`, so `for/in`, indexing, negative indexing,
 
 * It **cannot outlive its source** and **cannot be stored in a field**.
 * It may be passed into calls. Returning a slice is valid only when it is a subview of a slice parameter (the result cannot outlive that parameter's source).
-* While a `slice<T>` is alive, the source **cannot be mutated in a way that would move or free its storage** — for example, a `list<T>` cannot grow/reallocate while a slice views it. The compiler rejects such use.
+* While a `slice<T>` is alive, the source **cannot be mutated in a way that would move or free its storage** — for example, a `List<T>` cannot grow/reallocate while a slice views it. The compiler rejects such use.
 
 ### Read vs Mutable Slices
 
@@ -910,7 +910,7 @@ class Session {
 }
 ```
 
-`?` binds to the immediately preceding type: `list<str ?>` is a list of optional strings; `list<str> ?` is an optional list.
+`?` binds to the immediately preceding type: `List<str ?>` is a list of optional strings; `List<str> ?` is an optional list.
 
 ---
 
@@ -988,10 +988,10 @@ Bestie's core type surface is intentionally compact:
 * `bool`, `char`, and `str` expose explicit core operations only
 * `tuple`, `array<T>`, `slice<T>`, `range<T>`, `T ?`, and `T ! E` are first-class core forms, each with exactly one spelling
 * `array<T>[N]` is a C array: static length in the type, always fully initialized, flat row-major in every dimension, no decay to a pointer, and `arr.length` rather than `size()`
-* Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `list<T>`
+* Indexing is uniform: `[i]` panics out of bounds, `[-i]` counts from the end, `[lo..hi]` slices — the same on `array<T>`, `str`, and (in std-lib) array-backed `List<T>`
 * `slice<T>` is a borrowed, zero-copy view and the way to pass any-length data; owned copies are explicit (`.toList()` via `bestie.lib.collections`, or `copyFrom` into an array)
 * Conversions are explicit
 * `ptr<T>` remains isolated in `memory.md`
-* `list<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`
+* `List<T>` is a dynamic collection and lives in `bestie.lib.collections` — see `std-lib/collections.md`
 
 This keeps the language small enough to reason about, while still making expressions like `5.toStr()`, `"x".isEmpty()`, `xs[-1]`, `xs[1..4]`, and `(0..10).contains(4)` feel natural and consistent.

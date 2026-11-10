@@ -22,7 +22,7 @@ It is an **in-process** scheduler. It is not a distributed task queue like Celer
 | Depends on | For |
 | ---------- | --- |
 | `core` | Processors, `T ! E`, ownership |
-| `bestie.lib.concurrency` | Fibers, `fiber.sleep`, cancellation |
+| `bestie.lib.concurrency` | Fibers, `Fiber.sleep`, cancellation |
 | `bestie.lib.datetime` | `Instant`, `Duration`, `TimeZone` |
 
 ## 1. Declaring Jobs
@@ -99,7 +99,7 @@ A run-time cron string can be wrong, so `scheduler.cron` returns `void ! CronErr
 
 ## 4. Execution Model
 
-* `scheduler.start()` starts one fiber that sleeps until the next due run (`fiber.sleep`). It does not poll.
+* `scheduler.start()` starts one fiber that sleeps until the next due run (`Fiber.sleep`). It does not poll.
 * Each run executes in its own fiber, so a slow job never delays another job's start.
 * **Intervals** (`@Every`) are measured on the monotonic clock, from the start of one run to the start of the next. Changing the system time does not move them.
 * **Cron** schedules follow the wall clock in their zone. When a daylight-saving change skips a time, that run happens at the first valid time after it. When a time repeats, the run happens once, at its first occurrence.

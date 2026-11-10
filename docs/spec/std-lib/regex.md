@@ -14,7 +14,7 @@ It sits beside `bestie.lib.strings` (`strings.md`) and deliberately does not rep
 
 1. **Linear time, always.** Matching takes time proportional to the pattern size times the input length, for every pattern and every input. There is no backtracking engine, so there is no catastrophic backtracking and no ReDoS. A gateway can match a user-supplied pattern against a user-supplied body without a timeout. This rules out backreferences and lookaround (§3.3).
 2. **Compile once, at compile time when possible.** A pattern in a `const` is parsed, checked, and compiled to an automaton by the compiler. A bad pattern is a compile-time error, and the program carries the finished tables in read-only memory (§2.1). This is `vision.md` Rule 2: the convenience comes from the compiler.
-3. **Matches are views, not copies.** A match refers to the input it was found in. Getting the matched text allocates nothing (§4). Allocation happens only where a new `str` or `list<str>` is built, and those calls say so in their name.
+3. **Matches are views, not copies.** A match refers to the input it was found in. Getting the matched text allocates nothing (§4). Allocation happens only where a new `str` or `List<str>` is built, and those calls say so in their name.
 4. **One spelling per idea.** Flags are written inline in the pattern (`(?i)`). Replacement is a literal `str` or a lambda, never a template language with its own escape rules (§5). Regex operations are methods on `Regex`, never overloads of the `str` operations in `strings.md` (§7).
 5. **Freestanding.** The library uses no OS. A `const` regex matches with no allocator at all, so it works in a kernel or on a microcontroller.
 

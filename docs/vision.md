@@ -95,7 +95,7 @@ If a convenient operation must cost something — a copy, an allocation, a lock,
 
 If a feature cannot be both fast and elegant, **core** takes the fast form, and an opt-in library or framework builds the comfortable form on top. Code that does not want the comfort pays nothing for it.
 
-*In the spec:* core has `array<T>`; `list<T>` lives in `bestie.lib.collections`. Core has raw `ptr<T>`; frameworks build on ownership. `bestie.api.network` has raw sockets; `bestie.api.http` and `bestie.framework.web` are layered on them.
+*In the spec:* core has `array<T>`; `List<T>` lives in `bestie.lib.collections`. Core has raw `ptr<T>`; frameworks build on ownership. `bestie.api.network` has raw sockets; `bestie.api.http` and `bestie.framework.web` are layered on them.
 
 ### Rule 5 — The complexity budget is part of performance
 
@@ -127,7 +127,7 @@ Bestie must be usable with **no operating system and no runtime**: firmware, boo
 * Atomics with explicit ordering that need no OS (`std-lib/concurrency.md` §5)
 * Compile-time target selection with `when` and `target.*` (`lang.md` §25)
 * Static C-layout arrays in every dimension (`types.md` §5)
-* A fixed-capacity sequence with no heap, `bounded<T, N>` (`std-lib/collections.md` §2b)
+* A fixed-capacity sequence with no heap, `Bounded<T, N>` (`std-lib/collections.md` §2b)
 
 **Specified in `core/freestanding.md`** — B1–B8 below are no longer gaps; the table records what each one covers:
 
@@ -139,7 +139,7 @@ Bestie must be usable with **no operating system and no runtime**: firmware, boo
 | B4 | **Calling conventions** — interrupt handlers and naked functions per architecture | Exception vectors and trampolines |
 | B5 | **Untagged unions and bit-fields** for `@repr(C)` types | Hardware registers and C headers use both |
 | B6 | **Stack discipline** — per-target stack limits, stack probes, a guarantee of no implicit large stack use | Kernel stacks are small and fixed |
-| B7 | **Code-generation hints** — `@inline`, `@noinline`, `@cold`, branch likelihood | Hot interrupt paths and boot code |
+| B7 | **Code-generation hints** — `@inline`, `@noInline`, `@cold`, branch likelihood | Hot interrupt paths and boot code |
 | B8 | **Targets without an FPU and without unwinding** — soft-float, and no unwind tables in any mode | Microcontrollers and kernels |
 
 ### 3.2 Speed and Elegance in Balance
@@ -156,7 +156,7 @@ Section 2 is the commitment. Every new spec document states which rules it relie
 | P6 | **Private calling convention** for non-`export` functions — results, `T ! E`, and `T ?` in registers (§2.2 there) | Every call |
 | P7 | **`@checkFree`** — a compile-time error if a bounds check survives in a function (§2.6 there) | Engines, codecs, trading hot paths |
 | P8 | **Compressed references** — `rel<T>`, a 32-bit offset into an arena or region (§3.3 there) | Compilers, graphs, shared memory, zero-copy formats |
-| P9 | **`list<T>.soa`** — struct-of-arrays collections built with compile-time reflection (§3.4 there) | Game and physics engines, analytics |
+| P9 | **`List<T>.soa`** — struct-of-arrays collections built with compile-time reflection (§3.4 there) | Game and physics engines, analytics |
 
 Why these make Bestie faster and smaller than C, and which rule makes each one legal, is in `compiler/codegen-advantages.md`.
 

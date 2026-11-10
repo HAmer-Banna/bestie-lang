@@ -17,8 +17,8 @@ import bestie.lib.concurrency
 1. **No duplication of core semantics** — `thread` remains the only parallel execution primitive
 2. **No alternative concurrency models** — no async/await, no futures, no virtual threads
 3. **Explicit over implicit** — no hidden scheduler on programs that do not import this package
-4. **Zero magic** — a fiber scheduler exists only in binaries that use `fiber`
-5. **Same ownership rules as `thread`** — `fiber.new` is compiler-known; illegal sharing is a compile-time error
+4. **Zero magic** — a fiber scheduler exists only in binaries that use `Fiber`
+5. **Same ownership rules as `thread`** — `Fiber.new` is compiler-known; illegal sharing is a compile-time error
 
 If a problem can be solved with `thread` plus channels or locks, **do not invent a new abstraction**.
 
@@ -28,9 +28,9 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 
 | Tool | Role |
 | ---- | ---- |
-| `fiber` | Cooperative lightweight execution on a host `thread` |
+| `Fiber` | Cooperative lightweight execution on a host `thread` |
 | `Channel<T>` | Bounded message passing (CSP send/receive) |
-| `atomic<T>` | Explicit atomic operations on primitives |
+| `Atomic<T>` | Explicit atomic operations on primitives |
 | `Isolated<T>` | Places a value on its own cache line, to prevent false sharing |
 | `Lock` | Last-resort exclusive lock for shared mutation |
 | `CancellationToken` | Cooperative cancellation flag, passed explicitly |
@@ -47,24 +47,24 @@ If a problem can be solved with `thread` plus channels or locks, **do not invent
 
 ---
 
-## 3. Fibers (`fiber`)
+## 3. Fibers (`Fiber`)
 
-`fiber` is a **cooperative lightweight thread**. It is the concurrent (not parallel) execution helper.
+`Fiber` is a **cooperative lightweight thread**. It is the concurrent (not parallel) execution helper.
 
 * Low-overhead, high-concurrency
 * Cooperatively scheduled — yields control explicitly
 * Runs on an OS `thread` managed by this package’s scheduler
-* Does **not** run in parallel with other `fiber` instances on the same scheduler
+* Does **not** run in parallel with other `Fiber` instances on the same scheduler
 * Deterministic lifecycle within one scheduler
 
-A program that never calls `fiber.new` does not include the scheduler.
+A program that never calls `Fiber.new` does not include the scheduler.
 
 **Construction** — same shape as `thread.new`. There is no `.start { }` block form.
 
 ```bestie
-import bestie.lib.concurrency.fiber
+import bestie.lib.concurrency.Fiber
 
-val f = fiber.new(() => compute())
+val f = Fiber.new(() => compute())
 ```
 
 **Available methods:**
@@ -75,12 +75,12 @@ val f = fiber.new(() => compute())
 | `isCompleted(): bool` | Checks if execution finished                   |
 | `cancel()`            | Cancels execution (explicit handling required) |
 | `id(): int`           | Returns internal fiber identifier              |
-| `fiber.sleep(d: Duration)` | Parks the current fiber for at least `d`; other fibers run meanwhile |
+| `Fiber.sleep(d: Duration)` | Parks the current fiber for at least `d`; other fibers run meanwhile |
 
-**Yield points** — a `fiber` yields at:
+**Yield points** — a `Fiber` yields at:
 
 * `await()` calls on other fibers
-* Explicit `fiber.yield()` and `fiber.sleep(d)`
+* Explicit `Fiber.yield()` and `Fiber.sleep(d)`
 * Blocking I/O calls, when the call site cooperates (see below)
 
 **The I/O parking contract.** A fiber can only be parked on a blocking call if the code performing that call tells the scheduler. This package therefore publishes a hook:
@@ -97,11 +97,11 @@ There is no preemptive scheduling of fibers. Execution is deterministic within a
 
 ### 3.1 Class Rules
 
-`fiber` is a closed class, not inheritable, not a value class, created **only** via `fiber.new`.
+`Fiber` is a closed class, not inheritable, not a value class, created **only** via `Fiber.new`.
 
 ```bestie
-fiber.new()       // ❌ forbidden
-fiber.new(...)     // ✅
+Fiber.new()       // ❌ forbidden
+Fiber.new(...)     // ✅
 ```
 
 ### 3.2 Ownership, panic, and bodies
@@ -115,17 +115,17 @@ The same rules as core `thread`:
 * Body returns `void`
 * A panic inside a fiber **terminates the entire program** (same as `thread`)
 
-`fiber.new` is **compiler-known**: the frontend applies the same spawn-site capture checks as `thread.new`. It is still a library type — it is not a keyword.
+`Fiber.new` is **compiler-known**: the frontend applies the same spawn-site capture checks as `thread.new`. It is still a library type — it is not a keyword.
 
 ### 3.3 Parallel vs concurrent
 
 | Primitive | Layer | Model | Scheduling | Parallelism |
 | --------- | ----- | ----- | ---------- | ----------- |
 | `thread`  | core | OS thread | Preemptive | Yes — explicit, guaranteed |
-| `fiber`   | std-lib | Fiber | Cooperative | No — concurrent only |
+| `Fiber`   | std-lib | Fiber | Cooperative | No — concurrent only |
 
 Use `thread` when work must run **at the same time** on multiple cores.
-Use `fiber` when you need high-concurrency **I/O or coordination** without the cost of OS threads.
+Use `Fiber` when you need high-concurrency **I/O or coordination** without the cost of OS threads.
 
 ### 3.4 `threadlocal`
 
@@ -135,7 +135,7 @@ Fibers share the `threadlocal` copy of the OS thread they run on. See `core/conc
 
 ## 4. Channels (`Channel<T>`)
 
-`Channel<T>` is bounded, explicit message passing between `thread`s and/or `fiber`s.
+`Channel<T>` is bounded, explicit message passing between `thread`s and/or `Fiber`s.
 
 ```bestie
 val ch = Channel<int>.new(16)          // capacity 16
@@ -171,13 +171,13 @@ errors ChannelError {
 Atomics exist for **low-level performance-critical** code: lock-free structures, runtime internals. They are not the default tool for application logic.
 
 ```bestie
-atomic<T>
+Atomic<T>
 ```
 
 Rules:
 
 * `T` must be a primitive value type at most one machine word wide
-* `atomic<T>` has the size of `T` and an alignment equal to its size (stricter than `T`'s alone on some 32-bit targets), so it can overlay memory laid out as a plain `T`: `p.cast<atomic<T>>()` gives atomic access to a word that C code or another process owns (`core/memory.md` §8.8)
+* `Atomic<T>` has the size of `T` and an alignment equal to its size (stricter than `T`'s alone on some 32-bit targets), so it can overlay memory laid out as a plain `T`: `p.cast<Atomic<T>>()` gives atomic access to a word that C code or another process owns (`core/memory.md` §8.8)
 * Operations are explicit
 * **Every operation names its ordering** — there is no default
 * No hidden fences
@@ -187,10 +187,10 @@ Rules:
 The ordering vocabulary and its guarantees are defined in **`core/concurrency.md` §8.3** — what an ordering means constrains the optimizer and the CPU, so it is language semantics, not a library choice. This package supplies the type that uses it.
 
 ```bestie
-import bestie.lib.concurrency.atomic
+import bestie.lib.concurrency.Atomic
 import bestie.lib.concurrency.Ordering
 
-val counter = atomic<int>.new(0)
+val counter = Atomic<int>.new(0)
 
 counter.add(1, Ordering.Relaxed)          // just count
 val n = counter.load(Ordering.Acquire)    // pairs with a release store
@@ -225,8 +225,8 @@ The compiler packs fields for minimum size and never adds cache-line padding on 
 import bestie.lib.concurrency.Isolated
 
 class Queue {
-    head: Isolated<atomic<uint>>
-    tail: Isolated<atomic<uint>>
+    head: Isolated<Atomic<uint>>
+    tail: Isolated<Atomic<uint>>
 }
 ```
 
@@ -259,7 +259,7 @@ Prefer `defer lock.release()` after `acquire()`.
 
 ## 7. Cancellation
 
-`thread.interrupt()` and `fiber.cancel()` are the primitive cancel signals. `CancellationToken` is the **composable** form for passing a cancel flag through library calls.
+`thread.interrupt()` and `Fiber.cancel()` are the primitive cancel signals. `CancellationToken` is the **composable** form for passing a cancel flag through library calls.
 
 ```bestie
 class CancellationToken {
@@ -291,7 +291,7 @@ fun worker(token: CancellationToken): void {
 | ----- | -------------- |
 | Core `thread` / `threadlocal` | Parallelism and TLS |
 | `bestie.lib.concurrency` | Fibers, channels, atomics, locks, cancel tokens |
-| `bestie.api.io` / `network` / `ipc` / `http` | Blocking I/O; park a `fiber` or block a `thread` |
+| `bestie.api.io` / `network` / `ipc` / `http` | Blocking I/O; park a `Fiber` or block a `thread` |
 | `bestie.framework.*` | Actors, streaming, task groups — if they exist |
 
 ---
@@ -300,9 +300,9 @@ fun worker(token: CancellationToken): void {
 
 `bestie.lib.concurrency` provides:
 
-* `fiber` for cooperative concurrency
+* `Fiber` for cooperative concurrency
 * `Channel<T>` for explicit message passing and backpressure
-* `atomic<T>` for lock-free primitives
+* `Atomic<T>` for lock-free primitives
 * `Lock` for unavoidable shared mutation
 * `CancellationToken` for cooperative shutdown
 

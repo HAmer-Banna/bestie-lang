@@ -59,21 +59,21 @@ val y = x + x   // compile-time error or explicit overflow handling
 
 ---
 
-## 4. `matrix<T>`
+## 4. `Matrix<T>`
 
 Core has no matrix type. Compile-time grids that are **storage only** stay as nested `array<T>` (`array<int>[3][3]` in `core/types.md`). Algebra is not a language primitive.
 
-`matrix<T>` lives in `bestie.lib.math`. It is a **`class`**, lowercase like `list` and `set`: a foundational library type, not a nominal domain object.
+`Matrix<T>` lives in `bestie.lib.math`. It is a **`class`**, PascalCase like every library type (`core/lang.md` §3.1.3a).
 
 ### 4.1 Class kind
 
 | Type | Kind | Reasoning |
 | ---- | ---- | --------- |
-| `matrix<T>` | `class` | Owns a heap buffer whose size is `rows * cols` at runtime; has identity; supports in-place mutation |
+| `Matrix<T>` | `class` | Owns a heap buffer whose size is `rows * cols` at runtime; has identity; supports in-place mutation |
 
 It is not a `value class`: those cannot hold `own` fields, are copy-by-value, and cannot own a runtime-sized buffer. Copying a matrix on assignment would silently duplicate storage and hide allocation.
 
-It is not a collection. Dimensions are fixed at construction. There is no `.add`, no builder growth, and no `list<T>.matrix` view.
+It is not a collection. Dimensions are fixed at construction. There is no `.add`, no builder growth, and no `List<T>.matrix` view.
 
 `T` is a core numeric primitive (`int*`, `uint*`, `float16`, `float32`, `float64`, `float`).
 
@@ -84,9 +84,9 @@ Storage is a single contiguous **row-major** buffer. Index `(r, c)` is `r * cols
 ```bestie
 import bestie.lib.math
 
-val a = matrix<float64>.zeros(3, 3)
-val b = matrix<float64>.identity(3)
-val c = matrix<float64>.new(2, 2, {1.0, 2.0, 3.0, 4.0})  // row-major, length == rows * cols
+val a = Matrix<float64>.zeros(3, 3)
+val b = Matrix<float64>.identity(3)
+val c = Matrix<float64>.new(2, 2, {1.0, 2.0, 3.0, 4.0})  // row-major, length == rows * cols
 ```
 
 Rules:
@@ -102,8 +102,8 @@ Higher-level math uses **named methods**, not `*` / `+` overloads (see §5).
 ```bestie
 import bestie.lib.math
 
-val a = matrix<float64>.identity(3)
-val b = matrix<float64>.zeros(3, 3)
+val a = Matrix<float64>.identity(3)
+val b = Matrix<float64>.zeros(3, 3)
 b.set(0, 1, 2.0)
 
 val c = a.mul(b)          // new matrix; allocation is at this call
@@ -130,7 +130,7 @@ val rows = a.rows()
 val cols = a.cols()
 ```
 
-### 4.4 What `matrix<T>` is not
+### 4.4 What `Matrix<T>` is not
 
 * Not a replacement for `array<T>[n][m]` — use arrays when the size is compile-time and you only need storage
 * Not a tensor library — higher rank stays out of this module until a concrete need exists
@@ -207,20 +207,20 @@ Numbers beyond the core types come in two shapes, and Bestie gives each a differ
 
 | Type | Kind | Size known | Operators | Main users |
 | ---- | ---- | ---------- | --------- | ---------- |
-| `wideInt<BITS>` / `wideUInt<BITS>` | `value class`, inline | at compile time | ✅ | cryptography, hashing, wide fixed-point |
+| `WideInt<BITS>` / `WideUInt<BITS>` | `value class`, inline | at compile time | ✅ | cryptography, hashing, wide fixed-point |
 | `BigInt` | `class`, heap | at run time | ❌ — named methods | compilers, parsers, number theory |
-| `decimal64` / `decimal128` | `value class`, inline | at compile time | ✅ | money and finance |
+| `Decimal64` / `Decimal128` | `value class`, inline | at compile time | ✅ | money and finance |
 
 **Why the heap type has no operators.** Bestie has no garbage collector and no implicit cleanup (`core/memory.md` §7.4). If `BigInt` had `+`, then `a * b + c` would allocate a temporary for `a * b` that nothing could free — and an operator that allocates breaks the rule that nothing allocates behind syntax that looks free (`vision.md` Rule 3). Types whose size is fixed at compile time have no such problem: they are values, and `+` on them is as free as on `int64`.
 
-### 4b.1 `wideInt<BITS>` and `wideUInt<BITS>` — Fixed-Width Big Integers
+### 4b.1 `WideInt<BITS>` and `WideUInt<BITS>` — Fixed-Width Big Integers
 
 ```bestie
 import bestie.lib.math
 
-const P = wideUInt<256>.fromHex("FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_FFFFFC2F")
+const P = WideUInt<256>.fromHex("FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_FFFFFC2F")
 
-fun mulMod(a: wideUInt<256>, b: wideUInt<256>): wideUInt<256> {
+fun mulMod(a: WideUInt<256>, b: WideUInt<256>): WideUInt<256> {
     val wide = a.toWideUInt<512>() * b.toWideUInt<512>()      // exact: 256 × 256 fits 512
     return (wide % P.toWideUInt<512>()).toWideUInt<256>() ?: panic("fits after % P")
 }
@@ -230,9 +230,9 @@ fun mulMod(a: wideUInt<256>, b: wideUInt<256>): wideUInt<256> {
 * **Operators.** `+` `-` `*` `/` `%`, unary `-` on `wideInt`, `==`, and the ordering operators, through the operator protocols (`utils.md` §6) — statically dispatched and inlined. Overflow follows the core integer rules (§3). Explicit forms: `addWrapping(b)`, `subWrapping(b)`, `mulWrapping(b)` for arithmetic modulo 2^BITS, and `addChecked(b)`, `subChecked(b)`, `mulChecked(b)` returning `! OverflowError`.
 * **Bits.** Bitwise operators are not overloadable (`core/lang.md` §15.3), so bit operations are methods: `bitAnd(b)`, `bitOr(b)`, `bitXor(b)`, `bitNot()`, `shiftLeft(n)`, `shiftRight(n)` (arithmetic on `wideInt`), and `bit(i): bool`.
 * **Constant time.** Addition, subtraction, multiplication, the bitwise methods, `==`, and ordering run in time that depends only on `BITS`, never on the values — no branch and no memory access depends on a value. That is the property cryptographic code needs. Division, remainder, and shifts by a value-dependent amount are not constant-time, and say so in their documentation.
-* **Conversions.** `toWideUInt<M>()` / `toWideInt<M>()` widen exactly when `M >= BITS` and narrow to `T ?` otherwise (absent when the value does not fit). From and to core integers: `wideUInt<256>.from(x)` for any core integer `x`, and `toUInt64()`, `toUInt128()` and their signed forms, which narrow to `T ?`.
+* **Conversions.** `toWideUInt<M>()` / `toWideInt<M>()` widen exactly when `M >= BITS` and narrow to `T ?` otherwise (absent when the value does not fit). From and to core integers: `WideUInt<256>.from(x)` for any core integer `x`, and `toUInt64()`, `toUInt128()` and their signed forms, which narrow to `T ?`.
 * **Text.** `fromHex(s)` and `fromDecimal(s)` return `T ! ParseError` (`strings.md`). In a `const` initializer they are evaluated at compile time: invalid text is a compile-time error, so the constant's type is `T` and no `try` is written. `toHex()` and `toStr()` give text.
-* `wideUInt<128>` has the layout of core's `uint128` and converts to it exactly. Use `uint128` for 128-bit work: it lives in registers and the compiler knows it (`core/types.md` §2.2); `wideUInt` is for widths core does not have.
+* `WideUInt<128>` has the layout of core's `uint128` and converts to it exactly. Use `uint128` for 128-bit work: it lives in registers and the compiler knows it (`core/types.md` §2.2); `wideUInt` is for widths core does not have.
 
 ### 4b.2 `BigInt` — Arbitrary Precision
 
@@ -267,27 +267,27 @@ Rules:
 * A `set*` method grows `r`'s buffer when the result needs more limbs. That is the one allocation, and it is in the method's name and documentation; running out of memory panics, as for collections. A result never shrinks its buffer unless `shrink()` is called.
 * `BigInt.new()`, `BigInt.from(x)` for any core integer, and `BigInt.parse(s): own BigInt ! ParseError` construct. `toStr()` returns an `own str`. `compareTo(other)` and `equal(other)` make `BigInt` `Comparable` and `Equable` (`utils.md`), so ordering and `==` work, because comparing allocates nothing.
 * `BigInt` does **not** implement `Addable` or the other arithmetic protocols, so `a + b` on it is a compile-time error.
-* It allocates from `heap` (`std-lib/allocators.md` §4a.3). An allocator-aware form belongs with roadmap item P2.
+* It allocates from `HEAP` (`std-lib/allocators.md` §4a.3). An allocator-aware form belongs with roadmap item P2.
 * `free()` releases the buffer; ownership rules are those of any `own` class (`core/memory.md` §7).
 
-### 4b.3 `decimal64` and `decimal128` — Exact Decimal Arithmetic
+### 4b.3 `Decimal64` and `Decimal128` — Exact Decimal Arithmetic
 
-Binary floats cannot represent `0.1`, so `0.1 + 0.2 != 0.3` — wrong for money. `decimal64` and `decimal128` are the IEEE 754-2008 decimal formats: every decimal number with up to 16 (`decimal64`) or 34 (`decimal128`) significant digits is stored exactly.
+Binary floats cannot represent `0.1`, so `0.1 + 0.2 != 0.3` — wrong for money. `Decimal64` and `Decimal128` are the IEEE 754-2008 decimal formats: every decimal number with up to 16 (`Decimal64`) or 34 (`Decimal128`) significant digits is stored exactly.
 
 ```bestie
 import bestie.lib.math
 
-const PRICE    = decimal128.parse("19.99")
-const TAX_RATE = decimal128.parse("0.0825")
+const PRICE    = Decimal128.parse("19.99")
+const TAX_RATE = Decimal128.parse("0.0825")
 
-val total = PRICE * decimal128.from(3)         // exactly 59.97
+val total = PRICE * Decimal128.from(3)         // exactly 59.97
 val tax   = (total * TAX_RATE).roundTo(places: 2)
 ```
 
 * **Representation.** `value class`es of 8 and 16 bytes, aligned to their size, in the binary integer decimal (BID) encoding — the encoding C23's `_Decimal64` / `_Decimal128` use on x86-64 and AArch64, so they cross the C boundary unchanged.
-* **Operators.** `+` `-` `*` `/`, unary `-`, `==`, and ordering, through the operator protocols. Results are correctly rounded to the format's precision, half to even by default. `+`, `-`, and `*` are exact whenever the result fits the precision, which for currency amounts in `decimal128` is always.
+* **Operators.** `+` `-` `*` `/`, unary `-`, `==`, and ordering, through the operator protocols. Results are correctly rounded to the format's precision, half to even by default. `+`, `-`, and `*` are exact whenever the result fits the precision, which for currency amounts in `Decimal128` is always.
 * **Rounding is named.** `roundTo(places: int, mode: RoundingMode = RoundingMode.HalfEven)` with `HalfEven`, `HalfUp`, `Down`, `Up`, `Floor`, `Ceiling`. Division that cannot be exact rounds at the precision limit; code that needs cents rounds explicitly.
-* **IEEE behavior.** Overflow gives infinity, invalid operations give NaN; `isNaN()`, `isInfinite()`, and `isFinite()` work as on binary floats. `decimal128.MAX`, `MIN`, `INFINITY`, and `NAN` exist.
+* **IEEE behavior.** Overflow gives infinity, invalid operations give NaN; `isNaN()`, `isInfinite()`, and `isFinite()` work as on binary floats. `Decimal128.MAX`, `MIN`, `INFINITY`, and `NAN` exist.
 * **Text and construction.** `parse(s): T ! ParseError` reads decimal text exactly. In a `const` initializer it is evaluated at compile time, as `fromHex` is (§4b.1), so the constant is a plain `T`. `from(x)` takes any core integer exactly. There is deliberately no conversion from a binary float literal: `0.1` as a `float64` is already not `0.1`. `toStr()` prints the exact digits.
 * **Cost.** No mainstream CPU computes decimal arithmetic in hardware (IBM POWER aside), so it is implemented in Bestie, without allocation. It is several times slower than binary floating point and gives the same result on every target.
 
@@ -326,7 +326,7 @@ Math operations in Bestie:
 * Can be evaluated at compile time when inputs are constant
 
 ```bestie
-const x: int = pow(2, 10)  // resolved at compile time
+const X: int = pow(2, 10)  // resolved at compile time
 ```
 
 ---
@@ -350,8 +350,8 @@ These may be built as external libraries.
 Bestie math design:
 
 * Keeps core minimal and predictable
-* Gives algebra its own type (`matrix<T>`), separate from `array<T>` storage
-* Provides big numbers in the shape that fits each use: fixed-width `wideInt<BITS>` / `wideUInt<BITS>` and exact `decimal64` / `decimal128` as values with operators, and heap `BigInt` with named, allocation-visible methods
+* Gives algebra its own type (`Matrix<T>`), separate from `array<T>` storage
+* Provides big numbers in the shape that fits each use: fixed-width `WideInt<BITS>` / `WideUInt<BITS>` and exact `Decimal64` / `Decimal128` as values with operators, and heap `BigInt` with named, allocation-visible methods
 * Pushes advanced math into explicit libraries
 * Favors clarity over cleverness
 

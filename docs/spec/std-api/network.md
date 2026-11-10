@@ -123,7 +123,7 @@ Rules:
 DNS is a **network operation**, so it is a function that can fail and can block — never a hidden step inside `connect`:
 
 ```bestie
-fun resolve(host: str, port: Port): own list<SocketAddress> ! NetError
+fun resolve(host: str, port: Port): own List<SocketAddress> ! NetError
 ```
 
 ```bestie
@@ -228,7 +228,7 @@ This package defines **no buffer type**. Buffers are core types:
 | Need | Type |
 | ---- | ---- |
 | Owned storage, length fixed at compile time | `array<byte>[n]` |
-| Owned storage, length chosen at run time | `list<byte>` |
+| Owned storage, length chosen at run time | `List<byte>` |
 | A read-only view to send | `slice<byte>` |
 | A writable view to receive into | `slice<var byte>` |
 
@@ -239,7 +239,7 @@ val n = try sock.read(buf[..])          // fills the view, returns bytes read
 try sock.write(buf[0..n])               // sends exactly what was read
 ```
 
-A dedicated `ByteBuffer` class would be `slice<T>` with a different name: a base pointer, a length, no allocation, no auto-resize, explicit ownership. Core already provides that, `bestie.api.io` already speaks it, and a second vocabulary would mean every buffer crossing between packages needs a conversion that copies or reinterprets. Where a growable buffer is genuinely needed, that is `list<byte>` from `bestie.lib.collections`.
+A dedicated `ByteBuffer` class would be `slice<T>` with a different name: a base pointer, a length, no allocation, no auto-resize, explicit ownership. Core already provides that, `bestie.api.io` already speaks it, and a second vocabulary would mean every buffer crossing between packages needs a conversion that copies or reinterprets. Where a growable buffer is genuinely needed, that is `List<byte>` from `bestie.lib.collections`.
 
 ---
 
@@ -310,7 +310,7 @@ A timeout that expires is `NetError.TimedOut` from the operation that was waitin
 `bestie.api.network` does not spawn threads, does not manage fibers, and provides no async API. Concurrency comes from core `thread` and `bestie.lib.concurrency`, and **ownership is what makes it safe**:
 
 ```bestie
-import bestie.lib.concurrency.fiber
+import bestie.lib.concurrency.Fiber
 
 fun serve(addr: SocketAddress): void ! NetError {
     val own listener = try listen(addr, backlog: 128)
@@ -321,7 +321,7 @@ fun serve(addr: SocketAddress): void ! NetError {
 
         // The connection is moved into the fiber. The loop cannot touch it
         // afterwards -- the compiler rejects any use of a moved-from binding.
-        fiber.new([move conn]() => {
+        Fiber.new([move conn]() => {
             defer conn.close()
             handle(conn.address()) catch |e| { logFailure(e) }
         })

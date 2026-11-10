@@ -60,7 +60,7 @@ Following `vision.md` Rules 1 and 3, a flow costs what its stages ask for, and e
 | ---------- | -------- | ---- |
 | **Synchronous** | `map`, `filter`, `take`, `scan`, `distinct`, `flatMap` | Fused into the producer's loop. Each operator is a generic adapter with its lambda inlined (`core/fp.md`), so `filter(…).map(…).collect(…)` compiles to one loop with no allocation and no call per element |
 | **Asynchronous** | `buffer(n)`, `merge`, `zip`, `onFiber` | Starts a fiber and a `Channel` of the stated capacity. The capacity is always written |
-| **Timed** | `debounce`, `sample`, `window(Duration)`, `timeout`, `ticker` | Uses `fiber.sleep` from `bestie.lib.concurrency` |
+| **Timed** | `debounce`, `sample`, `window(Duration)`, `timeout`, `ticker` | Uses `Fiber.sleep` from `bestie.lib.concurrency` |
 
 A chain of synchronous operators has a long generated type, like an iterator chain. To store a flow in a field or return one whose type cannot be written, box it: `flow.boxed()` returns `own BoxedFlow<T, E>`, which costs one allocation and one indirect call per element — the same trade as `Closure` (`std-lib/functional.md`).
 
@@ -93,11 +93,11 @@ Terminal operations:
 | Operation | Returns |
 | --------- | ------- |
 | `collect(f)` | `void ! E` |
-| `toList()` | `own list<T> ! E` — allocates, by name |
+| `toList()` | `own List<T> ! E` — allocates, by name |
 | `first()` | `T ? ! E` — absent if the flow is empty |
 | `fold(init, f)` | `R ! E` |
 | `count()` | `int ! E` |
-| `launch()` | `fiber` collecting in the background; cancel it to stop |
+| `launch()` | `Fiber` collecting in the background; cancel it to stop |
 
 Every operator is an extension function over the `Flow` protocol. Third-party operators are written the same way and fuse the same way.
 

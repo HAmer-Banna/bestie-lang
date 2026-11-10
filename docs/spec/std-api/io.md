@@ -283,15 +283,15 @@ Wrapping transfers ownership, so a chain has exactly one owner at each level and
 Concurrency is achieved via:
 
 * core `thread`
-* `fiber` from `bestie.lib.concurrency`
+* `Fiber` from `bestie.lib.concurrency`
 
 Example:
 
 ```bestie
-import bestie.lib.concurrency.fiber
+import bestie.lib.concurrency.Fiber
 
 // The fiber takes ownership of the stream — nothing is shared across the boundary.
-fiber.new([move stream]() => {
+Fiber.new([move stream]() => {
     var buf : array<byte>[4096] = array<byte>[4096].fill(0)
     defer stream.close()
 

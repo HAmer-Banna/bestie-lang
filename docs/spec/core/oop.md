@@ -116,7 +116,7 @@ data class User {
 **Rules:**
 
 * All fields are implicitly `val` — `var` fields are **forbidden**
-* Fields holding collections must use the `immutable` variation (`list<T>.immutable`, `map<K,V>.immutable`)
+* Fields holding collections must use the `immutable` variation (`List<T>.immutable`, `Map<K,V>.immutable`)
 * Cannot be open or inherited
 * Cannot declare `protected` members
 * Inner classes must be `private value class` only
@@ -870,7 +870,7 @@ User.new().init(id: 1)         // ❌ would expose an uninitialized object
 
 `free()` and `freeDeep()` still take **no arguments**. Arguments belong only to `.new(...)`.
 
-Construction may be restricted with visibility on `init` (§11.8). There is no type that refuses `.new` and offers a differently-named factory instead: `thread`, `fiber`, and every collection are constructed with `.new` like everything else (§13.2).
+Construction may be restricted with visibility on `init` (§11.8). There is no type that refuses `.new` and offers a differently-named factory instead: `thread`, `Fiber`, and every collection are constructed with `.new` like everything else (§13.2).
 
 ---
 
@@ -1281,9 +1281,9 @@ Bestie has **no `static fun`**, and no `static` keyword at any layer.
 Every type-level function that a factory would need is a **constructor**, and §11.1 already settles that constructors are spelled `Type.new(...)`. So the factory *is* `.new`:
 
 ```bestie
-list<int>.new()                 // empty list
-list<int>.linked.new()          // empty linked list
-set<int>.new(1, 2, 3)           // varargs init — fp.md §9
+List<int>.new()                 // empty list
+List<int>.linked.new()          // empty linked list
+Set<int>.new(1, 2, 3)           // varargs init — fp.md §9
 thread.new(body)                // no special-cased construction path
 Channel<int>.new(16)
 Connection.new(host)            // fallible init — §11.6
@@ -1301,7 +1301,7 @@ Duration.new(30 as Seconds)
 Duration.new(30 as Millis)
 ```
 
-**A function that needs no instance and constructs nothing is a top-level `fun`.** Bestie has no rule forcing functions into a type's namespace, so `bestie.lib.math.identity(3)` is a plain function, not `matrix.identity(3)`.
+**A function that needs no instance and constructs nothing is a top-level `fun`.** Bestie has no rule forcing functions into a type's namespace, so `bestie.lib.math.identity(3)` is a plain function, not `Matrix.identity(3)`.
 
 **Restricting construction** is a visibility question, not a keyword question. An `init` declared without `public` is `internal` (§7), so `Type.new(...)` is already unavailable outside the module; `private init` narrows it to the declaring type, leaving a factory `.new` overload as the only way in.
 
@@ -1319,12 +1319,12 @@ Always thread-safe — deep immutability is declared explicitly:
 * `enum` — closed, no mutable state
 * `immutable class` — deep immutability enforced by the compiler
 * Primitive types (`int`, `float64`, `bool`, `char`, etc.)
-* Immutable collections — the `immutable` variation: `list<T>.immutable`, `set<T>.immutable`
+* Immutable collections — the `immutable` variation: `List<T>.immutable`, `Set<T>.immutable`
 * `const` values — stored in read-only memory
 
 **Not** automatically thread-safe:
 
-* `val xs: list<int>` — the binding is immutable, but the list is mutable
+* `val xs: List<int>` — the binding is immutable, but the list is mutable
 * A class with all `val` fields, if any field holds a mutable collection or a mutable class
 * `open class` and regular `class` instances unless declared `immutable`
 
@@ -1333,10 +1333,10 @@ Note that this list has no per-binding entry. A frozen *binding* would leave eve
 The bridge from a mutable value to a shareable one is **`freeze()`**, which consumes ownership:
 
 ```bestie
-val own ls = list<int>.new()
+val own ls = List<int>.new()
 ls.add(1)
 
-val own frozen = move ls.freeze()   // list<int>.immutable — ls is now invalid
+val own frozen = move ls.freeze()   // List<int>.immutable — ls is now invalid
 ```
 
 Because `move` invalidates the source, no mutable path to that storage survives the call. That is what makes the result safe to hand to another thread with no lock.

@@ -70,7 +70,7 @@ Doubles are hand-written implementations of a protocol. There is no auto-mocking
 
 ```bestie
 class FakeUserRepository impl UserRepository {
-    var own users: list<User> = list<User>.new()
+    var own users: List<User> = List<User>.new()
 
     fun find(id: int): User ? {
         for (u in users) {

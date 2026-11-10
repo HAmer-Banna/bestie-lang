@@ -89,8 +89,8 @@ class SpawnOptions {
     var stdout: Stdio
     var stderr: Stdio
     var workingDir: Path ?          // absent means inherit
-    val own env: map<str, str> ?    // absent means inherit the parent's environment
-    val own pass: list<HandleToken> ?   // extra handles this child inherits; absent means none
+    val own env: Map<str, str> ?    // absent means inherit the parent's environment
+    val own pass: List<HandleToken> ?   // extra handles this child inherits; absent means none
 }
 
 value class HandleToken {
@@ -209,7 +209,7 @@ Rules:
 fun getEnv(key: str): own str ?
 fun setEnv(key: str, value: str): void ! OsError
 fun removeEnv(key: str): void ! OsError
-fun envVars(): own map<str, str> ! OsError
+fun envVars(): own Map<str, str> ! OsError
 
 fun currentDir(): own Path ! OsError
 fun setCurrentDir(dir: ptr<Path>): void ! OsError
@@ -251,10 +251,10 @@ fun resetSignal(sig: Signal): void ! OsError
 The safe pattern is to record and return, then act in ordinary code:
 
 ```bestie
-import bestie.lib.concurrency.atomic
+import bestie.lib.concurrency.Atomic
 import bestie.lib.concurrency.Ordering
 
-val SHUTDOWN = atomic<bool>.new(false)
+val SHUTDOWN = Atomic<bool>.new(false)
 
 fun installShutdown(): void ! OsError {
     try onSignal(Signal.Term, s => SHUTDOWN.store(true, Ordering.Release))
@@ -328,7 +328,7 @@ enum Priority {
 
 fun setPriority(t: ptr<thread>, level: Priority): void ! OsError
 fun getPriority(t: ptr<thread>): Priority ! OsError
-fun setAffinity(t: ptr<thread>, cpus: ptr<set<int>>): void ! OsError
+fun setAffinity(t: ptr<thread>, cpus: ptr<Set<int>>): void ! OsError
 fun setName(t: ptr<thread>, name: str): void ! OsError
 ```
 

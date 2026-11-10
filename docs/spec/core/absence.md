@@ -67,7 +67,7 @@ val token: str ?                         // an optional field or binding
 ```
 
 * `T ?` is core syntax, sealed with the rest of core. There is no `option<T>` or `Optional<T>`; `T ?` is the only spelling.
-* `?` binds to the type immediately before it: `list<str ?>` is a list of optional strings, `list<str> ?` an optional list.
+* `?` binds to the type immediately before it: `List<str ?>` is a list of optional strings, `List<str> ?` an optional list.
 * `T ? ?` is legal (an optional optional) but rarely useful; each level costs one niche or one tag (§7).
 * `T ? ! E` — a value, a clean absence, or a failure — is legal and costs nothing extra. `T ! E ?` is not a type (`types.md` §8.4).
 

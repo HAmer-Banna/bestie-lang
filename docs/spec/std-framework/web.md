@@ -57,7 +57,7 @@ class UserController {
     }
 
     @Get("/")
-    fun list(@Query page: int ?): list<UserDto> {
+    fun list(@Query page: int ?): List<UserDto> {
         return service.page(page ?: 1)
     }
 

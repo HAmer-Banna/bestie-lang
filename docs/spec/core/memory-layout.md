@@ -330,9 +330,9 @@ Layout never weakens the memory model in `concurrency.md` §8:
 * Every field is its own memory location. Packing never merges two fields into one access, and narrowing (§4.3) never shares bytes between fields.
 * A naturally aligned access of at most one machine word is a single access. Packing never misaligns a field: step 3 of §4.1 places every field at its own alignment.
 
-**False sharing.** Two atomics written by different threads on the same cache line slow each other down. The compiler cannot see which fields are contended. Padding every `atomic<T>` to its own line would multiply the cost by every instance of every type that holds one, which contradicts minimum size by default. Bestie therefore does not insert cache-line padding implicitly, and there is no annotation to request it.
+**False sharing.** Two atomics written by different threads on the same cache line slow each other down. The compiler cannot see which fields are contended. Padding every `Atomic<T>` to its own line would multiply the cost by every instance of every type that holds one, which contradicts minimum size by default. Bestie therefore does not insert cache-line padding implicitly, and there is no annotation to request it.
 
-When contention is known, isolation is written as a **type**: `Isolated<T>` in `bestie.lib.concurrency` is a value type whose size and alignment are the target's cache-line size. A field of type `Isolated<atomic<int>>` occupies its own line wherever the compiler places it. As with `atomic<T>` orderings, the cost is visible in the source rather than chosen by default.
+When contention is known, isolation is written as a **type**: `Isolated<T>` in `bestie.lib.concurrency` is a value type whose size and alignment are the target's cache-line size. A field of type `Isolated<Atomic<int>>` occupies its own line wherever the compiler places it. As with `Atomic<T>` orderings, the cost is visible in the source rather than chosen by default.
 
 ---
 

@@ -39,24 +39,24 @@ Without this import, none of the functional symbols are visible.
 
 ## Core Functional Operations
 
-All three take their source as a generic parameter constrained by `Iterable<T>`, never as a concrete collection type. Variations are invariant (`collections.md` §3.3), so a `list<T>` parameter would accept array-backed lists only; the constraint accepts every variation, plus core `array<T>`, `slice<T>`, and `range<T>`.
+All three take their source as a generic parameter constrained by `Iterable<T>`, never as a concrete collection type. Variations are invariant (`collections.md` §3.3), so a `List<T>` parameter would accept array-backed lists only; the constraint accepts every variation, plus core `array<T>`, `slice<T>`, and `range<T>`.
 
 They take their callable the same way — as a generic parameter constrained by a function shape (`core/fp.md` §6.5):
 
 ```bestie
-fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): list<R>
-fun <C impl Iterable<T>, T, P impl fn(T) -> bool> filter(xs: C, p: P): list<T>
+fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): List<R>
+fun <C impl Iterable<T>, T, P impl fn(T) -> bool> filter(xs: C, p: P): List<T>
 fun <C impl Iterable<T>, T, R, F impl fn(R, T) -> R> fold(xs: C, initial: R, op: F): R
 ```
 
-`map` and `filter` return an array-backed `list<R>` — a new, owned collection the caller must discharge. They are monomorphized per collection type **and per callable**, so the lambda is a direct call inlined into the loop: `map(xs, x => x * 2)` compiles to the loop a C programmer would write. Lambda parameter types come from the signature (`core/fp.md` §7.2).
+`map` and `filter` return an array-backed `List<R>` — a new, owned collection the caller must discharge. They are monomorphized per collection type **and per callable**, so the lambda is a direct call inlined into the loop: `map(xs, x => x * 2)` compiles to the loop a C programmer would write. Lambda parameter types come from the signature (`core/fp.md` §7.2).
 
 ### map
 
 Transforms each element of a collection into a new value.
 
 ```bestie
-val xs = list<int>.new(1, 2, 3);
+val xs = List<int>.new(1, 2, 3);
 val ys = map(xs, x => x * 2)
 ```
 
@@ -71,7 +71,7 @@ val ys = map(xs, x => x * 2)
 Selects elements that satisfy a predicate.
 
 ```bestie
-val xs = list<int>.new(1, 2, 3, 4);
+val xs = List<int>.new(1, 2, 3, 4);
 val ys = filter(xs, x => x % 2 == 0)
 ```
 
@@ -192,7 +192,7 @@ class Closure<S> impl S {                         // S is a function type: Closu
 
 ```bestie
 class EventBus {
-    val own handlers: list<Closure<fn(Event) -> void>>
+    val own handlers: List<Closure<fn(Event) -> void>>
 
     fun subscribe(own h: Closure<fn(Event) -> void>) { this.handlers.add(move h) }
     fun publish(e: Event) {
@@ -221,10 +221,10 @@ Choose it only when the slot's callable type varies at run time. A field of one 
 
 Functional operations work on anything satisfying `Iterable<T>` (`utils.md` §2):
 
-* every `list` / `set` / `map` / `deque` / `priorityQueue` variation, including `.immutable`
+* every `List` / `Set` / `Map` / `Deque` / `PriorityQueue` variation, including `.immutable`
 * core `array<T>`, `slice<T>`, and `range<T>`
 
-That reach is the reason the constraint is written as `impl Iterable<T>` rather than as a concrete parameter type — a `list<int>` parameter could take none of the others.
+That reach is the reason the constraint is written as `impl Iterable<T>` rather than as a concrete parameter type — a `List<int>` parameter could take none of the others.
 
 Collections themselves remain structurally simple and behavior-free.
 

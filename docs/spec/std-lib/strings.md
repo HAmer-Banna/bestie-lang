@@ -4,7 +4,7 @@ This document defines the **Bestie Standard String Library (`bestie.lib.strings`
 
 Core `str` (see `core/types.md` §3) is intentionally minimal — it exposes only raw byte access, codepoint access, length, and iteration. Everything higher-level — **parsing**, **substrings**, **search**, **splitting**, **trimming**, and **case conversion** — lives here.
 
-`bestie.lib.strings` is delivered entirely as **extension functions** on `str` (and a few on `list<str>`). This means:
+`bestie.lib.strings` is delivered entirely as **extension functions** on `str` (and a few on `List<str>`). This means:
 
 * Core stays small; `str` gains no new fields or built-in methods.
 * The operations still read as methods (`s.toInt()`, `s.trim()`) because extension functions are called with method syntax (`fp.md` §11).
@@ -22,7 +22,7 @@ import bestie.lib.strings
 2. **Codepoint-aware by default** — indices in this module are **Unicode scalar (codepoint)** indices, not byte offsets. Byte-level access stays in core (`s[i]`, `s[lo..hi]`).
 3. **Parsing is explicit and fallible** — string→value conversions return `T ! ParseError`; there is no silent default.
 4. **No implicit locale** — case conversion uses Unicode default case mapping. Locale-sensitive behavior is out of scope for this module.
-5. **No hidden allocation surprises** — allocation happens only where a new `str` or `list<str>` is produced, and that is always visible at the call site.
+5. **No hidden allocation surprises** — allocation happens only where a new `str` or `List<str>` is produced, and that is always visible at the call site.
 
 ---
 
@@ -108,17 +108,17 @@ if (val i = path.indexOf("/")) {
 ## 5. Splitting and Joining
 
 ```bestie
-fun str.split(sep: str):     list<str>
-fun str.splitLines():        list<str>          // splits on \n / \r\n
-fun str.splitWhitespace():   list<str>          // splits on runs of whitespace
-fun list<str>.join(sep: str): str               // inverse of split
+fun str.split(sep: str):     List<str>
+fun str.splitLines():        List<str>          // splits on \n / \r\n
+fun str.splitWhitespace():   List<str>          // splits on runs of whitespace
+fun List<str>.join(sep: str): str               // inverse of split
 ```
 
 Rules:
 
 * `split` on an empty separator is a **compile-time error** (ambiguous) — use `chars()` from core to iterate scalars instead.
 * `split` never drops empty fields silently; `"a,,b".split(",")` yields `["a", "", "b"]`.
-* `join` is an extension on `list<str>` so the pair reads naturally:
+* `join` is an extension on `List<str>` so the pair reads naturally:
 
 ```bestie
 val parts = "a,b,c".split(",")     // ["a", "b", "c"]

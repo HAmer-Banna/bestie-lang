@@ -41,12 +41,12 @@ They are reusable, composable, and predictable.
 
 ### How these signatures are written
 
-Collection variations are invariant (`collections.md` §3.3), so a parameter naming `list<T>` accepts array-backed lists and nothing else. Every algorithm here therefore falls into one of two shapes:
+Collection variations are invariant (`collections.md` §3.3), so a parameter naming `List<T>` accepts array-backed lists and nothing else. Every algorithm here therefore falls into one of two shapes:
 
 * **Read-only traversal** takes a generic parameter constrained by `Iterable<T>` — `fun <C impl Iterable<T>> f(xs: C)`. This accepts every collection variation, plus core `array<T>`, `slice<T>`, and `range<T>`. It is fully monomorphized, so each instantiation compiles to what a hand-written loop would.
-* **In-place reordering and indexed access** names a concrete type, because the cost is part of the contract. `binarySearch` says `list<T>` precisely because O(log n) depends on array-backed indexing; the same signature over `list<T>.linked` would be O(n log n) with nothing in the source saying so.
+* **In-place reordering and indexed access** names a concrete type, because the cost is part of the contract. `binarySearch` says `List<T>` precisely because O(log n) depends on array-backed indexing; the same signature over `List<T>.linked` would be O(n log n) with nothing in the source saying so.
 
-In-place algorithms take `ptr<list<T>>`, not `list<T>`: `list<T>` is a `class` and classes are not copyable across a call (`core/memory.md` §6.1). Pointing is how a callee mutates the caller's object.
+In-place algorithms take `ptr<List<T>>`, not `List<T>`: `List<T>` is a `class` and classes are not copyable across a call (`core/memory.md` §6.1). Pointing is how a callee mutates the caller's object.
 
 ---
 
@@ -72,14 +72,14 @@ Properties:
 Example:
 
 ```bestie
-var nums : list<int> = {4, 1, 3}
+var nums : List<int> = {4, 1, 3}
 sort(nums[..])
 
 var fixed : array<int>[] = {9, 2, 7}
 sort(fixed[..])          // arrays sort exactly like lists
 ```
 
-The in-place algorithms take `slice<var T>`, not a particular collection: anything contiguous — an `array<T>[N]`, an array-backed `list<T>`, or a sub-range of either — is sorted, partitioned, or searched by the same function. `nums[..]` is how the call site says the callee writes into `nums`.
+The in-place algorithms take `slice<var T>`, not a particular collection: anything contiguous — an `array<T>[N]`, an array-backed `List<T>`, or a sub-range of either — is sorted, partitioned, or searched by the same function. `nums[..]` is how the call site says the callee writes into `nums`.
 
 Use when:
 

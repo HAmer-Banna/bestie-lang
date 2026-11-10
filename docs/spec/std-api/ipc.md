@@ -275,7 +275,7 @@ Rules:
 | Permitted | Why |
 | --------- | --- |
 | Fixed-width integers, `float32`, `float64`, `byte`, `bool` | Size and representation are fixed by the target ABI |
-| `atomic<P>` of a permitted primitive, where lock-free on the target | Cross-process atomics must be the hardware instruction; a lock-based fallback would lock a lock only one process can see |
+| `Atomic<P>` of a permitted primitive, where lock-free on the target | Cross-process atomics must be the hardware instruction; a lock-based fallback would lock a lock only one process can see |
 | A `@repr(C)` type whose fields are all permitted | Declaration-order layout, fixed by the C ABI (`foreign.md` §5.2) |
 | `array<T>[n]` of a permitted `T` | Inline, fixed stride |
 
@@ -285,7 +285,7 @@ Rules:
 | Any non-`@repr(C)` aggregate | Its layout is not stable across builds (`memory-layout.md` §15) |
 | `ptr<T>`, `str`, `slice<T>`, any `own` or `ref` field, any `class` | They hold addresses, and an address is meaningful in exactly one process |
 
-Using a rejected `T` is a compile-time error naming the offending field. `atomic<P>` on a target where it is not lock-free is also a compile-time error, on that target.
+Using a rejected `T` is a compile-time error naming the offending field. `Atomic<P>` on a target where it is not lock-free is also a compile-time error, on that target.
 
 Additionally, at run time:
 
@@ -297,7 +297,7 @@ Additionally, at run time:
 
 Shared memory is **ordinary memory that another program also writes**. The rules are the rules for threads (`core/concurrency.md` §8):
 
-* Concurrent access where at least one side writes must go through `atomic<P>`, or be ordered by an atomic release/acquire pair, or by a `Semaphore` (§9).
+* Concurrent access where at least one side writes must go through `Atomic<P>`, or be ordered by an atomic release/acquire pair, or by a `Semaphore` (§9).
 * A plain read through a `ptr<T>` of a location another process is writing concurrently is a data race, with the same consequences as between threads — the optimizer may keep the value in a register.
 * There are no implicit fences. Every atomic operation names its `Ordering`.
 
@@ -306,13 +306,13 @@ Shared memory is **ordinary memory that another program also writes**. The rules
 ### 8.4 Example — a single-producer, single-consumer counter page
 
 ```bestie
-import bestie.lib.concurrency.atomic
+import bestie.lib.concurrency.Atomic
 import bestie.lib.concurrency.Ordering
 
 @repr(C)
 value class Stats {
-    requests: atomic<uint64>
-    errors:   atomic<uint64>
+    requests: Atomic<uint64>
+    errors:   Atomic<uint64>
 }
 
 fun publishStats(name: IpcName): own SharedMemory ! IpcError {
@@ -415,7 +415,7 @@ fun runWorker(job: str): str ! (IpcError | OsError | ReadError) {
     val own rd = move p.reader ?: return IpcError.Closed
     val own wr = move p.writer ?: return IpcError.Closed
 
-    var passed = list<HandleToken>.new()
+    var passed = List<HandleToken>.new()
     passed.add(wr.token())
 
     val own opts = SpawnOptions.new(
@@ -507,7 +507,7 @@ They may add mechanisms and options. They may not change what a `PipeReader`, `L
 | Socket paths, removing stale files | `bestie.api.fs` |
 | `Shutdown`; communication across machines | `bestie.api.network` |
 | `@repr(C)` | `bestie.api.foreign` |
-| `atomic<T>`, `Ordering` | `bestie.lib.concurrency` |
+| `Atomic<T>`, `Ordering` | `bestie.lib.concurrency` |
 | `Duration` | `bestie.lib.datetime` |
 | Encoding messages | `bestie.lib.format` |
 

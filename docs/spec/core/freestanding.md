@@ -39,7 +39,7 @@ Every build is for one of two kinds of target:
 | Panic | Prints and terminates per build mode (`exceptions.md` §4.2) | Calls the program's panic handler (§3.3) |
 | Heap | Default size-classed allocator, replaceable (§3.4) | None until the program registers one (§3.4) |
 | `thread` | Available | Compile-time error |
-| `fiber` | Available | Available once an allocator is registered — fibers need stacks |
+| `Fiber` | Available | Available once an allocator is registered — fibers need stacks |
 | std-lib | All of it | All of it except what needs a heap, unless one is registered |
 | std-api | All of it | `bestie.api.memory` only, supplied by the platform or a board-support project |
 
@@ -96,7 +96,7 @@ These work from the first instruction of the entry function, with no runtime and
 * Every primitive, `value class`, `data class`, `enum`, tuple, `array<T>[N]`, `slice<T>`, `range<T>`, `T ?`, and `T ! E`
 * `ptr<T>` and everything in `memory.md` §8
 * `const` data, compiled into `.rodata`
-* `atomic<T>`, `Ordering`, and barriers — `bestie.lib.concurrency` §5 needs no OS
+* `Atomic<T>`, `Ordering`, and barriers — `bestie.lib.concurrency` §5 needs no OS
 * `MmioRegion<T>` and the rest of `bestie.api.memory`
 * Statically dispatched calls, protocols, generics, and `virtual` dispatch — dispatch needs no runtime tables beyond the program's own `.rodata` (`memory-layout.md` §7)
 
@@ -152,13 +152,13 @@ Rules:
 * The registered binding is a module-level `val` whose type implements `GlobalAllocator` (`std-lib/allocators.md`). Its state lives in atomics or `global<T>` storage (§3.5), because the allocator may be called from any thread or interrupt.
 * `free` receives the size and alignment the object was allocated with. Deallocation is **sized** everywhere in Bestie (`memory-layout.md` §10), so an allocator never needs a header to find an object's size.
 * At most one `@globalAllocator` per program. On a hosted target, one replaces the default — the usual reason being a trading or game process that wants its own allocator for everything.
-* Code reaches the program's allocator — registered or default — as `heap` from `bestie.lib.allocators` (`std-lib/allocators.md` §4a.3): `heap.create(v)` takes raw memory from the same place `.new()` does.
+* Code reaches the program's allocator — registered or default — as `HEAP` from `bestie.lib.allocators` (`std-lib/allocators.md` §4a.3): `HEAP.create(v)` takes raw memory from the same place `.new()` does.
 * **On a freestanding target with no allocator, any heap allocation is a compile-time error**, reported at the allocating call with the chain that reached it:
 
 ```
 error: heap allocation in a freestanding program with no @globalAllocator
   --> src/net/frame.bst:41:23
-   |  val own buf = list<byte>.new()
+   |  val own buf = List<byte>.new()
    = note: reached from reset → run → handleFrame
 ```
 
@@ -172,7 +172,7 @@ Bestie has no mutable global variables (`oop.md` §15). Bare-metal code still ne
 @section(".dma")
 val RX_RING: global<array<byte>[2048]> = global<array<byte>[2048]>.zeroed()
 
-val TICKS: atomic<uint64> = atomic<uint64>.new(0)       // no global<T> needed for atomics
+val TICKS: Atomic<uint64> = Atomic<uint64>.new(0)       // no global<T> needed for atomics
 
 fun rxBuffer(): ptr<array<byte>[2048]> {
     return RX_RING.ptr()

@@ -365,16 +365,16 @@ Rules:
 ## 11. Integration with Concurrency
 
 `bestie.api.fs` introduces **no** async keywords. Blocking calls run on whatever thread invokes
-them; concurrency is achieved with core `thread` or `fiber` from `bestie.lib.concurrency` (matching `bestie.api.io`):
+them; concurrency is achieved with core `thread` or `Fiber` from `bestie.lib.concurrency` (matching `bestie.api.io`):
 
 ```bestie
-import bestie.lib.concurrency.fiber
+import bestie.lib.concurrency.Fiber
 
 fun scanInBackground(p: Path): void ! FsError {
     val own f = try open(p, OpenMode.Read)
 
     // The handle is moved into the fiber, which owns and closes it.
-    fiber.new([move f]() => {
+    Fiber.new([move f]() => {
         defer f.close()
 
         var buf : array<byte>[4096] = array<byte>[4096].fill(0)

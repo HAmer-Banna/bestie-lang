@@ -351,7 +351,7 @@ swap(this.top, spare)            // spare now holds the old top, which must stil
 `ref` is allowed **only** on:
 
 * Class fields (`class` / `open class` / `abstract class`)
-* Collection element types (`list<ref User>`, `set<ref User>`, …)
+* Collection element types (`List<ref User>`, `Set<ref User>`, …)
 
 It is **not** a function-parameter mode, not a local loan, and not a return type. To share or mutate the same object in a function, use `ptr<T>` / `ptr<const T>` (§6).
 
@@ -616,7 +616,7 @@ while (val n = cur) {
 }
 ```
 
-The cursor is a raw pointer, with the usual `ptr<T>` contract: the compiler does not check that the nodes outlive it. Checking that would need a lifetime solver, which Bestie does not have (`vision.md` Rule 5). A hand-written linked structure is low-level code and reads like it; `list<T>.linked` in `bestie.lib.collections` is the checked path.
+The cursor is a raw pointer, with the usual `ptr<T>` contract: the compiler does not check that the nodes outlive it. Checking that would need a lifetime solver, which Bestie does not have (`vision.md` Rule 5). A hand-written linked structure is low-level code and reads like it; `List<T>.linked` in `bestie.lib.collections` is the checked path.
 
 A `val T` binding designates **writable storage**, so its address is a mutable `ptr<T>`. A `const T` binding designates an **immutable target**, so its address is a `ptr<const T>` — a *pointer to const*: the target can be read through it but **never mutated**. Runtime handles are read-only. Immutable class kinds (for example `data class`) always yield `ptr<const T>` regardless of the binding — see §10.1.2.
 
@@ -781,7 +781,7 @@ Rules:
 
 * `p.toSlice(n)` states that `n` elements of `T` start at `p`. The compiler cannot check this, as it cannot check a C length. Every access through the slice is bounds-checked against `n`.
 * `n` must not be negative; `n == 0` gives an empty slice.
-* A `slice<var T>` is exclusive (`types.md` §6): while it is live, no other path may write the same elements. `toSlice` on memory that another thread or process writes concurrently breaks that promise — use the pointer and `atomic<T>` there instead (`std-api/ipc.md` §8.3).
+* A `slice<var T>` is exclusive (`types.md` §6): while it is live, no other path may write the same elements. `toSlice` on memory that another thread or process writes concurrently breaks that promise — use the pointer and `Atomic<T>` there instead (`std-api/ipc.md` §8.3).
 * `s.base()` is the address of element 0. On an empty slice it is a non-zero address aligned to `alignOf(T)`, which must not be read or written through.
 
 ---
@@ -872,7 +872,7 @@ Rules:
 
 * `cast<U>()` changes only the pointee type — the address value is unchanged. It performs **no conversion** of the pointed-to bytes (unlike numeric `as` conversion in `types.md` §2.1).
 * Casting to `ptr<byte>` is always permitted (every type is byte-addressable). `byte`-level access is the canonical way to inspect raw storage.
-* **Atomic access to existing memory** is a cast: `p.cast<atomic<T>>()`. `atomic<T>` has the size of `T` (`std-lib/concurrency.md` §5), so this reaches a word that C code or another process laid out as a plain `T`. Its alignment may be stricter than `T`'s, so test with `p.isAligned<atomic<T>>()` when the address is not known to satisfy it.
+* **Atomic access to existing memory** is a cast: `p.cast<Atomic<T>>()`. `Atomic<T>` has the size of `T` (`std-lib/concurrency.md` §5), so this reaches a word that C code or another process laid out as a plain `T`. Its alignment may be stricter than `T`'s, so test with `p.isAligned<Atomic<T>>()` when the address is not known to satisfy it.
 * Casting **to a stricter alignment** than the address satisfies is undefined on access; alignment is the programmer's responsibility. The required alignment of `T` is compile-time known, and `p.isAligned<U>(): bool` tests an address before a stricter cast.
 * **Removing `const`** (`ptr<const T>` → `ptr<T>`) is a const violation and is permitted **only under `@trusted`**. Adding `const` is always allowed.
 * A reinterpret cast between unrelated pointee types is not, by itself, a compile-time error — it is the explicit low-level boundary — but statically provable misuse (e.g., access beyond a known size) is still rejected per §8.5.
@@ -948,7 +948,7 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 | `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic in elements; strides by `strideOf(T)` (`memory-layout.md` §3). Negative `n` moves back. Provable OOB is a compile error. |
 | `p.distanceFrom(base)` | `int` | §8.5 | Element count from `base` to `p` (C `p - base`). Meaningful only within one allocation. |
 | `p.toSlice(n)` | `slice<var T>` / `slice<T>` | §8.5.2 | `n` elements starting at `p`; bounds-checked from then on. |
-| `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. `cast<atomic<T>>()` gives atomic access. |
+| `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. `cast<Atomic<T>>()` gives atomic access. |
 | `p.toCode<F>()` | `F` | §8.9 | Reinterpret the address as a `foreign fn` type `F`. |
 | `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
 | `a == b`, `a != b` | `bool` | §8.7 | Address equality. A pointer is its address; there is no provenance. |
@@ -1197,7 +1197,7 @@ val p: Printable = Circle.new(radius: 5)
 The concrete type must be statically known at the point of assignment. This means:
 
 * `val p: Printable = Circle.new()` — ✅ concrete type is known at compile time
-* `list<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `virtual` instead
+* `List<Printable>` containing mixed `Circle` and `Rectangle` — ❌ requires runtime polymorphism; use a sealed `open class` hierarchy with `virtual` instead
 
 `.address()` on a protocol-typed variable resolves to the concrete type's pointer:
 
@@ -1244,7 +1244,7 @@ fun ok(p: Point) {
 Collections own their elements **only if element type is `own T`**.
 
 ```bestie
-list<own User> users
+List<own User> users
 ```
 
 * `users.freeDeep()` frees all users
@@ -1270,31 +1270,31 @@ What `copy()` / `deepCopy()` do, per element kind:
 
 | Element kind | `copy(a)` | `deepCopy(a)` |
 | ------------ | --------- | ------------- |
-| value elements (`list<int>`) | new buffer, elements copied | identical to `copy` |
-| reference-type elements (`list<ref T>`) | new buffer, **same handles** (aliased; list does not own) | same |
-| ownership (`list<own T>`) | ❌ forbidden (would duplicate ownership) | new buffer, **each element deep-copied** |
-| raw pointers (`list<ptr<T>>`) | new buffer, **same addresses** (aliased) | same (raw pointers not followed) |
+| value elements (`List<int>`) | new buffer, elements copied | identical to `copy` |
+| reference-type elements (`List<ref T>`) | new buffer, **same handles** (aliased; list does not own) | same |
+| ownership (`List<own T>`) | ❌ forbidden (would duplicate ownership) | new buffer, **each element deep-copied** |
+| raw pointers (`List<ptr<T>>`) | new buffer, **same addresses** (aliased) | same (raw pointers not followed) |
 
 ```bestie
-val a: list<int> = {1, 2, 3}
+val a: List<int> = {1, 2, 3}
 
 val b = a            // ❌ compile-time error — collection owns its buffer
 val b = move a       // ✅ transfer; a is now invalid
 val c = copy(a)      // ✅ explicit independent duplicate (allocation is visible)
 
-val o: list<own User> = ...
+val o: List<own User> = ...
 val q = deepCopy(o)  // ✅ new container; each User deep-copied
 val r = copy(o)      // ❌ forbidden — would duplicate ownership of elements
 ```
 
-Duplication semantics are defined in full in `std-lib/utils.md` §7. Note that for `list<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
+Duplication semantics are defined in full in `std-lib/utils.md` §7. Note that for `List<ptr<T>>`, `copy()` produces a new buffer holding the **same addresses** — the container is duplicated, the pointees are aliased, because `ptr<T>` carries no ownership (§4.2).
 
 ---
 
 ### 11.3 Immutable & Concurrent Variants
 
 ```bestie
-val l : list<int>.immutable = ...
+val l : List<int>.immutable = ...
 ```
 
 Rules:
@@ -1307,20 +1307,20 @@ Rules:
 
 ### 11.4 Containers of Pointers
 
-Any collection may hold raw pointers as elements — `array<ptr<T>>`, `list<ptr<T>>`, `map<K, ptr<V>>`, and so on — because `ptr<T>` is a value-type element (one word — §4.2). Nesting (`array<ptr<array<int>>>`) and const element forms (`array<ptr<const T>>`) are equally valid.
+Any collection may hold raw pointers as elements — `array<ptr<T>>`, `List<ptr<T>>`, `Map<K, ptr<V>>`, and so on — because `ptr<T>` is a value-type element (one word — §4.2). Nesting (`array<ptr<array<int>>>`) and const element forms (`array<ptr<const T>>`) are equally valid.
 
 **A pointer-element container owns nothing it points through.** `ptr<T>` carries no ownership, so the container is responsible only for its own backing buffer. This is the decisive difference from owning and borrowing element kinds:
 
 | Element type | What the container owns | `freeDeep()` | Copy semantics |
 | ------------ | ----------------------- | ------------ | -------------- |
-| `list<own T>` | the elements | frees buffer **and every element** | move-only (no copy) |
-| `list<ref T>` | nothing (non-owning handles) | frees buffer only — **elements are never freed** | shallow copy (aliasing) allowed |
-| `list<ptr<T>>` | nothing (raw addresses) | frees buffer only — **pointees are never freed** | shallow copy (aliasing) allowed |
+| `List<own T>` | the elements | frees buffer **and every element** | move-only (no copy) |
+| `List<ref T>` | nothing (non-owning handles) | frees buffer only — **elements are never freed** | shallow copy (aliasing) allowed |
+| `List<ptr<T>>` | nothing (raw addresses) | frees buffer only — **pointees are never freed** | shallow copy (aliasing) allowed |
 
 Consequences, all in the explicit low-level domain:
 
-* **Freeing pointees is manual.** `freeDeep()` on a `list<ptr<T>>` behaves like `free()` with respect to the pointees — it reclaims the backing buffer, not the pointed-to memory. To free the targets, iterate and release each explicitly **before** freeing the container.
-* **Copying aliases.** `val b = a` on a `list<ptr<T>>` is a shallow copy: `a` and `b` hold the **same addresses**. This is permitted (unlike `list<own T>`, which is move-only — §11.2) and is intentional — it matches C-style pointer arrays. The programmer must not free through one alias while the other is still in use.
+* **Freeing pointees is manual.** `freeDeep()` on a `List<ptr<T>>` behaves like `free()` with respect to the pointees — it reclaims the backing buffer, not the pointed-to memory. To free the targets, iterate and release each explicitly **before** freeing the container.
+* **Copying aliases.** `val b = a` on a `List<ptr<T>>` is a shallow copy: `a` and `b` hold the **same addresses**. This is permitted (unlike `List<own T>`, which is move-only — §11.2) and is intentional — it matches C-style pointer arrays. The programmer must not free through one alias while the other is still in use.
 
 ```bestie
 val arr: array<ptr<Node>>[4] = ...
@@ -1332,7 +1332,7 @@ arr[0] = other                  // replace the stored pointer (container mutable
 
 **Concurrency.** A container of `ptr<T>` shared across threads is programmer-owned: the compiler provides no data-race protection on raw pointers (§14), unlike `own` / `ref` element containers. The `concurrent` variant guards only the container's own structure; the pointees remain unguarded.
 
-**Value- / data-class elements that hold pointers** follow the field rules of §10.1.1: a `list<C>` whose `data class C` has a `ptr<const T>` field is fine; a mutable `ptr<T>` field inside a `data class` is rejected.
+**Value- / data-class elements that hold pointers** follow the field rules of §10.1.1: a `List<C>` whose `data class C` has a `ptr<const T>` field is fine; a mutable `ptr<T>` field inside a `data class` is rejected.
 
 ---
 

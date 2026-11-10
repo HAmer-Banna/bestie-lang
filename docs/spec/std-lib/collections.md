@@ -4,7 +4,7 @@ This document defines the **Bestie collections** provided by the standard librar
 Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
 
 Core Bestie provides `array<T>[N]` — a static, C-layout array whose length is part of its type, defined in `core/types.md` §5.
-This document covers the standard-library collection layer: `list<T>`, `set`, `map`, `deque`, and `priorityQueue`.
+This document covers the standard-library collection layer: `List<T>`, `Set<T>`, `Map<K,V>`, `Deque<T>`, and `PriorityQueue<T>`.
 
 ---
 
@@ -12,7 +12,7 @@ This document covers the standard-library collection layer: `list<T>`, `set`, `m
 
 ### Class kind
 
-All five standard-library collection types — `list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, `priorityQueue<T>` — are **`class`**.
+All five standard-library collection types — `List<T>`, `Set<T>`, `Map<K,V>`, `Deque<T>`, `PriorityQueue<T>` — are **`class`**.
 
 They are not `value class` or `data class` because:
 
@@ -22,7 +22,7 @@ They are not `value class` or `data class` because:
 
 The `.immutable` modifier produces a variant that exposes no mutation API, but the underlying type is still a `class`.
 
-The one exception is **`bounded<T, N>`** (§2b), a `value class` with inline storage and no heap allocation. It is a separate type rather than a `list` variation because it is copied on assignment, and a variation may change cost, never semantics (§3.1).
+The one exception is **`Bounded<T, N>`** (§2b), a `value class` with inline storage and no heap allocation. It is a separate type rather than a `List` variation because it is copied on assignment, and a variation may change cost, never semantics (§3.1).
 
 ### Field-level ownership for element types
 
@@ -30,11 +30,11 @@ A collection's ownership of its elements is determined by the element type's `ow
 
 | Declaration | Meaning |
 | ----------- | ------- |
-| `set<User>` | The set holds **copies** of `User` values. `User` is a value type. |
-| `set<own User>` | The set **owns** each `User` instance. `freeDeep()` frees all elements. |
-| `set<ref User>` | The set holds **non-owning handles**. It is not responsible for freeing them. |
+| `Set<User>` | The set holds **copies** of `User` values. `User` is a value type. |
+| `Set<own User>` | The set **owns** each `User` instance. `freeDeep()` frees all elements. |
+| `Set<ref User>` | The set holds **non-owning handles**. It is not responsible for freeing them. |
 
-The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `priorityQueue<T>` for both key and value types where applicable.
+The same rule applies to `List<T>`, `Map<K,V>`, `Deque<T>`, and `PriorityQueue<T>` for both key and value types where applicable.
 
 ---
 
@@ -42,21 +42,21 @@ The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `priorityQueue<T
 
 | Collection | Representation | API restriction | Default |
 | ---------- | -------------- | --------------- | ------- |
-| `list<T>`  | `linked`       | —               | array-backed |
-| `set<T>`   | `hash` `tree` `linked` | —      | `hash`  |
-| `map<K,V>` | `hash` `tree` `linked` | —      | `hash`  |
-| `deque<T>` | —              | `queue` `stack` | full deque |
-| `priorityQueue<T>` | —        | —               | ❌ `max` or `min` required |
-| `bounded<T, N>` | inline, capacity `N` | — | — (a `value class`, §2b) |
+| `List<T>`  | `linked`       | —               | array-backed |
+| `Set<T>`   | `hash` `tree` `linked` | —      | `hash`  |
+| `Map<K,V>` | `hash` `tree` `linked` | —      | `hash`  |
+| `Deque<T>` | —              | `queue` `stack` | full deque |
+| `PriorityQueue<T>` | —        | —               | ❌ `max` or `min` required |
+| `Bounded<T, N>` | inline, capacity `N` | — | — (a `value class`, §2b) |
 
 Every family also takes the `immutable` variation (§4).
 
 All collections are **generic** (`<T>`).
 All variations are **explicit**, **compile-time validated**, and **part of the type** (§3.3).
 
-Collection family names stay lowercase across Bestie so they remain aligned with core `array<T>`, `slice<T>`, and `range<T>`.
+Collection families are PascalCase, like every type that needs an import; core's built-in `array<T>`, `slice<T>`, and `range<T>` are lowercase because they need none (`core/lang.md` §3.1.3a).
 
-`list<T>` is the primary dynamic collection. Its default (no variation keyword) is an array-backed resizable list. The `linked` variation selects a linked-list representation. Additional sequence variations may be introduced in future versions.
+`List<T>` is the primary dynamic collection. Its default (no variation keyword) is an array-backed resizable list. The `linked` variation selects a linked-list representation. Additional sequence variations may be introduced in future versions.
 
 ---
 
@@ -65,15 +65,15 @@ Collection family names stay lowercase across Bestie so they remain aligned with
 Every collection is constructed with **`.new(...)`**, the one construction verb in the language (`core/oop.md` §11.1). There is no `.new(...)` and no `.new(...)`.
 
 ```bestie
-val ls = list<int>.new()                    // empty array-backed list
-val ys = list<int>.new(1, 2, 3, 4, 5)       // from explicit values (varargs init)
-val ll = list<int>.linked.new()             // empty linked list
-val xs = set<int>.tree.new(1, 2)            // tree-backed set with two elements
-val zs = map<int,str>.new()                 // hash-backed, empty
-val dq = deque<int>.queue.new(1, 2, 3)      // FIFO-restricted deque
+val ls = List<int>.new()                    // empty array-backed list
+val ys = List<int>.new(1, 2, 3, 4, 5)       // from explicit values (varargs init)
+val ll = List<int>.linked.new()             // empty linked list
+val xs = Set<int>.tree.new(1, 2)            // tree-backed set with two elements
+val zs = Map<int,str>.new()                 // hash-backed, empty
+val dq = Deque<int>.queue.new(1, 2, 3)      // FIFO-restricted deque
 ```
 
-A variation is selected by naming it before `.new`, and the variation is part of the **type** — `list<int>.linked` is a type, writable in a signature or an annotation (§3.3).
+A variation is selected by naming it before `.new`, and the variation is part of the **type** — `List<int>.linked` is a type, writable in a signature or an annotation (§3.3).
 
 Rules:
 
@@ -87,19 +87,19 @@ Rules:
 A collection literal is written with a type annotation naming the target type (`core/lang.md` §5.4):
 
 ```bestie
-val ls : list<int>          = {1, 2, 3}
-val xs : set<int>           = {1, 2, 3}      // deduplicates
-val ll : list<int>.linked   = {1, 2, 3}
-val m  : map<int,str>       = {1: "a", 2: "b"}
+val ls : List<int>          = {1, 2, 3}
+val xs : Set<int>           = {1, 2, 3}      // deduplicates
+val ll : List<int>.linked   = {1, 2, 3}
+val m  : Map<int,str>       = {1: "a", 2: "b"}
 ```
 
-Without an annotation, `{v, ...}` is an `array<T>` and `{k: v, ...}` is a `map<K,V>` — core fixes both defaults.
+Without an annotation, `{v, ...}` is an `array<T>` and `{k: v, ...}` is a `Map<K,V>` — core fixes both defaults.
 
 ---
 
-## 2a. `list<T>` — Dynamic Collection
+## 2a. `List<T>` — Dynamic Collection
 
-`list<T>` is Bestie's dynamic, resizable collection.
+`List<T>` is Bestie's dynamic, resizable collection.
 It grows automatically as elements are added and shares an indexing interface with `array<T>`.
 
 ### 2a.1 Operators
@@ -127,7 +127,7 @@ Indexing, negative indexing, and slicing share one convention with core `array<T
 | `indexOf(value: T)` | `int ?` | Returns index or absent |
 | `size()` | `int` | Current number of elements |
 | `isEmpty()` | `bool` | True when no elements exist |
-| `toSet()` | `set<T>` | New hash set containing all elements (deduplicates) |
+| `toSet()` | `Set<T>` | New hash set containing all elements (deduplicates) |
 
 ### 2a.3 Variations
 
@@ -142,11 +142,11 @@ Future sequence variations may be introduced under the same model.
 
 ### 2a.4 Shared Interface with `array<T>`
 
-`list<T>` and `array<T>` (core) intentionally share the same indexing syntax and method names where they overlap:
+`List<T>` and `array<T>` (core) intentionally share the same indexing syntax and method names where they overlap:
 
 ```bestie
 val arr : array<int>[] = {10, 20, 30}
-val ls  : list<int>    = {10, 20, 30}
+val ls  : List<int>    = {10, 20, 30}
 
 arr[0]      // 10
 ls[0]       // 10 — identical syntax
@@ -159,16 +159,16 @@ ls.size()   // 3 — live, changes as the list grows
 ls.add(40)  // fine — list grows; an array has no add()
 ```
 
-The key distinction: `array<T>[N]` is **static** — its length is part of its type and never changes, and it has no `add()`; `list<T>` is **dynamic** — it grows as needed. The count is spelled differently on purpose: `length` on a fixed sequence, `size()` on a collection whose count changes (`core/types.md` §5.6). A list of lists, `list<own list<T>>`, reaches each row through a pointer to that row's own object; it is not a flat block — see `core/types.md` §5.12.
+The key distinction: `array<T>[N]` is **static** — its length is part of its type and never changes, and it has no `add()`; `List<T>` is **dynamic** — it grows as needed. The count is spelled differently on purpose: `length` on a fixed sequence, `size()` on a collection whose count changes (`core/types.md` §5.6). A list of lists, `List<own List<T>>`, reaches each row through a pointer to that row's own object; it is not a flat block — see `core/types.md` §5.12.
 
 ---
 
-## 2b. `bounded<T, N>` — Fixed Capacity, No Heap
+## 2b. `Bounded<T, N>` — Fixed Capacity, No Heap
 
-`bounded<T, N>` is a sequence of **up to** `N` elements stored inline, with a live count. It is what C programmers write by hand as `T items[N]; int count;`, packaged so the two cannot fall out of sync. It allocates nothing, so it works in freestanding code with no allocator (`core/freestanding.md`).
+`Bounded<T, N>` is a sequence of **up to** `N` elements stored inline, with a live count. It is what C programmers write by hand as `T items[N]; int count;`, packaged so the two cannot fall out of sync. It allocates nothing, so it works in freestanding code with no allocator (`core/freestanding.md`).
 
 ```bestie
-var pending : bounded<Packet, 32> = bounded<Packet, 32>.new()
+var pending : Bounded<Packet, 32> = Bounded<Packet, 32>.new()
 
 pending.add(p)                 // panics when full
 if (not pending.tryAdd(q)) { dropped += 1 }
@@ -190,8 +190,8 @@ process(pending[..])           // slice<Packet> over the live elements only
 Rules:
 
 * It is a `value class`: assignment copies the count and the live elements, and it lives inline wherever it is declared — in a stack frame, a field, or an array.
-* `T` must be copyable. A `value class` cannot hold `own` fields (`core/memory.md` §10.1.1), so a fixed pool of owned objects is a `list<own T>` backed by a `FixedBuffer` (`allocators.md` §3).
-* Elements past `size()` are never read. `clear()` and `removeLast()` do not overwrite them, so emptying a `bounded` costs one store.
+* `T` must be copyable. A `value class` cannot hold `own` fields (`core/memory.md` §10.1.1), so a fixed pool of owned objects is a `List<own T>` backed by a `FixedBuffer` (`allocators.md` §3).
+* Elements past `size()` are never read. `clear()` and `removeLast()` do not overwrite them, so emptying a `Bounded` costs one store.
 * Layout is `array<T>[N]` followed by the count, whose type is the smallest unsigned integer that holds `N`.
 
 ---
@@ -204,37 +204,37 @@ A variation narrows a collection family to a concrete type. They are not all the
 
 | Kind | Variations | Changes |
 | ---- | ---------- | ------- |
-| **Representation** | `list.linked` · `set.hash` `set.tree` `set.linked` · `map.hash` `map.tree` `map.linked` | Cost, not API |
-| **API restriction** | `deque.queue` · `deque.stack` | A narrower API, same representation |
-| **Mandatory discriminator** | `priorityQueue.max` · `priorityQueue.min` | Ordering; there is no bare `priorityQueue<T>` |
+| **Representation** | `List.linked` · `Set.hash` `Set.tree` `Set.linked` · `Map.hash` `Map.tree` `Map.linked` | Cost, not API |
+| **API restriction** | `Deque.queue` · `Deque.stack` | A narrower API, same representation |
+| **Mandatory discriminator** | `PriorityQueue.max` · `PriorityQueue.min` | Ordering; there is no bare `PriorityQueue<T>` |
 | **Mutability** | `.immutable` | Removes the mutation API (§4) |
 
 ### 3.2 Defaults
 
-**This package owns these defaults.** `core/lang.md` §5.4 fixes only that an unannotated `{k: v, ...}` literal is a `map<K,V>` and that `K` must satisfy the cited `hash()`; which representation backs it is decided here, so a new variation can be added without a language change.
+**This package owns these defaults.** `core/lang.md` §5.4 fixes only that an unannotated `{k: v, ...}` literal is a `Map<K,V>` and that `K` must satisfy the cited `hash()`; which representation backs it is decided here, so a new variation can be added without a language change.
 
 | Family | Default |
 | ------ | ------- |
-| `list<T>` | array-backed resizable |
-| `set<T>` | hash |
-| `map<K,V>` | hash |
-| `deque<T>` | full deque — `addFirst` / `addLast` / `removeFirst` / `removeLast` |
-| `priorityQueue<T>` | **none** — `max` or `min` must be named |
+| `List<T>` | array-backed resizable |
+| `Set<T>` | hash |
+| `Map<K,V>` | hash |
+| `Deque<T>` | full deque — `addFirst` / `addLast` / `removeFirst` / `removeLast` |
+| `PriorityQueue<T>` | **none** — `max` or `min` must be named |
 
-`deque<T>.queue` restricts the API to `addLast` / `removeFirst`; `deque<T>.stack` restricts it to `addLast` / `removeLast`. The bare form is not "unrestricted queue-or-stack" — it is the full double-ended collection, and the two named variations are deliberate narrowings that make misuse a compile-time error.
+`Deque<T>.queue` restricts the API to `addLast` / `removeFirst`; `Deque<T>.stack` restricts it to `addLast` / `removeLast`. The bare form is not "unrestricted queue-or-stack" — it is the full double-ended collection, and the two named variations are deliberate narrowings that make misuse a compile-time error.
 
 ### 3.3 Variations are types, and they are invariant
 
 A variation is written in type position, and **a variation does not convert to its family type or to any sibling**:
 
 ```bestie
-val ll : list<int>.linked = {1, 2, 3}
+val ll : List<int>.linked = {1, 2, 3}
 
-fun sum(xs: list<int>): int          // array-backed lists only
-sum(ll)                              // ❌ list<int>.linked is not list<int>
+fun sum(xs: List<int>): int          // array-backed lists only
+sum(ll)                              // ❌ List<int>.linked is not List<int>
 ```
 
-This is deliberate, and it is what lets a signature promise a cost. `fun binarySearch(xs: list<int>, target: int): int ?` is O(log n) because the parameter type says array-backed; if `list<int>.linked` converted, the same signature would be O(n log n) with nothing in the source saying so. Erasing variations would also force the family type's API down to the intersection of every representation — and `list<T>.linked` supports no slicing at all (§8a.5), so `list<int>` would lose `[lo..hi]` entirely.
+This is deliberate, and it is what lets a signature promise a cost. `fun binarySearch(xs: List<int>, target: int): int ?` is O(log n) because the parameter type says array-backed; if `List<int>.linked` converted, the same signature would be O(n log n) with nothing in the source saying so. Erasing variations would also force the family type's API down to the intersection of every representation — and `List<T>.linked` supports no slicing at all (§8a.5), so `List<int>` would lose `[lo..hi]` entirely.
 
 **Write generic collection code against a protocol instead**, which is both looser and more useful:
 
@@ -246,21 +246,21 @@ fun <C impl Iterable<int>> sum(xs: C): int {
 }
 ```
 
-That accepts every list variation — and `array<int>`, `slice<int>`, `set<int>`, and `range<int>` besides, none of which a concrete `list<int>` parameter could ever take. `Iterable<T>` is declared in `bestie.lib.utils` and is cited by core (`core/lang.md` §27). Name a concrete variation only where the cost is part of the contract.
+That accepts every list variation — and `array<int>`, `slice<int>`, `Set<int>`, and `range<int>` besides, none of which a concrete `List<int>` parameter could ever take. `Iterable<T>` is declared in `bestie.lib.utils` and is cited by core (`core/lang.md` §27). Name a concrete variation only where the cost is part of the contract.
 
 ### 3.4 Conflicting variations
 
 Naming two variations from the same kind is a **compile-time error**, not a last-one-wins race:
 
 ```bestie
-set<int>.hash.tree.new()      // ❌ two representations named
-map<int,str>.linked.hash.new()  // ❌
+Set<int>.hash.tree.new()      // ❌ two representations named
+Map<int,str>.linked.hash.new()  // ❌
 ```
 
 Variations from *different* kinds compose, in any order:
 
 ```bestie
-val q : deque<int>.queue.immutable = ...   // ✅ restriction + mutability
+val q : Deque<int>.queue.immutable = ...   // ✅ restriction + mutability
 ```
 
 ---
@@ -278,13 +278,13 @@ val q : deque<int>.queue.immutable = ...   // ✅ restriction + mutability
 `immutable` is a **variation**, selected in type position like any other:
 
 ```bestie
-val ls : list<int>.immutable = ...
+val ls : List<int>.immutable = ...
 ```
 
 It means exactly what it means everywhere else in Bestie (`core/immutability.md` §2.1): **the mutation API is unavailable.** `add`, `insert`, `remove`, and `ls[i] = v` are compile-time errors on an immutable collection.
 
 ```bestie
-val ls : list<int>.immutable = ...
+val ls : List<int>.immutable = ...
 ls.add(4)          // ❌ compile-time error: 'add' is not available on an immutable list
 val ls2 = ls       // ✅ reading and copying are fine
 ```
@@ -296,11 +296,11 @@ This is also why `str` needs no equivalent: `str` has no mutation API at all, so
 **Obtaining one.** Either construct it directly, or freeze a mutable collection with `freeze()`, which consumes ownership:
 
 ```bestie
-val own ls = list<int>.new()
+val own ls = List<int>.new()
 ls.add(1)
 ls.add(2)
 
-val own frozen = move ls.freeze()   // list<int>.immutable — ls is now invalid
+val own frozen = move ls.freeze()   // List<int>.immutable — ls is now invalid
 ```
 
 Because `move` invalidates the source, no mutable path to that storage survives, which is what makes the result safe to share across threads with no lock (`core/oop.md` §14).
@@ -309,8 +309,8 @@ Because `move` invalidates the source, no mutable path to that storage survives,
 
 | Mechanism | Mutation call | Rebind the name? |
 | --------- | ------------- | ---------------- |
-| `list<T>` | modifies in place | depends on `val` / `var` |
-| `list<T>.immutable` | compile-time error | depends on `val` / `var` |
+| `List<T>` | modifies in place | depends on `val` / `var` |
+| `List<T>.immutable` | compile-time error | depends on `val` / `var` |
 | `const` (literal only) | compile-time error | ❌ always |
 
 There is no per-binding freeze. A frozen binding would leave other references to the same collection free to mutate it, so it could never carry the guarantee that makes immutability worth having (`core/immutability.md` §6).
@@ -322,14 +322,14 @@ There is no per-binding freeze. A frozen binding would leave other references to
 Collection literals use `{}` syntax and are compile-time parsed with explicit runtime allocation semantics.
 
 ```bestie
-val a : set<int> = {1,2,3}
-val b : map<str,int> = {"a": 1, "b": 2}
+val a : Set<int> = {1,2,3}
+val b : Map<str,int> = {"a": 1, "b": 2}
 ```
 
 > **A literal does not imply immutability.** A bare `{...}` literal produces a **mutable** collection. The literal only supplies the initial elements; it does not freeze them. A collection is a reference type, so `val` freezes the binding and not the contents — unlike a core `array<T>`, which is a value type and is frozen whole by `val` (`core/types.md` §5.13):
 >
 > ```bestie
-> val ys : list<int> = {1, 2, 3}   // binding frozen, elements mutable
+> val ys : List<int> = {1, 2, 3}   // binding frozen, elements mutable
 > ys.add(4)   // ✅ allowed — list grows
 > ```
 >
@@ -342,13 +342,13 @@ val b : map<str,int> = {"a": 1, "b": 2}
 
 ### 5.1 Literal Rules
 
-* `set` literals reject duplicates when duplicates are compile-time provable
-* `map` literals reject duplicate keys when duplicates are compile-time provable
+* `Set` literals reject duplicates when duplicates are compile-time provable
+* `Map` literals reject duplicate keys when duplicates are compile-time provable
 * No automatic deduplication is performed
 
 ```bestie
-val x : set<int> = {1,2,2} // ❌ compile-time error
-val y : map<str,int> = {"a": 1, "a": 2} // ❌ compile-time error
+val x : Set<int> = {1,2,2} // ❌ compile-time error
+val y : Map<str,int> = {"a": 1, "a": 2} // ❌ compile-time error
 ```
 
 ---
@@ -358,15 +358,15 @@ val y : map<str,int> = {"a": 1, "a": 2} // ❌ compile-time error
 A collection may be declared `const` **only if** it is created via a literal. The reverse does **not** hold: using a literal does not by itself make a collection `const` or immutable — `const` must be written explicitly, exactly as for `array<T>` (`const arr : array<int>[] = {1,2,3}`).
 
 ```bestie
-const xs : set<int> = {1,2,3}
-const ys : map<str,int> = {"x": 1}
+const XS : Set<int> = {1,2,3}
+const YS : Map<str,int> = {"x": 1}
 ```
 
 Invalid:
 
 ```bestie
-const a = set<int>.new()          // ❌ runtime allocation
-const b = map<str,int>.new()      // ❌ runtime allocation
+const A = Set<int>.new()          // ❌ runtime allocation
+const B = Map<str,int>.new()      // ❌ runtime allocation
 ```
 
 `const` collections:
@@ -386,11 +386,11 @@ All collections use **consistent method naming**.
 
 | Collection | Core methods                                                               |
 | ---------- | -------------------------------------------------------------------------- |
-| list       | `add`, `insert`, `get`, `remove`, `indexOf`, `size`, `isEmpty`             |
-| set        | `add`, `remove`, `contains`                                                |
-| priorityQueue | `add`, `remove`, `peek`                                                  |
-| deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
-| map        | `put`, `get`, `remove`, `containsKey`                                      |
+| List       | `add`, `insert`, `get`, `remove`, `indexOf`, `size`, `isEmpty`             |
+| Set        | `add`, `remove`, `contains`                                                |
+| PriorityQueue | `add`, `remove`, `peek`                                                  |
+| Deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
+| Map        | `put`, `get`, `remove`, `containsKey`                                      |
 
 All collections provide **efficient iterators** with no hidden indirection beyond the selected collection representation.
 Element access syntax is explicit (for example: `prices["food"]`, `ls[3]`).
@@ -399,9 +399,9 @@ Map view methods (returns live views, not copies):
 
 | Method | Returns | Notes |
 | ------ | ------- | ----- |
-| `map.keys()` | `set<K>` | The set of all keys |
-| `map.values()` | `list<V>` | All values in iteration order |
-| `map.entries()` | `list<(K, V)>` | All key-value pairs in iteration order |
+| `map.keys()` | `Set<K>` | The set of all keys |
+| `map.values()` | `List<V>` | All values in iteration order |
+| `map.entries()` | `List<(K, V)>` | All key-value pairs in iteration order |
 
 ---
 
@@ -428,9 +428,9 @@ All collections and `array<T>` (core) implement `Iterable<T>`. The `for/in` loop
 
 ```bestie
 val arr  : array<int>[]  = {1, 2, 3}
-val ls   : list<int>     = {4, 5, 6}
-val xs   : set<str>      = {"a", "b", "c"}
-val dq   : deque<int>.queue = deque<int>.queue.new(7, 8, 9)
+val ls   : List<int>     = {4, 5, 6}
+val xs   : Set<str>      = {"a", "b", "c"}
+val dq   : Deque<int>.queue = Deque<int>.queue.new(7, 8, 9)
 
 for (n in arr) { print(n.toStr()) }
 for (n in ls)  { print(n.toStr()) }
@@ -440,10 +440,10 @@ for (n in dq)  { print(n.toStr()) }
 
 ### Map iteration
 
-`map<K,V>` iterates over `(K, V)` entry pairs. Use tuple destructuring in the `for` header:
+`Map<K,V>` iterates over `(K, V)` entry pairs. Use tuple destructuring in the `for` header:
 
 ```bestie
-val prices : map<str, int> = {"apple": 3, "bread": 5}
+val prices : Map<str, int> = {"apple": 3, "bread": 5}
 
 for ((item, price) in prices) {
     print(item + " costs " + price.toStr())
@@ -468,35 +468,35 @@ for (v in prices.values()) { print(v.toStr()) }
 
 ## 8a. Indexing, Negative Indexing, and Slicing
 
-Collections reuse the **same indexing and slicing surface** defined for `array<T>` and `slice<T>` in `core/types.md` (§5–§6). There is one convention across the language — `array<T>` and array-backed `list<T>` behave identically — but a collection only exposes what its representation can do **without hidden cost**.
+Collections reuse the **same indexing and slicing surface** defined for `array<T>` and `slice<T>` in `core/types.md` (§5–§6). There is one convention across the language — `array<T>` and array-backed `List<T>` behave identically — but a collection only exposes what its representation can do **without hidden cost**.
 
 ### 8a.1 What each collection supports
 
 | Collection | `c[i]` positional | `c[-i]` from end | `c[lo..hi]` slice |
 | ---------- | ----------------- | ---------------- | ----------------- |
-| `list<T>` (array-backed) | ✅ O(1) | ✅ O(1) | ✅ → `slice<T>` view (no copy) |
-| `list<T>.linked` | ✅ O(n) | ✅ O(n) | ❌ no view — see §8a.5 |
-| `deque<T>` | ends O(1); middle representation-dependent | ✅ `deq[-1]` O(1) | ❌ no view — see §8a.5 |
+| `List<T>` (array-backed) | ✅ O(1) | ✅ O(1) | ✅ → `slice<T>` view (no copy) |
+| `List<T>.linked` | ✅ O(n) | ✅ O(n) | ❌ no view — see §8a.5 |
+| `Deque<T>` | ends O(1); middle representation-dependent | ✅ `deq[-1]` O(1) | ❌ no view — see §8a.5 |
 | `array<T>` (core) | ✅ O(1) | ✅ O(1) | ✅ → `slice<T>` view |
-| `set<T>` | ❌ not positional | ❌ | ❌ |
-| `map<K,V>` | `m[key]` is **key** access, not positional | ❌ | ❌ |
+| `Set<T>` | ❌ not positional | ❌ | ❌ |
+| `Map<K,V>` | `m[key]` is **key** access, not positional | ❌ | ❌ |
 
 ### 8a.2 Negative indexing
 
-`c[-i]` counts from the end and is sugar for `c[c.size() - i]` — `c[-1]` is the last element. Its cost is exactly the cost of positional access on that representation (O(1) for array-backed `list`/`deque` ends, O(n) for `list.linked`, same as `c[i]`). Out-of-range negative indices **panic**, identical to positive access.
+`c[-i]` counts from the end and is sugar for `c[c.size() - i]` — `c[-1]` is the last element. Its cost is exactly the cost of positional access on that representation (O(1) for array-backed `List`/`Deque` ends, O(n) for `List.linked`, same as `c[i]`). Out-of-range negative indices **panic**, identical to positive access.
 
 ```bestie
-val ls : list<int> = {10, 20, 30, 40}
+val ls : List<int> = {10, 20, 30, 40}
 ls[-1]    // 40
 ls[-2]    // 30
 ```
 
 ### 8a.3 `deque[-1]` and the end accessors
 
-For a `deque<T>`, end indexing is defined in terms of the existing peek methods — same element, different empty-behavior:
+For a `Deque<T>`, end indexing is defined in terms of the existing peek methods — same element, different empty-behavior:
 
 ```bestie
-val dq : deque<int>.queue = deque<int>.queue.new(10, 20, 30)
+val dq : Deque<int>.queue = Deque<int>.queue.new(10, 20, 30)
 
 dq[-1]            // 30  — equivalent element to dq.peekLast()
 dq[0]             // 10  — equivalent element to dq.peekFirst()
@@ -516,14 +516,14 @@ So `dq[-1]` and `dq.peekLast()` read the **same element**; they differ only at t
 Slicing follows the core `slice<T>` rules (`core/types.md` §6) and only applies to **contiguous** storage:
 
 ```bestie
-val ls : list<int> = {10, 20, 30, 40, 50}
+val ls : List<int> = {10, 20, 30, 40, 50}
 
 val view : slice<int> = ls[1..4]   // borrowed view over {20, 30, 40} — no copy
 val tail               = ls[-2..]  // {40, 50}
-val copy : list<int>   = ls[1..4].toList()   // explicit O(n) owned copy
+val copy : List<int>   = ls[1..4].toList()   // explicit O(n) owned copy
 ```
 
-* Array-backed `list<T>` yields a `slice<T>` borrowing the list's buffer. While that slice is alive the list **cannot grow/reallocate** (borrow rule) — the compiler enforces this, preventing a dangling view.
+* Array-backed `List<T>` yields a `slice<T>` borrowing the list's buffer. While that slice is alive the list **cannot grow/reallocate** (borrow rule) — the compiler enforces this, preventing a dangling view.
 * A mutable list sliced as `slice<var T>` allows `view[i] = v` to write through to the list.
 
 ### 8a.5 Edge cases — when you must use methods, not `[]`
@@ -532,13 +532,13 @@ The `[lo..hi]` view and positional `[]` are not available everywhere. In these c
 
 1. **Empty-safe access.** `c[i]`, `c[-1]`, and `get(index)` **panic** out of bounds. When absence is expected, use the `T ?`-returning accessors: `deque.peekFirst()` / `deque.peekLast()` return `T ?`, `list.indexOf(value)` returns `int ?`, and `map.get(key)` returns `V ?`. These never panic.
 
-2. **`set<T>` has no positional index.** A set has no stable position, so `xs[2]` does not exist. Use `contains(value)`, or iterate with `for/in`. There is no slicing.
+2. **`Set<T>` has no positional index.** A set has no stable position, so `xs[2]` does not exist. Use `contains(value)`, or iterate with `for/in`. There is no slicing.
 
-3. **`map<K,V>` indexing is key access, not positional.** `m[k]` looks up the value for key `k`. For a `map<int, V>`, `m[-1]` is a lookup for the key `-1` — **not** "the last entry." Positional and end-relative indexing therefore do not apply to maps; use `keys()` / `values()` / `entries()` views (and, for ordered variants, the first/last-entry accessors covered with the sequenced design) to reach a position.
+3. **`Map<K,V>` indexing is key access, not positional.** `m[k]` looks up the value for key `k`. For a `Map<int, V>`, `m[-1]` is a lookup for the key `-1` — **not** "the last entry." Positional and end-relative indexing therefore do not apply to maps; use `keys()` / `values()` / `entries()` views (and, for ordered variants, the first/last-entry accessors covered with the sequenced design) to reach a position.
 
-4. **Unordered (hash) variants have no "first/last/from-end."** `set<T>` (hash) and `map<K,V>` (hash) have no defined order, so end-relative or positional access is meaningless. Use an ordered variant (`linked` / `tree`) when order matters.
+4. **Unordered (hash) variants have no "first/last/from-end."** `Set<T>` (hash) and `Map<K,V>` (hash) have no defined order, so end-relative or positional access is meaningless. Use an ordered variant (`linked` / `tree`) when order matters.
 
-5. **Non-contiguous storage cannot produce a slice view.** `list<T>.linked`, `deque<T>`, `set<T>`, and `map<K,V>` are not contiguous, so `c[lo..hi]` would have to copy O(n). Bestie does **not** hide that cost behind slice syntax — slicing is unavailable on them. To get a sub-range, copy explicitly (`.toList()` then slice the result) or traverse it as a sequence. (A zero-copy lazy traversal layer is being designed separately.)
+5. **Non-contiguous storage cannot produce a slice view.** `List<T>.linked`, `Deque<T>`, `Set<T>`, and `Map<K,V>` are not contiguous, so `c[lo..hi]` would have to copy O(n). Bestie does **not** hide that cost behind slice syntax — slicing is unavailable on them. To get a sub-range, copy explicitly (`.toList()` then slice the result) or traverse it as a sequence. (A zero-copy lazy traversal layer is being designed separately.)
 
 6. **Searching by value, not position.** To find *where* a value is, use `list.indexOf(value): int ?` — `[]` is for when you already know the index.
 
@@ -550,7 +550,7 @@ Conversions between collections are **explicit method calls**.
 No implicit coercion between collection types ever occurs.
 Every conversion method allocates a new collection.
 
-**Conversions *from* a core type are extension functions declared here, not core methods.** `array<T>` and `slice<T>` are core types (`core/types.md` §5–6), but a method that returns a `list<T>` or a `set<T>` belongs to the layer that owns `list` and `set` — otherwise core's surface is pinned to this package's type names. This mirrors the split core already applies to `str`: core has `byteSize()` and `chars()`; `substring()` and `toInt()` are extensions in `bestie.lib.strings`.
+**Conversions *from* a core type are extension functions declared here, not core methods.** `array<T>` and `slice<T>` are core types (`core/types.md` §5–6), but a method that returns a `List<T>` or a `Set<T>` belongs to the layer that owns `List` and `set` — otherwise core's surface is pinned to this package's type names. This mirrors the split core already applies to `str`: core has `byteSize()` and `chars()`; `substring()` and `toInt()` are extensions in `bestie.lib.strings`.
 
 ```bestie
 import bestie.lib.collections
@@ -568,44 +568,44 @@ Rows marked **ext** are extension functions on a core type, declared in this pac
 
 | Source | Method | Target | Notes |
 | ------ | ------ | ------ | ----- |
-| `array<T>` | `toList()` **ext** | `list<T>` | New array-backed list |
-| `array<T>` | `toSet()` **ext** | `set<T>` | New hash set; deduplicates |
-| `slice<T>` | `toList()` **ext** | `list<T>` | New owned list; O(n) copy |
-| `list<T>` | `toSet()` | `set<T>` | New hash set; deduplicates |
-| `set<T>` | `toList()` | `list<T>` | New list in iteration order |
-| `set<T>` | `asMapKeys(default: V)` | `map<T, V>` | Each element becomes a key; all values set to `default` |
-| `map<K,V>` | `keys()` | `set<K>` | Live key set view |
-| `map<K,V>` | `values()` | `list<V>` | Values in iteration order |
-| `map<K,V>` | `entries()` | `list<(K,V)>` | Key-value pairs in iteration order |
+| `array<T>` | `toList()` **ext** | `List<T>` | New array-backed list |
+| `array<T>` | `toSet()` **ext** | `Set<T>` | New hash set; deduplicates |
+| `slice<T>` | `toList()` **ext** | `List<T>` | New owned list; O(n) copy |
+| `List<T>` | `toSet()` | `Set<T>` | New hash set; deduplicates |
+| `Set<T>` | `toList()` | `List<T>` | New list in iteration order |
+| `Set<T>` | `asMapKeys(default: V)` | `Map<T, V>` | Each element becomes a key; all values set to `default` |
+| `Map<K,V>` | `keys()` | `Set<K>` | Live key set view |
+| `Map<K,V>` | `values()` | `List<V>` | Values in iteration order |
+| `Map<K,V>` | `entries()` | `List<(K,V)>` | Key-value pairs in iteration order |
 | any `C` | `freeze()` | `C.immutable` | **Consumes ownership** — see §9.4. No copy |
 
 ### 9.2 Examples
 
-**`array` ↔ `list`**
+**`array` ↔ `List`**
 
 ```bestie
 val arr : array<int>[] = {1, 2, 3}
-val ls  : list<int>    = arr.toList()   // new list from array
+val ls  : List<int>    = arr.toList()   // new list from array
 
-val ls2 : list<int> = {4, 5, 6}
+val ls2 : List<int> = {4, 5, 6}
 var arr2 : array<int>[3] = array<int>[3].fill(0)
 arr2[..].copyFrom(ls2[..])             // panics if ls2.size() != 3
 ```
 
 There is no `toArray()`. An array's length is a compile-time constant and a list's is not, so the conversion would have to invent a length. Copying into an array you declared states it.
 
-**`list` / `array` → `set`**
+**`List` / `array` → `set`**
 
 ```bestie
-val ls : list<int> = {1, 2, 2, 3}
-val xs : set<int>  = ls.toSet()         // {1, 2, 3} — duplicates removed
+val ls : List<int> = {1, 2, 2, 3}
+val xs : Set<int>  = ls.toSet()         // {1, 2, 3} — duplicates removed
 ```
 
 **`set` → map keys**
 
 ```bestie
-val permissions : set<str> = {"read", "write", "admin"}
-val access : map<str, bool> = permissions.asMapKeys(false)
+val permissions : Set<str> = {"read", "write", "admin"}
+val access : Map<str, bool> = permissions.asMapKeys(false)
 // {"read": false, "write": false, "admin": false}
 
 access.put("read", true)
@@ -614,10 +614,10 @@ access.put("read", true)
 **`map` → key set and value list**
 
 ```bestie
-val scores : map<str, int> = {"alice": 92, "bob": 85}
+val scores : Map<str, int> = {"alice": 92, "bob": 85}
 
-val names  : set<str>  = scores.keys()     // {"alice", "bob"}
-val values : list<int> = scores.values()   // [92, 85]
+val names  : Set<str>  = scores.keys()     // {"alice", "bob"}
+val values : List<int> = scores.values()   // [92, 85]
 ```
 
 ### 9.3 Rules
@@ -631,23 +631,23 @@ val values : list<int> = scores.values()   // [92, 85]
 
 ### 9.4 `freeze()` — the one bridge into `immutable`
 
-`list<int>` and `list<int>.immutable` are distinct, invariant types (§3.3), so neither converts to the other implicitly. `freeze()` is the only bridge, and it **consumes ownership**:
+`List<int>` and `List<int>.immutable` are distinct, invariant types (§3.3), so neither converts to the other implicitly. `freeze()` is the only bridge, and it **consumes ownership**:
 
 ```bestie
-fun freeze(own xs: list<int>): own list<int>.immutable
+fun freeze(own xs: List<int>): own List<int>.immutable
 ```
 
 ```bestie
-val own ls = list<int>.new()
+val own ls = List<int>.new()
 ls.add(1)
 ls.add(2)
 
-val own frozen = move ls.freeze()   // list<int>.immutable
+val own frozen = move ls.freeze()   // List<int>.immutable
 ls.add(3)                           // ❌ ls was moved
 frozen.add(3)                       // ❌ 'add' is not available
 ```
 
-Why ownership must be consumed: a plain `list<int>` → `list<int>.immutable` conversion would leave the caller holding a mutable alias to the same storage, so "immutable" would mean only *"I will not mutate it"* — useless for the thread-safety guarantee that is the point (`core/oop.md` §14). Because `move` invalidates the source, no mutable path survives the call, and the result is safe to share across threads with no lock.
+Why ownership must be consumed: a plain `List<int>` → `List<int>.immutable` conversion would leave the caller holding a mutable alias to the same storage, so "immutable" would mean only *"I will not mutate it"* — useless for the thread-safety guarantee that is the point (`core/oop.md` §14). Because `move` invalidates the source, no mutable path survives the call, and the result is safe to share across threads with no lock.
 
 `freeze()` performs **no copy and no allocation**. The storage is unchanged; only the static type of the handle differs. It is available on every collection family. Core `array<T>` does not need it: an array is a value type, and a `val` array is already frozen (`core/types.md` §5.13).
 
@@ -669,9 +669,9 @@ Bestie collections are:
 * Universally iterable — every collection and `array<T>` work with `for/in` without conversion
 * Uniformly indexed — `[i]`, `[-i]`, and `[lo..hi]` follow the same convention as core `array<T>`/`slice<T>`, exposed only where the representation supports it without hidden cost (§8a)
 
-`list<T>` is the go-to dynamic collection. Its array-backed default is efficient and familiar. Switch to `list<T>.linked` when the access pattern calls for it.
+`List<T>` is the go-to dynamic collection. Its array-backed default is efficient and familiar. Switch to `List<T>.linked` when the access pattern calls for it.
 
-`array<T>[N]` (in `core/types.md`) is the static alternative — same indexing syntax, a length fixed at compile time, C layout, no growth. `bounded<T, N>` sits between them: a capacity fixed at compile time, a count that changes, and no heap.
+`array<T>[N]` (in `core/types.md`) is the static alternative — same indexing syntax, a length fixed at compile time, C layout, no growth. `Bounded<T, N>` sits between them: a capacity fixed at compile time, a count that changes, and no heap.
 
 Conversions between any two collection types are explicit `to*()`/`as*()` method calls — no implicit coercion, no surprise allocation.
 

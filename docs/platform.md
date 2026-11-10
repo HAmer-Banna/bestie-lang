@@ -84,7 +84,7 @@ Both layers are always available, on every target: a freestanding kernel gets co
 * **Std-lib** is what can be written in Bestie on top of core. It needs an import and may still evolve.
 * **How often a feature is used** decides only the cases where either layer could hold it — and then frequent, foundational features lean to core.
 
-So a rarely used feature can be core, and a common one can be std-lib. `asm` is rare but core, because only the compiler can parse it and honor its clobbers; `list<T>` is everywhere but std-lib, because it is written in Bestie.
+So a rarely used feature can be core, and a common one can be std-lib. `asm` is rare but core, because only the compiler can parse it and honor its clobbers; `List<T>` is everywhere but std-lib, because it is written in Bestie.
 
 The low-level features, placed by that rule:
 
@@ -96,10 +96,10 @@ The low-level features, placed by that rule:
 | `union`, `bitfield` | Core | Type-declaration forms with their own layout (`freestanding.md` §7) |
 | `global<T>`, `export(interrupt)` / `export(naked)`, `@section` | Core | Storage placement, ABI, and linker control |
 | Memory ordering | Core | Constrains the optimizer and the CPU (`core/concurrency.md` §8.3) |
-| `atomic<T>`, `Isolated<T>`, `Aligned<T, A>` | Std-lib | Types built on core |
+| `Atomic<T>`, `Isolated<T>`, `Aligned<T, A>` | Std-lib | Types built on core |
 | `GlobalAllocator` | Std-lib | Cited by core, so its name and shape are frozen (§12) |
 | Typed allocation — `create`, `destroy`, `createSlice`, `destroySlice` | Std-lib | Methods on `GlobalAllocator` (`std-lib/allocators.md` §4a.1.1) |
-| `heap` — the program's allocator | Std-lib | A zero-sized forwarder to the registered or default allocator (`std-lib/allocators.md` §4a.3) |
+| `HEAP` — the program's allocator | Std-lib | A zero-sized forwarder to the registered or default allocator (`std-lib/allocators.md` §4a.3) |
 | `Arena`, `FixedBuffer`, `Debug` | Std-lib | Allocation strategies |
 | MMIO, volatile, barriers | Std-api (`bestie.api.memory`) | Device access, supplied by the platform; available freestanding |
 
@@ -119,8 +119,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
   - Safety guarantees
   - Major performance-preserving improvements
 - No imports required
-- Keywords and core identifiers are lowercase (`int`, `float`, `fun`)
-- Foundational abstractions use lowercase (`list`, `str`, `ptr`, `byte`, `thread`)
+- Keywords and core built-in type names are lowercase (`int`, `float`, `fun`, `str`, `ptr`, `thread`); naming conventions for every layer are in `core/lang.md` §3.1.3a
 - Core is **built-in and always available**
 - Defines **semantic guarantees** (memory, ownership, layout, concurrency)
 - Safe-by-default semantics for ownership-validated (`own`) paths; `ref` is a stored non-owning slot, not a borrow checker
@@ -142,9 +141,9 @@ Provides **high-level utilities** without system dependency.
 
 - `algorithms` — sorting, searching, utilities
 - `allocators` — Arena, FixedBuffer, Debug
-- `collections` — list, set, map, deque, priorityQueue
+- `collections` — list, set, map, deque, PriorityQueue
 - `functional` — map, filter, fold, composition
-- `math` — numeric operations, matrices, linear algebra, big integers (`wideInt<BITS>`, `BigInt`), exact decimals (`decimal64`, `decimal128`)
+- `math` — numeric operations, matrices, linear algebra, big integers (`WideInt<BITS>`, `BigInt`), exact decimals (`Decimal64`, `Decimal128`)
 - `datetime` — date/time
 - `format` — formatting and templates
 - `strings` — parsing, search, split, trim, case conversion
@@ -158,9 +157,8 @@ Provides **high-level utilities** without system dependency.
 
 - Closed but not sealed
 - Evolves conservatively
-- Purely library-level (no OS/file/network runtime). `concurrency` may include a fiber scheduler, linked only when `fiber` is used.
-- Foundational abstractions use lowercase (`set`, `map`, `list`, `deque`, `priorityQueue`, `heap`)
-- Nominal concrete types use PascalCase (`StringBuilder`, `Date`, `Command`)
+- Purely library-level (no OS/file/network runtime). `concurrency` may include a fiber scheduler, linked only when `Fiber` is used.
+- Every type is PascalCase (`List<T>`, `Map<K,V>`, `Atomic<T>`, `Fiber`, `StringBuilder`, `Date`) — it needs an import, and the case says so (`core/lang.md` §3.1.3a)
 - Requires `import`
 - Imported via:
 
@@ -195,8 +193,7 @@ Provides **system-level and external interaction**.
 ### Properties
 
 - Stable but allowed to evolve
-- Foundational abstractions imported from lower layers keep lowercase names
-- API-defined nominal types use PascalCase
+- Every type is PascalCase (`File`, `TcpSocket`, `MmioRegion<T>`), as in std-lib
 - Requires `import` and `bestie-project.toml`
 - Imported via:
 
@@ -456,7 +453,7 @@ do is hand a higher layer the **meaning of its own syntax**.
 ### Cite, don't delegate
 
 * **Citing is allowed.** Core may refer to a lib or api name in a signature, an
-  example, or a constraint (`array<T>.toList(): list<T>`, `range<T>` requiring
+  example, or a constraint (`array<T>.toList(): List<T>`, `range<T>` requiring
   `Comparable`). This does not make lib part of core.
 * **Delegating is forbidden.** The meaning of a keyword, an operator, or a
   statement form is always defined in core. Core says what `a + b` lowers to and

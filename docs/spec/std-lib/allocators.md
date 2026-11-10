@@ -61,11 +61,11 @@ val arena = Arena.new(1, MB)
 
 ```bestie
 val n = arena.add(42)         // ptr<int>
-val xs = arena.add(listOfInts) // ptr<list<int>>
+val xs = arena.add(listOfInts) // ptr<List<int>>
 ```
 
 * `add(T)` allocates a single value and returns a `ptr<T>` into arena-owned storage
-* `add(list<T>)` allocates a contiguous sequence and returns a `ptr<list<T>>` into arena-owned storage
+* `add(List<T>)` allocates a contiguous sequence and returns a `ptr<List<T>>` into arena-owned storage
 
 All allocations belong to the arena and share the same lifetime.
 
@@ -184,13 +184,13 @@ fun <T> destroySlice(s: slice<var T>): void
 ```
 
 ```bestie
-import bestie.lib.allocators.heap        // the program's allocator (§4a.3)
+import bestie.lib.allocators.HEAP        // the program's allocator (§4a.3)
 
-val p   = heap.create(42) ?: panic("out of memory")                  // ptr<int>
-val buf = heap.createSlice(4096, fill: 0 as byte) ?: panic("out of memory")
+val p   = HEAP.create(42) ?: panic("out of memory")                  // ptr<int>
+val buf = HEAP.createSlice(4096, fill: 0 as byte) ?: panic("out of memory")
 buf[0] = 0x7F
-heap.destroySlice(buf)
-heap.destroy(p)
+HEAP.destroySlice(buf)
+HEAP.destroy(p)
 ```
 
 The same four methods exist on any other `GlobalAllocator`, so code written against one allocator moves to another by changing the receiver.
@@ -222,34 +222,34 @@ table.val[0] = entry
 
 It exists for hardware that requires alignment — page tables, DMA descriptors, interrupt vector tables — and is the alignment counterpart of `Isolated<T>` (`concurrency.md` §5.2): the cost is visible in the type, never added by default, and there is no `@align` annotation (`core/memory-layout.md` §14).
 
-### 4a.3 `Heap` and `heap` — The Program's Allocator
+### 4a.3 `Heap` and `HEAP` — The Program's Allocator
 
-`heap` is the allocator every Bestie program already has: the one `Type.new()`, the collections, and `str` concatenation allocate from. It gives code a name for it, so raw memory comes from the same place as everything else.
+`HEAP` is the allocator every Bestie program already has: the one `Type.new()`, the collections, and `str` concatenation allocate from. It gives code a name for it, so raw memory comes from the same place as everything else.
 
 ```bestie
 value class Heap impl GlobalAllocator     // no fields: sizeOf(Heap) == 0
-val heap = Heap.new()
+val HEAP = Heap.new()
 ```
 
 ```bestie
-import bestie.lib.allocators.heap
+import bestie.lib.allocators.HEAP
 
-val node = heap.create(Node.new(value: 1)) ?: panic("out of memory")   // Node is a value class
+val node = HEAP.create(Node.new(value: 1)) ?: panic("out of memory")   // Node is a value class
 ```
 
 Rules:
 
-* **`heap` forwards to the registered allocator.** With a `@globalAllocator` binding (`core/freestanding.md` §3.4), `heap.alloc` and `heap.free` call it; without one, on a hosted target, they call the default allocator. The program has exactly one registration, known at compile time, so each call is a direct call — no indirection, no function pointer.
-* **`Heap` is zero-sized.** It has no state of its own, so `heap` costs nothing to copy or pass. A generic function that takes an allocator — `fun <A: GlobalAllocator> build(a: A)` — accepts `heap` like any other.
-* **Freestanding without an allocator.** Calling `heap` on a freestanding target with no registered allocator is the same compile-time error as any other heap allocation (`core/freestanding.md` §3.4).
-* **`heap` cannot be registered.** `@globalAllocator` on a binding of type `Heap` is a compile-time error: it would forward to itself.
-* **Naming.** `heap` is lowercase, like the other foundational names (`platform.md` §2); `Heap` is its nominal type. The priority-queue collection is `priorityQueue<T>` (`collections.md`), so the word has one meaning in Bestie: memory.
+* **`HEAP` forwards to the registered allocator.** With a `@globalAllocator` binding (`core/freestanding.md` §3.4), `HEAP.alloc` and `HEAP.free` call it; without one, on a hosted target, they call the default allocator. The program has exactly one registration, known at compile time, so each call is a direct call — no indirection, no function pointer.
+* **`Heap` is zero-sized.** It has no state of its own, so `HEAP` costs nothing to copy or pass. A generic function that takes an allocator — `fun <A: GlobalAllocator> build(a: A)` — accepts `HEAP` like any other.
+* **Freestanding without an allocator.** Calling `HEAP` on a freestanding target with no registered allocator is the same compile-time error as any other heap allocation (`core/freestanding.md` §3.4).
+* **`HEAP` cannot be registered.** `@globalAllocator` on a binding of type `Heap` is a compile-time error: it would forward to itself.
+* **Naming.** `HEAP` is UPPER_SNAKE_CASE like every module-level `val`, and `Heap` is PascalCase like every library type (`core/lang.md` §3.1.3a). The priority-queue collection is `PriorityQueue<T>` (`collections.md`), so the word has one meaning in Bestie: memory.
 
 ---
 
 ## 5. Relationship to Other Layers
 
-* `bestie.lib.allocators` provides the program's allocator (`heap`), strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`), and typed allocation on all of them
+* `bestie.lib.allocators` provides the program's allocator (`HEAP`), strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`), and typed allocation on all of them
 * `bestie.api.memory` provides platform and hardware memory APIs (MMIO, regions, volatile operations)
 * Core language remains unchanged: ownership and explicit unsafe boundaries still define correctness
 
@@ -259,7 +259,7 @@ Rules:
 
 The allocators package provides:
 
-* The program's allocator (`heap`)
+* The program's allocator (`HEAP`)
 * Typed allocation — `create`, `destroy`, `createSlice`, `destroySlice` — on every `GlobalAllocator`
 * Region allocation (`Arena`)
 * Fixed-capacity allocation (`FixedBuffer`)

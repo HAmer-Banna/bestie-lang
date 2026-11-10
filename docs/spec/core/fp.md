@@ -137,7 +137,7 @@ Local functions are **named helpers nested inside a function, method, or block**
 They parallel inner classes (`core/oop.md` §8): **lexically nested, not implicitly bound**.
 
 ```bestie
-fun process(items: list<int>): int {
+fun process(items: List<int>): int {
     fun clamp(x: int): int {
         if (x < 0) { return 0 }
         if (x > 100) { return 100 }
@@ -373,7 +373,7 @@ Java uses `null` for three different jobs, all spelled `x = null`. Bestie gives 
 | --- | ---- | ------ |
 | This slot may be empty | `Node next;` … `next = null` | The type says so: `var own next: Node ?`, emptied with `absent` |
 | Take the value out and leave the slot empty | `Node n = head; head = null;` | `val own n = move this.head` — the place becomes `absent` (`memory.md` §5.2.1) |
-| This sequence holds fewer than its capacity | `arr[i] = null`, then skip nulls | Keep a count and view `arr[..count]`, or use `bounded<T, N>` (`std-lib/collections.md` §2b) |
+| This sequence holds fewer than its capacity | `arr[i] = null`, then skip nulls | Keep a count and view `arr[..count]`, or use `Bounded<T, N>` (`std-lib/collections.md` §2b) |
 
 **The end of a linked list** is an absent link. `own Node ?` costs nothing over C: the zero address is a niche of `own T`, so the field is one pointer, and the compiler tests it exactly as C tests `NULL` (`memory-layout.md` §11). The program, though, can never read that zero address:
 
@@ -412,7 +412,7 @@ class IntList {
 
 **An array slot that may be empty** is `array<T ?>[N]`, emptied with `slots[i] = absent`. When `T` has a niche — a `class` reference, `bool`, an `enum`, a range-constrained integer — `T ?` is the same size as `T`. When it has none, as with a plain `int`, every element gains a tag byte; that cost shows in the type, where `?` is written.
 
-**An array that is "partly empty"** is usually a sequence shorter than its storage, and should not be modeled with empty slots at all. Keep a count beside the array and pass `arr[..count]`. This is the C idiom: no flags to scan, no gaps, and every slice and algorithm works on the live part. `bounded<T, N>` in `bestie.lib.collections` packages exactly that.
+**An array that is "partly empty"** is usually a sequence shorter than its storage, and should not be modeled with empty slots at all. Keep a count beside the array and pass `arr[..count]`. This is the C idiom: no flags to scan, no gaps, and every slice and algorithm works on the live part. `Bounded<T, N>` in `bestie.lib.collections` packages exactly that.
 
 ---
 
@@ -652,7 +652,7 @@ These are the same checks the compiler already performs for slices, so `fn[]` ad
 Inside a generic parameter list, `fn(T) -> R` is also a **constraint**: `F impl fn(T) -> R` accepts any callable of that shape — a named function, any lambda, a `fn`, a `fn[]`, a `foreign fn`, or a type that implements `fn(T) -> R` (§6.7). The function is monomorphized for each distinct `F`, exactly like any other generic parameter (`lang.md` §7.1).
 
 ```bestie
-fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): list<R>
+fun <C impl Iterable<T>, T, R, F impl fn(T) -> R> map(xs: C, f: F): List<R>
 
 val ys = map(nums, x => x * 2)
 ```
@@ -1113,7 +1113,7 @@ Name collisions are illegal.
 ### 11.6 Generic Extensions
 
 ```bestie
-fun <T> list<T>.head(): T ? {
+fun <T> List<T>.head(): T ? {
     if (this.size > 0) {
         return this[0]
     }
@@ -1226,7 +1226,7 @@ protocol Comparator {
     fun compare(a: int, b: int): int
 }
 
-fun sortWith(values: list<int>, cmp: Comparator): list<int> { ... }
+fun sortWith(values: List<int>, cmp: Comparator): List<int> { ... }
 
 // A lambda is accepted directly — no named class required.
 val sorted = sortWith(values, (a: int, b: int) => a - b)

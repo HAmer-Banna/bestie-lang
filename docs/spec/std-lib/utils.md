@@ -4,7 +4,7 @@ This document defines the **utils package** of the Bestie standard library. It h
 
 Every symbol core depends on lives here, which is what makes `core/lang.md` §27's citation table point at a single package.
 
-Bestie uses lowercase for foundational library types such as `set<T>` and `map<K,V>`, while nominal concrete utility types such as `StringBuilder` remain PascalCase.
+Every library type is PascalCase — `Set<T>`, `Map<K,V>`, `StringBuilder` — because it needs an import; only core's built-in types are lowercase (`core/lang.md` §3.1.3a).
 
 ---
 
@@ -103,7 +103,7 @@ A type does **not** have to implement this protocol to work with `for/in`: core 
 
 ### 2.3 Why this is the constraint for generic collection code
 
-Collection variations are invariant (`std-lib/collections.md` §3.3), so a function that names `list<int>` accepts array-backed lists and nothing else. Generic code takes `Iterable<T>` instead:
+Collection variations are invariant (`std-lib/collections.md` §3.3), so a function that names `List<int>` accepts array-backed lists and nothing else. Generic code takes `Iterable<T>` instead:
 
 ```bestie
 fun <C impl Iterable<int>> sum(xs: C): int {
@@ -113,9 +113,9 @@ fun <C impl Iterable<int>> sum(xs: C): int {
 }
 ```
 
-This is looser *and* more capable than a concrete parameter: it accepts every list variation plus `array<int>`, `slice<int>`, `set<int>`, and `range<int>`. It is fully monomorphized, so each instantiation compiles to the same code a hand-written loop would.
+This is looser *and* more capable than a concrete parameter: it accepts every list variation plus `array<int>`, `slice<int>`, `Set<int>`, and `range<int>`. It is fully monomorphized, so each instantiation compiles to the same code a hand-written loop would.
 
-Name a concrete type only where the cost is part of the contract — `fun binarySearch(xs: list<int>, target: int): int ?` says array-backed because O(log n) depends on it.
+Name a concrete type only where the cost is part of the contract — `fun binarySearch(xs: List<int>, target: int): int ?` says array-backed because O(log n) depends on it.
 
 ---
 
@@ -380,10 +380,10 @@ To duplicate what a `ptr<T>` points at, the programmer must do it explicitly (th
 
 | Element type | `copy()` | `deepCopy()` |
 | ------------ | -------- | ------------ |
-| `list<value T>` | new container, elements copied (independent) | identical to `copy()` |
-| `list<own T>` | ❌ forbidden — would duplicate ownership | new container, **each element deep-copied** |
-| `list<ref T>` | new container, **same handles** (aliased; list does not own) | identical (handles aren't owned) |
-| `list<ptr<T>>` | new container, **same addresses** (aliased) | identical (raw pointers not followed) |
+| `List<value T>` | new container, elements copied (independent) | identical to `copy()` |
+| `List<own T>` | ❌ forbidden — would duplicate ownership | new container, **each element deep-copied** |
+| `List<ref T>` | new container, **same handles** (aliased; list does not own) | identical (handles aren't owned) |
+| `List<ptr<T>>` | new container, **same addresses** (aliased) | identical (raw pointers not followed) |
 
 This is consistent with §8.3–8.4: ownership is duplicated only by `deepCopy`, never silently.
 

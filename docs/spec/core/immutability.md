@@ -35,7 +35,7 @@ var s   : str = "hello"    // binding rebindable, but str has no mutation API
 | Mechanism | Means | Positions | Depth |
 | --------- | ----- | --------- | ----- |
 | `const` | The value is fixed | `const NAME: T = <compile-time expr>` · `ptr<const T>` | Shallow — this access path |
-| `immutable` | The mutation API is unavailable | `immutable class C { }` · `list<T>.immutable` | Deep |
+| `immutable` | The mutation API is unavailable | `immutable class C { }` · `List<T>.immutable` | Deep |
 | `val` / `var` | The binding is fixed, or not | binding · field | Binding only |
 
 There is no fourth mechanism, and there is no per-binding freeze annotation.
@@ -44,18 +44,18 @@ There is no fourth mechanism, and there is no per-binding freeze annotation.
 
 > **`immutable` means the mutation API is unavailable.**
 
-A type that has **no** mutation API — `str`, `int`, `tuple`, `range<T>`, `data class`, `enum` — is already immutable, and `immutable` on it is a no-op. A type that **has** one — `list`, `set`, `map`, `array<T>`, `class` — loses it: every mutating method and every `x[i] = v` becomes a compile-time error.
+A type that has **no** mutation API — `str`, `int`, `tuple`, `range<T>`, `data class`, `enum` — is already immutable, and `immutable` on it is a no-op. A type that **has** one — `List`, `Set`, `Map`, `array<T>`, `class` — loses it: every mutating method and every `x[i] = v` becomes a compile-time error.
 
 That single rule replaces a table of special cases. In particular it explains why `str` needs no modifier: `str` has no mutation API at all. `s + " world"` is a **constructor**, exactly like `a + b` on `int` — not a mutation being redirected. There is nothing to remove, so there is nothing to say.
 
 **`immutable` is freeze, never persist.** It never turns a mutating call into one that returns a new value:
 
 ```bestie
-val ls : list<int>.immutable = ...
+val ls : List<int>.immutable = ...
 val ls2 = ls.add(4)      // ❌ compile-time error: 'add' is not available on an immutable list
 ```
 
-A persistent collection — where `add` returns a new collection — is deliberately absent. `list<T>` is a `class` with an owned heap buffer, so `ls.add(4)` returning a new list would hand the caller an `own` obligation from a call that reads like an update, and a loop over it orphans one allocation per iteration. Making that cheap requires structural sharing, which requires refcounting to know when a shared node dies — and `own` guarantees exactly one owner, so there is nothing to share. Bestie has no garbage collector to absorb the difference, so the honest answer is to remove the operation rather than redirect it.
+A persistent collection — where `add` returns a new collection — is deliberately absent. `List<T>` is a `class` with an owned heap buffer, so `ls.add(4)` returning a new list would hand the caller an `own` obligation from a call that reads like an update, and a loop over it orphans one allocation per iteration. Making that cheap requires structural sharing, which requires refcounting to know when a shared node dies — and `own` guarantees exactly one owner, so there is nothing to share. Bestie has no garbage collector to absorb the difference, so the honest answer is to remove the operation rather than redirect it.
 
 ### 2.2 Why `const` is separate
 
@@ -204,27 +204,27 @@ An `immutable class` may not declare `var` fields or `var` properties, and may n
 
 ## 7. Std-Lib Collections
 
-`list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, and `priorityQueue<T>` are reference-type `class` instances. Immutability is selected as a **variation** (`std-lib/collections.md`):
+`List<T>`, `Set<T>`, `Map<K,V>`, `Deque<T>`, and `PriorityQueue<T>` are reference-type `class` instances. Immutability is selected as a **variation** (`std-lib/collections.md`):
 
 | Declaration | Rebind? | Mutate? |
 | ----------- | ------- | ------- |
-| `var ls : list<int>` | ✅ | ✅ |
-| `val ls : list<int>` | ❌ | ✅ — the binding is frozen, the list is not |
-| `val ls : list<int>.immutable` | ❌ | ❌ — mutation API unavailable |
-| `const ls : set<int> = {1,2,3}` | ❌ | ❌ — literal only, `.rodata` |
+| `var ls : List<int>` | ✅ | ✅ |
+| `val ls : List<int>` | ❌ | ✅ — the binding is frozen, the list is not |
+| `val ls : List<int>.immutable` | ❌ | ❌ — mutation API unavailable |
+| `const ls : Set<int> = {1,2,3}` | ❌ | ❌ — literal only, `.rodata` |
 
 An immutable collection is obtained either by constructing one directly or by freezing a mutable one:
 
 ```bestie
-val own ls = list<int>.new()
+val own ls = List<int>.new()
 ls.add(1)
 ls.add(2)
 
-val own frozen = move ls.freeze()    // list<int>.immutable — ls is now invalid
+val own frozen = move ls.freeze()    // List<int>.immutable — ls is now invalid
 frozen.add(3)                        // ❌ 'add' is not available
 ```
 
-`list<int>` and `list<int>.immutable` are **distinct types with no conversion between them**; `freeze()` is the only bridge, and it consumes its input. See `std-lib/collections.md` for the full variation rules.
+`List<int>` and `List<int>.immutable` are **distinct types with no conversion between them**; `freeze()` is the only bridge, and it consumes its input. See `std-lib/collections.md` for the full variation rules.
 
 ---
 
@@ -269,8 +269,8 @@ frozen.add(3)                        // ❌ 'add' is not available
 | `array<T>[N]` | core value type | ✅ elements (`var`) | ✅ freezes all elements | n/a — `val` is enough | ✅ literal only |
 | `slice<T>` | core view | ❌ (`slice<var T>` ✅) | ✅ | n/a — use `slice<T>` | ❌ |
 | `class` / `open` / `abstract` | class | ✅ | ❌ reference only | ✅ `immutable class` | ❌ |
-| `list<T>` `set<T>` `map<K,V>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ✅ literal only |
-| `deque<T>` `priorityQueue<T>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ❌ |
+| `List<T>` `Set<T>` `Map<K,V>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ✅ literal only |
+| `Deque<T>` `PriorityQueue<T>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ❌ |
 | `ptr<T>` | raw pointer | ✅ | ❌ no rebind only | n/a — use `ptr<const T>` | ❌ |
 | `ptr<const T>` | pointer-to-const | ❌ through it | binding: depends | n/a | ❌ |
 | `T ?` / `T ! E` | core syntax | variant: ❌ / contents: depends | depends on `T` | follows `T` | ❌ |

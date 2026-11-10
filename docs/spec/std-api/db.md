@@ -74,11 +74,11 @@ enum DbValue {
     Real(float64),
     Text(str),
     Bool(bool),
-    Blob(own list<byte>)
+    Blob(own List<byte>)
 }
 ```
 
-A column value is **typed**. An earlier shape returned `map<str, str>` — every column stringified — which loses the server's type information, forces every caller to re-parse, and cannot represent a blob at all.
+A column value is **typed**. An earlier shape returned `Map<str, str>` — every column stringified — which loses the server's type information, forces every caller to re-parse, and cannot represent a blob at all.
 
 `Blob` carries an `own` payload, so a `DbValue` holding one is **move-only** (`core/memory.md` §4.3). The other four variants are freely copyable.
 

@@ -129,12 +129,12 @@ thread.new([cfg]() => read(cfg))                 // ✅ copied
 Race-free to share **by address** — no thread can write through any path:
 
 * `immutable class` — deep immutability enforced by the compiler
-* Immutable collections — the `immutable` variation: `list<int>.immutable`
+* Immutable collections — the `immutable` variation: `List<int>.immutable`
 
 ```bestie
-val own ls = list<int>.new()
+val own ls = List<int>.new()
 ls.add(1)
-val own frozen = move ls.freeze()                       // list<int>.immutable
+val own frozen = move ls.freeze()                       // List<int>.immutable
 thread.new([xs = frozen.address()]() => process(xs))    // ✅ shared read-only; frozen must outlive the thread
 ```
 
@@ -153,7 +153,7 @@ thread.new([xs = frozen.address()]() => process(xs))    // ✅ shared read-only;
 > If `own` sharing rules compile, ownership accounting is safe by construction.
 > `ptr`-based sharing remains explicit programmer responsibility.
 
-The same ownership rules apply to compiler-known spawn points in `bestie.lib.concurrency` (`fiber.new`). See that package.
+The same ownership rules apply to compiler-known spawn points in `bestie.lib.concurrency` (`Fiber.new`). See that package.
 
 ---
 
@@ -255,7 +255,7 @@ There is no ceremony. `counter` is a variable. The compiler routes reads and wri
 
 ## 8. Memory Model
 
-Whether two threads may touch the same memory, and what each is guaranteed to see, is a **language** question: no library can define it, because the answer constrains what the optimizer and the CPU are allowed to reorder. Core defines it here. `bestie.lib.concurrency` supplies the `atomic<T>` and `Lock` types that make use of it.
+Whether two threads may touch the same memory, and what each is guaranteed to see, is a **language** question: no library can define it, because the answer constrains what the optimizer and the CPU are allowed to reorder. Core defines it here. `bestie.lib.concurrency` supplies the `Atomic<T>` and `Lock` types that make use of it.
 
 ### 8.1 Data Race
 
@@ -283,7 +283,7 @@ Fibers run on a host `thread` and add no edges of their own — two fibers on th
 
 ### 8.3 Atomic Ordering
 
-An atomic operation carries an **ordering** that says which non-atomic accesses around it are constrained. Core fixes the vocabulary and the meanings; `bestie.lib.concurrency` provides `atomic<T>`, whose operations take one of these:
+An atomic operation carries an **ordering** that says which non-atomic accesses around it are constrained. Core fixes the vocabulary and the meanings; `bestie.lib.concurrency` provides `Atomic<T>`, whose operations take one of these:
 
 | Ordering | Meaning |
 | -------- | ------- |
@@ -295,7 +295,7 @@ An atomic operation carries an **ordering** that says which non-atomic accesses 
 
 **A `Release` store observed by an `Acquire` load of the same location creates a happens-before edge** between the storing and loading threads. This is the primitive every lock, channel, and lock-free structure is built from.
 
-Bestie has **no default ordering**. `atomic<T>` operations name theirs, because a silently-`SeqCst` default is a hidden cost on architectures where it means a fence, and a silently-`Relaxed` default is a hidden bug. This is the same rule as everywhere else in the language: the cost is written down.
+Bestie has **no default ordering**. `Atomic<T>` operations name theirs, because a silently-`SeqCst` default is a hidden cost on architectures where it means a fence, and a silently-`Relaxed` default is a hidden bug. This is the same rule as everywhere else in the language: the cost is written down.
 
 Atomic operations are never data races, whatever their ordering.
 
@@ -310,7 +310,7 @@ Atomic operations are never data races, whatever their ordering.
 
 * That a `ptr<T>` shared across threads is race-free — that is programmer-owned (§5, `memory.md` §14)
 * Any ordering between accesses to *different* locations, absent an edge from §8.2 or a `Release`/`Acquire` pair
-* Progress. A spin loop with no atomic operation and no yield may be optimized as the compiler sees fit; use `atomic<T>` or a `Lock`
+* Progress. A spin loop with no atomic operation and no yield may be optimized as the compiler sees fit; use `Atomic<T>` or a `Lock`
 * Anything about memory the program did not allocate — MMIO has its own rules (`std-api/memory.md` §5), and volatile semantics are **not** implied by any ordering above
 
 ---
@@ -319,7 +319,7 @@ Atomic operations are never data races, whatever their ordering.
 
 Core provides `thread` and `threadlocal`. Everything else is **`bestie.lib.concurrency`**, built on top:
 
-* Fibers (`fiber`)
+* Fibers (`Fiber`)
 * Channels
 * Mutexes, atomics
 * Cooperative cancellation tokens
@@ -336,7 +336,7 @@ Actors, structured concurrency, and reactive pipelines belong in frameworks or a
 | Need | Use |
 | ---- | --- |
 | Parallel execution on multiple cores | `thread` (core) |
-| High-concurrency cooperative I/O | `fiber` (`bestie.lib.concurrency`) |
+| High-concurrency cooperative I/O | `Fiber` (`bestie.lib.concurrency`) |
 | Message passing between threads | `Channel` (`bestie.lib.concurrency`) |
 | Shared mutable state | Locks / atomics (`bestie.lib.concurrency`) |
 

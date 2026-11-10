@@ -145,9 +145,9 @@ A 64-bit pointer is often twice what is needed. Java (compressed oops), V8 (poin
 
 ### 3.4 Struct-of-Arrays Collections
 
-A `list<Particle>` stores whole particles one after another. A loop that reads only `position` still pulls every other field into the cache. A struct-of-arrays layout stores each field in its own array, so that loop reads only positions.
+A `List<Particle>` stores whole particles one after another. A loop that reads only `position` still pulls every other field into the cache. A struct-of-arrays layout stores each field in its own array, so that loop reads only positions.
 
-**Proposal.** A `list<T>.soa` representation variation (`spec/std-lib/collections.md` §3) that stores each field of `T` separately. It is a variation, so it changes cost and not API: `ps[i].position` still works. It is built with compile-time reflection (`metaprogramming.md` §2), so it is library code, not compiler magic.
+**Proposal.** A `List<T>.soa` representation variation (`spec/std-lib/collections.md` §3) that stores each field of `T` separately. It is a variation, so it changes cost and not API: `ps[i].position` still works. It is built with compile-time reflection (`metaprogramming.md` §2), so it is library code, not compiler magic.
 
 **Status:** proposed (`vision.md` §3.2, P9).
 
@@ -181,5 +181,5 @@ With profile data (`vision.md` P4), the compiler can place a class's rarely used
 | Field reordering, no headers, sized free, niches | Memory | Guarantee |
 | Tagged pointers in alignment bits | Memory | Guaranteed niche source |
 | Compressed `rel<T>` references | Memory | Proposal |
-| `list<T>.soa` | Memory, speed | Proposal |
+| `List<T>.soa` | Memory, speed | Proposal |
 | Hot/cold splitting with PGO | Memory, speed | Optional optimization |
