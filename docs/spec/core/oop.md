@@ -640,6 +640,17 @@ Inheritance in Bestie is explicit:
 * `internal` is the default — no modifier means `internal`
 * `protected` applies only within inheritance hierarchies
 * Inner declarations cannot widen visibility beyond their enclosing declaration
+* A modifier is written on **each declaration** it applies to. There are no visibility sections or blocks (`private:` / `private { … }`)
+
+**Why `internal` is the default — for types and members alike.**
+
+The boundary that encapsulation protects is the **module**, and that boundary is already opt-in: nothing leaves a module unless it is declared `public` *and* listed in the module's `exports` (`modules-and-packaging.md` §7). A module's code is owned by one team and compiled together, so hiding a member from the rest of the module protects little and costs a lot.
+
+* **Data stays readable.** `data class Point { x: int; y: int }` is used as `p.x` everywhere in its module. Private-by-default members would force `public` on every field, or a property per field — the getter boilerplate of Java and C#.
+* **Mutation is already controlled by `val`.** A `val` field cannot be written after construction, by anyone (`immutability.md`). The remaining case — a `var` readable across the module but written only by its own type — is `private set` (§10.1).
+* **Narrowing is one word where it matters.** `private` marks the real internals of a type; `public` marks the exported API. Code in between writes nothing.
+
+This is Swift's choice, for the same reason. Kotlin's `public` default exposes too much across libraries; C#'s `private` members and Rust's private-everything make the common case the verbose one.
 
 **`private` at top level is file-private.**
 
@@ -796,6 +807,33 @@ class Temperature {
 * Allowed in inner classes
 * Forbidden in protocols
 * Discouraged in `data`/`value` classes (prefer direct fields)
+
+### 10.1 Narrowing Write Access — `private set`
+
+A `var` field may be readable at its declared visibility but writable only inside its own type:
+
+```bestie
+class Counter {
+    var count: int => { private set }     // read anywhere in the module; written only by Counter
+
+    fun bump() { this.count += 1 }        // ✅ inside Counter
+}
+
+val own c = Counter.new(count: 0)
+c.bump()
+log(c.count)                              // ✅ read
+c.count = 10                              // ❌ compile-time error — count's setter is private
+```
+
+Rules:
+
+* `=> { private set }` on a `var` with no accessor bodies is a **stored field**, not a property. Reads and writes are plain field accesses — no methods are generated. The only effect is that an assignment outside the allowed scope is a compile-time error.
+* The modifier may be `private` or `protected` (`protected set` lets subclasses write). It may only **narrow** the field's visibility, never widen it.
+* Only `set` takes a modifier. Reading is always at the declared visibility; a field that should be hidden entirely is `private var`.
+* A bodied property may narrow its setter the same way: `private set(value) { ... }`.
+* Construction is inside the type, so the generated memberwise `init` (§11.4) and `Type.new(count: 0)` still set the field.
+* Reflection follows the same rule: code outside the type sees the field but cannot write it (`metaprogramming.md` §2.1).
+* Not allowed on `val` fields, which have no setter at all.
 
 ---
 

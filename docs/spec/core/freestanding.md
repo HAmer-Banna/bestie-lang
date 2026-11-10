@@ -424,7 +424,7 @@ union Word {
 }
 
 var w = Word.new(f: 1.0)
-val bits = @trusted w.u          // 0x3F80_0000 — a reinterpretation
+val bits = w.u                   // 0x3F80_0000 — a reinterpretation
 w.u = 0x4000_0000                // writing any field is always allowed
 ```
 
@@ -433,7 +433,7 @@ Rules:
 * Every field is at offset 0. `sizeOf` is the largest field's size rounded to the largest alignment; `alignOf` is the largest alignment. This is C's union layout on every target, so a `union` matches a C header with no further annotation.
 * Fields must be copyable value types with no `own` or `ref` content — a union cannot know which field to free.
 * `Word.new(...)` initializes **exactly one** field by name. Bytes beyond that field are zero.
-* **Reading a field is a reinterpretation** and requires `@trusted`, exactly like a pointer cast (`memory.md` §8.8). The programmer upholds that the bytes are a valid value of the field's type. Writing needs no annotation.
+* **Reading a field is a reinterpretation**, exactly like a pointer cast (`memory.md` §8.8), and like it needs no annotation: the word `union` at the declaration is the searchable marker (§1). The programmer upholds that the bytes are a valid value of the field's type.
 * A `union` is a value type and follows the `val`/`var` rules of `value class`.
 
 ### 7.2 `bitfield`
@@ -689,7 +689,7 @@ Nothing in the binary was put there by Bestie except the code above and the `mem
 * **`asm` is an expression with explicit operands**, conservative by default and optimizable by stated promises; module-level `asm` and `.S` files cover code outside functions.
 * **Calling conventions are tags on definitions:** `export(c)`, `export(interrupt)`, `export(naked)`, and named architecture conventions.
 * **Linker control is metadata:** `@section`, `@used`, `@weak`, `export(c)` data, `foreign val` symbols, and the platform's own linker scripts. Alignment beyond a type's own is a type, `Aligned<T, A>`.
-* **`union` matches C, and `bitfield` states every bit** — reads of a reinterpreted union field are `@trusted`; bitfield writes cannot truncate.
+* **`union` matches C, and `bitfield` states every bit** — reading a union field is a reinterpretation, like a pointer cast; bitfield writes cannot truncate.
 * **The stack is accounted for:** no hidden frames, probes on hosted targets, and a worst-case analysis that is exact for closed-world Bestie code.
 * **Hints and assumptions are explicit:** `@inline`, `@cold`, `@likely`, and `@trusted assume`.
 * **The target says what the machine allows:** `float = "none"`, `simd-registers = false`, no red zone — and Bestie never needs unwind tables, because it never unwinds.

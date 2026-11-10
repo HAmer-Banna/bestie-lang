@@ -172,6 +172,46 @@ protocol GlobalAllocator {
 * `free` always receives the size and alignment of the original allocation — deallocation is sized (`memory-layout.md` §10).
 * One module-level `val` per program is registered with `@globalAllocator`. On hosted targets it replaces the default allocator; on freestanding targets it is the only one.
 
+### 4a.1.1 Typed Allocation
+
+`alloc` and `free` deal in bytes, for code that implements allocators. Code that *uses* an allocator works in types. Every type that implements `GlobalAllocator` gets four extension methods, defined once here:
+
+```bestie
+fun <T> create(v: T): ptr<T> ?                          // one T, initialized to v
+fun <T> destroy(p: ptr<T>): void
+fun <T> createSlice(n: int, fill: T): slice<var T> ?    // n elements, each initialized to fill
+fun <T> destroySlice(s: slice<var T>): void
+```
+
+```bestie
+@globalAllocator
+val HEAP = BumpHeap.new()                // freestanding.md §3.4
+
+val p   = HEAP.create(42) ?: panic("out of memory")                  // ptr<int>
+val buf = HEAP.createSlice(4096, fill: 0 as byte) ?: panic("out of memory")
+buf[0] = 0x7F
+HEAP.destroySlice(buf)
+HEAP.destroy(p)
+```
+
+| C | Bestie |
+|---|---|
+| `(int*)malloc(sizeof(int))` | `a.create(0)` — `ptr<int> ?` |
+| `(T*)malloc(n * sizeof(T))` | `a.createSlice(n, fill: x)` — `slice<var T> ?` |
+| `free(p)` | `a.destroy(p)` · `a.destroySlice(s)` |
+
+Rules:
+
+* **The type supplies size and alignment.** There is no cast and no `sizeOf` at the call: `create` calls `alloc(sizeOf(T), alignOf(T))`, `createSlice` calls `alloc(n * strideOf(T), alignOf(T))`.
+* **Memory is always initialized**, as every array element is (`core/types.md` §5.2). There is no uninitialized-allocation method; code that needs one, such as an allocator wrapping another, calls `alloc` directly.
+* **Deallocation is sized without a header.** `destroy` frees `sizeOf(T)` bytes; `destroySlice` frees `s.length * strideOf(T)` bytes, because a slice carries its length (`core/memory-layout.md` §10).
+* **Exhaustion is absent**, as in `alloc` and `FixedBuffer.alloc`. The caller decides what running out means — `?: panic(...)`, a fallback, or an error.
+* `T` must be copyable (`core/memory.md` §6.1). This is raw memory for values; an object with an owner and a `deinit` is `Type.new()`. `destroy` therefore runs no cleanup.
+* `createSlice` panics on negative `n`. `n == 0` gives an empty slice without allocating; `destroySlice` of an empty slice does nothing.
+* `destroy` and `destroySlice` must receive memory from the same allocator, unchanged. That is the programmer's to uphold; `Debug` (§4) reports violations.
+
+**Open:** the name under which a hosted program reaches its allocator when it registered none of its own — the default allocator — is not yet chosen.
+
 ### 4a.2 `Aligned<T, const A: int>`
 
 A `value class` holding one `T` with alignment `A`, a power of two from `1` to `65536`. Its size is `sizeOf(T)` rounded up to `A`.

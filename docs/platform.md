@@ -76,6 +76,32 @@ Layers are ordered by **change appetite**, not by dependency direction: core may
 
 This split exists so Bestie does not repeat Java module headaches, Python 2→3, or JavaScript `==` vs `===`. Core stays small so it can stay stable. Std-lib is not "outside the language."
 
+### Deciding the Layer — Core or Std-Lib
+
+Both layers are always available, on every target: a freestanding kernel gets core and std-lib (`core/freestanding.md` §2). The difference is not who may use a feature, but **what the compiler must understand**:
+
+* **Core** is what the compiler must understand to compile a program: syntax, type layout, code generation, the ABI, the memory model. It needs no import and is nearly sealed.
+* **Std-lib** is what can be written in Bestie on top of core. It needs an import and may still evolve.
+* **How often a feature is used** decides only the cases where either layer could hold it — and then frequent, foundational features lean to core.
+
+So a rarely used feature can be core, and a common one can be std-lib. `asm` is rare but core, because only the compiler can parse it and honor its clobbers; `list<T>` is everywhere but std-lib, because it is written in Bestie.
+
+The low-level features, placed by that rule:
+
+| Feature | Layer | Why |
+| ------- | ----- | --- |
+| `ptr<T>`, `.address()`, `sizeOf` / `alignOf` / `strideOf` / `offsetOf` | Core | Layout and code generation |
+| `Type.new()`, `own`, `free` | Core | Ownership semantics |
+| `asm` | Core | Parsed by the compiler, which must know its operands and clobbers (`freestanding.md` §4) |
+| `union`, `bitfield` | Core | Type-declaration forms with their own layout (`freestanding.md` §7) |
+| `global<T>`, `export(interrupt)` / `export(naked)`, `@section` | Core | Storage placement, ABI, and linker control |
+| Memory ordering | Core | Constrains the optimizer and the CPU (`core/concurrency.md` §8.3) |
+| `atomic<T>`, `Isolated<T>`, `Aligned<T, A>` | Std-lib | Types built on core |
+| `GlobalAllocator` | Std-lib | Cited by core, so its name and shape are frozen (§12) |
+| Typed allocation — `create`, `destroy`, `createSlice`, `destroySlice` | Std-lib | Methods on `GlobalAllocator` (`std-lib/allocators.md` §4a.1.1) |
+| `Arena`, `FixedBuffer`, `Debug` | Std-lib | Allocation strategies |
+| MMIO, volatile, barriers | Std-api (`bestie.api.memory`) | Device access, supplied by the platform; available freestanding |
+
 Each layer has **different stability, responsibility, and evolution rules**.
 
 ---
@@ -83,7 +109,7 @@ Each layer has **different stability, responsibility, and evolution rules**.
 ## 1. Core Language (`core`)
 
 **Components included:**
-`lang.md`, `types.md`, `fp.md`, `oop.md`, `memory.md`, `constants.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`.
+`lang.md`, `types.md`, `fp.md`, `oop.md`, `memory.md`, `memory-layout.md`, `absence.md`, `immutability.md`, `constants.md`, `modules-and-packaging.md`, `exceptions.md`, `concurrency.md`, `annotations.md`, `metaprogramming.md`, `freestanding.md`.
 
 ### Properties
 
