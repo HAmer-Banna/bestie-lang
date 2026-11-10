@@ -128,14 +128,18 @@ Rules:
 | Bestie   | C         |
 | -------- | --------- |
 | `int`    | `intptr_t` |
-| `int32`  | `int32_t`  |
-| `int64`  | `int64_t`  |
+| `int8` … `int64`, `uint8` … `uint64` | `int8_t` … `int64_t`, `uint8_t` … `uint64_t` |
+| `int128` / `uint128` | `__int128` / `unsigned __int128`, on targets whose C compilers define them; elsewhere they cannot cross |
 | `uint`   | `uintptr_t` / `size_t` |
+| `float16` | `_Float16` |
+| `float32` / `float64` | `float` / `double` — IEEE binary32 and binary64 on every supported target |
 | `bool`   | `_Bool`    |
 | `byte` / `uint8` | `uint8_t` |
 | `char`   | `uint32_t` — a Unicode scalar, **not** a C `char`. A C `char*` is `ptr<byte>` (§5.3) |
 | `ptr<T>` | `T*`       |
 | `foreign fn(P) -> R` | `R (*)(P)` — a function pointer (§9) |
+
+C's `int`, `long`, `long double`, and the other types whose width the C ABI chooses per target are in §5.4.
 
 ---
 
@@ -180,6 +184,40 @@ Rules:
 * `fromCStr` is fallible: C makes no UTF-8 guarantee, and invalid bytes are `ForeignError.InvalidUtf8` rather than a replacement character.
 * `fromCStr` **copies**. The returned `str` does not alias foreign memory, so it stays valid after the foreign buffer is freed.
 * Neither function frees anything on the C side. If the C API says the caller must free the returned pointer, call its free function (§6).
+
+---
+
+### 5.4 C's Platform-Dependent Types — `c.long` and Its Relatives
+
+Many C headers use types whose width the C ABI chooses for each target: `long` is 64 bits on Linux and macOS and 32 bits on Windows; `char` is signed on x86 and unsigned on ARM Linux; `long double` is 80 bits on x86-64 Linux, 128 on AArch64 Linux, and 64 on Windows. A binding that maps `long` to `int64` is right on one target and wrong on another. The package `bestie.api.foreign.c` names these types exactly:
+
+```bestie
+import bestie.api.foreign.c
+
+// C: long labs(long x);
+foreign fun labs(x: c.long): c.long
+
+val n = labs(-5 as c.long).toInt64()
+```
+
+| Bestie | C | Width |
+| ------ | - | ----- |
+| `c.char` | `char` | 8 bits; signedness per target |
+| `c.schar` / `c.uchar` | `signed char` / `unsigned char` | 8 bits |
+| `c.short` / `c.ushort` | `short` / `unsigned short` | Per target (16 on every supported target) |
+| `c.int` / `c.uint` | `int` / `unsigned int` | Per target (32 on every supported target) |
+| `c.long` / `c.ulong` | `long` / `unsigned long` | Per target — 64 on LP64 (Linux, macOS), 32 on LLP64 (Windows) and 32-bit targets |
+| `c.longLong` / `c.ulongLong` | `long long` / `unsigned long long` | Per target (64 on every supported target) |
+| `c.longDouble` | `long double` | Per target — 64, 80 (in 16 bytes), or 128 bits |
+
+Rules:
+
+* **Each is a distinct type**, a newtype over the fixed-width type that matches the target (`core/types.md` §8.1). `c.long` is never interchangeable with `int64` or `int32`: mixing them needs a conversion on **every** target, so code that is only correct on Linux does not compile on Linux either. An alias would hide that until the Windows build.
+* The integer types have the operators and conversions of their underlying type. `c.long` on Windows is `int32`-shaped; `labs(x).toInt64()` widens on every target.
+* **`c.longDouble` is storage only.** It crosses the boundary and converts with `toFloat64()` and `c.longDouble.fromFloat64(x)`; it has no arithmetic. Bestie has no 80-bit or 128-bit float (`core/types.md` §2.4), and a value computed at a precision that differs per target would break the rule that results do not depend on the target.
+* Fixed-width C types need nothing here: `int32_t`, `uint64_t`, `size_t`, `intptr_t`, `float`, and `double` map directly (§5.1). Prefer them in new C interfaces.
+* `bestie bind` (`vision.md` C1) maps every platform-dependent C type to its `c.` counterpart, so generated bindings are correct on every target by construction.
+* These types exist only for the C boundary. Ordinary Bestie code uses the fixed-width types and `int` / `uint`.
 
 ---
 

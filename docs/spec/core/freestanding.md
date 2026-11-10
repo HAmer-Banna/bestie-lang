@@ -557,8 +557,8 @@ The target's `float` setting says what floating point is available:
 | `float` | Meaning |
 | ------- | ------- |
 | `"hard"` | Hardware FPU; floats in float registers |
-| `"soft"` | No FPU; `float32` / `float64` arithmetic is compiled to library routines shipped with the toolchain |
-| `"none"` | No floating point at all — any `float`, `float32`, or `float64` value in the program is a compile-time error |
+| `"soft"` | No FPU; `float16` / `float32` / `float64` arithmetic is compiled to library routines shipped with the toolchain |
+| `"none"` | No floating point at all — any `float`, `float16`, `float32`, or `float64` value in the program is a compile-time error |
 
 `"none"` is what a kernel wants: the kernel does not save the FPU state of the task it interrupted, so it must never use the FPU. `target.float` exposes the setting to `when`, so a library can provide a fixed-point fallback.
 
@@ -578,7 +578,7 @@ Frame information for debuggers and crash backtraces is debug information, contr
 
 ### 10.5 Compiler Support Routines
 
-Some operations need helper routines on some targets: 64-bit division on 32-bit cores, soft-float arithmetic, and `memcpy` / `memset` / `memmove` / `memcmp`, which the compiler emits for large copies. The toolchain ships these, written in Bestie and compiled for the target, and links them only when used. Each is a `@weak` symbol (§6.1): a program or board-support project that provides a faster `memcpy` for its hardware simply defines `export(c) fun memcpy`.
+Some operations need helper routines on some targets: 64-bit division on 32-bit cores, `int128` / `uint128` division on every target and their other operations on 32-bit cores, soft-float arithmetic, and `memcpy` / `memset` / `memmove` / `memcmp`, which the compiler emits for large copies. The toolchain ships these, written in Bestie and compiled for the target, and links them only when used. Each is a `@weak` symbol (§6.1): a program or board-support project that provides a faster `memcpy` for its hardware simply defines `export(c) fun memcpy`.
 
 ---
 

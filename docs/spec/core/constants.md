@@ -73,7 +73,7 @@ Every numeric primitive exposes its bounds as **compile-time associated constant
 | `T.MIN`   | Smallest representable value     |
 | `T.MAX`   | Largest representable value      |
 
-Available on every integer type — `int8`, `int16`, `int32`, `int64`, `int`, `uint8`, `uint16`, `uint32`, `uint64`, `uint`, and `byte`.
+Available on every integer type — `int8`, `int16`, `int32`, `int64`, `int128`, `int`, `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, `uint`, and `byte`.
 
 ```bestie
 val a = int32.MAX      // 2147483647
@@ -85,7 +85,7 @@ The pointer-sized types `int` / `uint` are **platform-dependent**: `int.MAX` res
 
 ### 3.2 Floating-Point
 
-Available on `float32` and `float64`:
+Available on `float16`, `float32`, `float64`, and `float`:
 
 | Constant       | Meaning                                             |
 | -------------- | --------------------------------------------------- |

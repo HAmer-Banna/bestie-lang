@@ -509,17 +509,19 @@ Primitive value types map directly to machine types:
 
 | Type                              | Width         | Notes                                    |
 | --------------------------------- | ------------- | ---------------------------------------- |
-| `int8`, `int16`, `int32`, `int64` | Fixed         | Signed integers, explicit width          |
-| `uint8`, `uint16`, `uint32`, `uint64` | Fixed     | Unsigned integers, explicit width        |
+| `int8`, `int16`, `int32`, `int64`, `int128` | Fixed | Signed integers, explicit width          |
+| `uint8`, `uint16`, `uint32`, `uint64`, `uint128` | Fixed | Unsigned integers, explicit width   |
 | `byte`                            | 8-bit         | Alias for `uint8`. Used for raw memory.  |
 | `int`                             | Pointer-sized | Signed. Equivalent to C `intptr_t`. Use for indices, sizes, offsets. |
 | `uint`                            | Pointer-sized | Unsigned. Equivalent to C `uintptr_t` / `size_t`. |
-| `float32`, `float64`              | 32 / 64-bit   | IEEE 754                                 |
+| `float16`, `float32`, `float64`   | 16 / 32 / 64-bit | IEEE 754 binary16 / binary32 / binary64 |
 | `float`                           | Target-default | The platform's natural IEEE-754 float (`float64` on all current mainstream targets). Use when you want "a float" without committing to a width. |
 | `bool`                            | 1-bit logical | `true` / `false`                         |
 | `char`                            | 32-bit        | Unicode scalar value (valid codepoint)   |
 
 `double` does not exist. Use `float64`.
+
+**There are no width modifiers.** Bestie has no `long`, `short`, `long long`, `unsigned`, or `long double`: every name states its width, so it means the same thing on every target. C's `long` is 64 bits on Linux and 32 on Windows; `int64` is 64 bits everywhere. C's platform-dependent types exist only at the C boundary, as `c.long` and its relatives (`std-api/foreign.md` §5.4).
 
 **`int` and `uint` — pointer-sized by design:**
 
@@ -531,7 +533,9 @@ Mixing `int` with fixed-width types (`int32`, `int64`, etc.) requires an explici
 
 Like `int` and `uint`, `float` is resolved at compile time to the platform's natural floating-point type — `float64` on every current mainstream target. It is the backend-friendly default for general-purpose math when you do not want to commit to a width; reach for `float32` or `float64` explicitly when the bit width matters (storage layout, SIMD, wire formats, GPU interop).
 
-Mixing `float` with fixed-width float types (`float32`, `float64`) requires an explicit cast. No silent narrowing or widening.
+Mixing `float` with fixed-width float types (`float16`, `float32`, `float64`) requires an explicit cast. No silent narrowing or widening.
+
+**`int128` / `uint128` and `float16`** are specified with the other numeric types in `types.md` §2.2–§2.4.
 
 **`byte` and `uint8`:**
 
@@ -978,6 +982,13 @@ val y = 3.14 as float32
 ```
 
 No implicit promotion. No suffix syntax — `as` keeps it consistent with the rest of casting.
+
+A literal must fit the type it takes; one that does not is a compile-time error, never a truncation. A literal wider than 64 bits therefore needs a 128-bit context:
+
+```bestie
+val k: uint128 = 0x9E37_79B9_7F4A_7C15_F39C_C060_5CED_C834     // ✅
+val n = 0x1_0000_0000_0000_0000                                 // ❌ no context — does not fit int
+```
 
 ---
 

@@ -44,10 +44,12 @@ Bestie includes these primitive numeric families:
 
 | Family | Types |
 | ------ | ----- |
-| Signed integers | `int8`, `int16`, `int32`, `int64`, `int` |
-| Unsigned integers | `uint8`, `uint16`, `uint32`, `uint64`, `uint` |
+| Signed integers | `int8`, `int16`, `int32`, `int64`, `int128`, `int` |
+| Unsigned integers | `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, `uint` |
 | Byte alias | `byte` (`uint8`) |
-| Floating point | `float32`, `float64` |
+| Floating point | `float16`, `float32`, `float64`, `float` |
+
+`int` and `uint` are pointer-sized; `float` is the target's natural float, `float64` on every current mainstream target (`lang.md` §5.1). There are no width modifiers such as `long` or `short` — every other name states its width.
 
 All numeric primitives are **value types**.
 They copy by value, have deterministic layout, and require no deallocation.
@@ -57,9 +59,9 @@ They copy by value, have deterministic layout, and require no deallocation.
 All numeric types support explicit conversion methods.
 Method naming follows the target type:
 
-* `toInt8()`, `toInt16()`, `toInt32()`, `toInt64()`, `toInt()`
-* `toUInt8()`, `toUInt16()`, `toUInt32()`, `toUInt64()`, `toUInt()`
-* `toFloat32()`, `toFloat64()`
+* `toInt8()`, `toInt16()`, `toInt32()`, `toInt64()`, `toInt128()`, `toInt()`
+* `toUInt8()`, `toUInt16()`, `toUInt32()`, `toUInt64()`, `toUInt128()`, `toUInt()`
+* `toFloat16()`, `toFloat32()`, `toFloat64()`, `toFloat()`
 * `toByte()` when converting to the `byte` alias
 * `toStr()` for textual conversion
 
@@ -90,6 +92,7 @@ Signed integer types are:
 * `int16`
 * `int32`
 * `int64`
+* `int128`
 * `int` (pointer-sized)
 
 #### Operators
@@ -119,6 +122,23 @@ val s = n.toStr()          // core
 val big = n.toInt64()      // core
 ```
 
+#### 128-bit integers
+
+`int128` and `uint128` are 16 bytes, aligned to 16 — the layout of C's `__int128` on x86-64 and AArch64. They exist for the work that overflows 64 bits in the middle: a full 64 × 64 → 128 multiply in hashing, random number generators, and cryptography; fixed-point money whose products exceed `int64`; UUIDs, IPv6 addresses, and 128-bit bitsets.
+
+```bestie
+fun mulHigh(a: uint64, b: uint64): uint64 {
+    val wide = a.toUInt128() * b.toUInt128()     // one `mul` on x86-64: rdx:rax
+    return (wide >> 64).toUInt64()
+}
+```
+
+* They have every operator and conversion of the other integers. Overflow follows the same rules (`lang.md` §15.1).
+* On 64-bit targets they live in register pairs. Addition, subtraction, comparison, shifts, and bitwise operations are a few instructions; multiplication of two widened 64-bit values is one. Division and remainder call a compiler support routine (`freestanding.md` §10.5), as C's `__int128` does.
+* On 32-bit targets every operation is a support routine or a short instruction sequence. The type is the same; the cost is the target's.
+* `atomic<T>` does not accept them: they are wider than a machine word (`std-lib/concurrency.md` §5).
+* At the C boundary, `int128` is `__int128` and `uint128` is `unsigned __int128` on the targets whose C compilers define them (`std-api/foreign.md` §5.1).
+
 ---
 
 ### 2.3 Unsigned Integers and `byte`
@@ -129,6 +149,7 @@ Unsigned integer types are:
 * `uint16`
 * `uint32`
 * `uint64`
+* `uint128` (§2.2, *128-bit integers*)
 * `uint` (pointer-sized)
 * `byte` (`uint8`)
 
@@ -165,10 +186,12 @@ val text = raw.toStr()     // core
 
 Floating-point types are:
 
-* `float32`
-* `float64`
+* `float16` — IEEE 754 binary16
+* `float32` — binary32
+* `float64` — binary64
+* `float` — the target's natural float, `float64` on every current mainstream target (`lang.md` §5.1)
 
-Both use IEEE 754 semantics.
+All use IEEE 754 semantics.
 
 #### Operators
 
@@ -192,6 +215,17 @@ Floating-point values support:
 The three classification predicates stay in core because `core/constants.md` §3.2 makes them normative: `T.NAN` is never equal to itself, so `.isNaN()` — not `== float64.NAN` — is the *only* correct test, and core must supply the operation it mandates.
 
 Rounding and sign helpers (`abs`, `floor`, `ceil`, `round`, `trunc`) are extension functions in `bestie.lib.math` — see §2.7 — alongside `sqrt`, `pow`, trigonometry, and linear algebra.
+
+#### `float16`
+
+Half precision halves the memory and bandwidth of `float32` where 11 bits of precision are enough: model weights and activations in ML inference, vertex and texture data in graphics, audio buffers.
+
+* 2 bytes, aligned to 2. It has every operator, method, and constant of the other float types (`constants.md` §3).
+* **Results are identical on every target.** Where the hardware computes in binary16 (ARM64, x86-64 with AVX-512 FP16), each operation is one instruction. Elsewhere the compiler converts to `float32` (one instruction with x86-64 F16C), computes, and rounds back — and for `+`, `-`, `*`, `/`, and square root that gives exactly the correctly rounded binary16 result, so the value never depends on the target.
+* Conversions follow §2.1: `float16` → `float32` / `float64` is widening and exact; the other direction is a narrowing conversion, with the same rules as `float64` → `float32`.
+* At the C boundary, `float16` is `_Float16` (`std-api/foreign.md` §5.1).
+
+`bfloat16`, the truncated-`float32` format used in training, is not a core type yet; it belongs with portable SIMD (`vision.md` P1). There is no `float128` or 80-bit float: few targets compute them in hardware, so quad precision is a library type in `bestie.lib.math`, and C's `long double` exists only at the boundary (`std-api/foreign.md` §5.4).
 
 ---
 

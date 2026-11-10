@@ -28,9 +28,9 @@ Only primitives that must be understood by the compiler live in core. Everything
 
 Core numeric primitives match the **Primitive Types** section of the [core language spec](../core/lang.md). In short:
 
-* **Signed integers:** `int8`, `int16`, `int32`, `int64`, and pointer-sized `int`
-* **Unsigned integers:** `uint8`, `uint16`, `uint32`, `uint64`, and pointer-sized `uint` (`byte` is an alias for `uint8`)
-* **Floating-point:** `float32` and `float64` (IEEE 754)
+* **Signed integers:** `int8`, `int16`, `int32`, `int64`, `int128`, and pointer-sized `int`
+* **Unsigned integers:** `uint8`, `uint16`, `uint32`, `uint64`, `uint128`, and pointer-sized `uint` (`byte` is an alias for `uint8`)
+* **Floating-point:** `float16`, `float32`, `float64`, and target-default `float` (IEEE 754)
 
 ### 2.1 Design Rules
 
@@ -75,7 +75,7 @@ It is not a `value class`: those cannot hold `own` fields, are copy-by-value, an
 
 It is not a collection. Dimensions are fixed at construction. There is no `.add`, no builder growth, and no `list<T>.matrix` view.
 
-`T` is a core numeric primitive (`int*`, `uint*`, `float32`, `float64`).
+`T` is a core numeric primitive (`int*`, `uint*`, `float16`, `float32`, `float64`, `float`).
 
 ### 4.2 Layout and construction
 
@@ -174,7 +174,7 @@ Available on every signed and unsigned integer type (`int8`…`int64`, `int`, `u
 
 ### 4a.2 Floating-point extensions
 
-Available on `float32` and `float64`.
+Available on `float16`, `float32`, `float64`, and `float`.
 
 | Extension | Returns | Notes |
 | --------- | ------- | ----- |
