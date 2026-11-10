@@ -225,7 +225,7 @@ Half precision halves the memory and bandwidth of `float32` where 11 bits of pre
 * Conversions follow §2.1: `float16` → `float32` / `float64` is widening and exact; the other direction is a narrowing conversion, with the same rules as `float64` → `float32`.
 * At the C boundary, `float16` is `_Float16` (`std-api/foreign.md` §5.1).
 
-`bfloat16`, the truncated-`float32` format used in training, is not a core type yet; it belongs with portable SIMD (`vision.md` P1). There is no `float128` or 80-bit float: few targets compute them in hardware, so quad precision is a library type in `bestie.lib.math`, and C's `long double` exists only at the boundary (`std-api/foreign.md` §5.4).
+`bfloat16`, the truncated-`float32` format used in training, is not a core type yet; it belongs with portable SIMD (`vision.md` P1). There is no `float128` or 80-bit float: few targets compute them in hardware, so arbitrary precision is a third-party package's job and exact decimals are `decimal64` / `decimal128` in `bestie.lib.math` (`std-lib/math.md` §4b), and C's `long double` exists only at the boundary (`std-api/foreign.md` §5.4).
 
 ---
 

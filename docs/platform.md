@@ -144,7 +144,7 @@ Provides **high-level utilities** without system dependency.
 - `allocators` — Arena, FixedBuffer, Debug
 - `collections` — list, set, map, deque, priorityQueue
 - `functional` — map, filter, fold, composition
-- `math` — numeric operations, matrices, linear algebra
+- `math` — numeric operations, matrices, linear algebra, big integers (`wideInt<BITS>`, `BigInt`), exact decimals (`decimal64`, `decimal128`)
 - `datetime` — date/time
 - `format` — formatting and templates
 - `strings` — parsing, search, split, trim, case conversion
