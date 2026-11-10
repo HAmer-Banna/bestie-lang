@@ -570,7 +570,10 @@ Rules:
 * No ownership semantics
 * No lifetime guarantees
 * No implicit dereferencing
+* Never the zero address — a pointer that may be missing is `ptr<T> ?` (§8.7)
+* A pointer is an address and nothing more — no hidden provenance (§8.7)
 * Explicitly raw and low-level by design — guarantees are the programmer's to uphold
+* First-class: no pointer operation requires `@trusted`; removing pointee `const` is the one marked exception (§8.8)
 
 ---
 
@@ -583,7 +586,9 @@ Having ownership does **not** require exposing an address.
 
 ---
 
-### 8.3 `.address()` — The Only Way to Get a Pointer
+### 8.3 `.address()` — A Pointer to a Value
+
+`.address()` is how a pointer to something the program already has is made. There are two other sources, both for addresses that do not come from a Bestie value: `ptr<T>.fromAddr(u)` turns an integer address into a pointer (§8.7), and `s.base()` gives the first element of a slice (§8.5.2).
 
 ```bestie
 value.address()
@@ -627,6 +632,8 @@ Bestie has **no implicit dereferencing**. The pointee is always `p.val`. The add
 val v = p.val      // pointee
 p.val = 42         // write through (requires a writable pointee)
 ```
+
+**`p.val` is a place, not a copy.** `p.val.port` reads one field through the pointer, and `p.val.port = 9090` writes one field. Neither copies the whole `T`. A copy of the pointee happens only where a whole `T` is bound or passed by value — `val u = p.val` — and then the copy is visible in the source, as any other `val` copy is (§6.1).
 
 #### 8.4.1 Two axes — the C pointer-const matrix, in Bestie
 
@@ -695,7 +702,23 @@ p.toStr()      // "0x7ffc0100"  (0x prefix, hex, width = target.bits)
 
 `p.addr` and `p.toStr()` are valid on both `ptr<T>` and `ptr<const T>` — reading the address is not a write through the pointer.
 
-Do not confuse `p.addr` with `p.address()`: one is the word stored in `p`; the other is a pointer to that word.
+Do not confuse `p.addr` with `p.address()`: one is the word stored in `p`; the other is a pointer to that word. The inverse of `p.addr` is `ptr<T>.fromAddr(u)` (§8.7).
+
+#### 8.4.3 Unaligned Access
+
+`p.val` assumes the address satisfies `alignOf(T)` (§8.8). Data whose layout another program chose — network packets, file formats, protocol headers — puts values at any byte offset. For those, two operations read and write without that assumption:
+
+```bestie
+fun readUnaligned(): T              // any address; T must be copyable (§6.1)
+fun writeUnaligned(v: T): void      // any address; forbidden on ptr<const T>
+```
+
+```bestie
+val hdr = packet[3].address().cast<uint32>()     // offset 3: not 4-aligned
+val len = hdr.readUnaligned()
+```
+
+On targets that load unaligned values in hardware (x86-64, ARM64), each is one ordinary load or store. On targets that do not, the compiler emits byte loads and shifts. The operation is the same; its cost per target is the compiler's to choose, and it is never a trap.
 
 ---
 
@@ -735,6 +758,31 @@ Operators lower to methods for user-defined types (`lang.md` §15.3), so `ptr<T>
 4. **One spelling each** (`lang.md` §15). Bestie already chose `.address()` and `.val` over `&` and `*`. Arithmetic on the same pointer follows the same choice.
 
 Most code never needs either operation: walking a buffer is `for (x in xs)` or indexing a `slice<T>`, both bounds-checked. Pointer arithmetic is for FFI, allocators, and data structures that genuinely address raw memory.
+
+#### 8.5.2 Pointers and Slices
+
+A pointer and a length are a slice. Two operations cross between them, so code that receives raw memory can return to bounds-checked code at once:
+
+```bestie
+fun toSlice(n: int): slice<var T>     // on ptr<T>
+fun toSlice(n: int): slice<T>         // on ptr<const T>
+fun base(): ptr<T>                    // on slice<var T>
+fun base(): ptr<const T>              // on slice<T>
+```
+
+```bestie
+foreign fun read(fd: int32, buf: ptr<byte>, n: uint): int
+
+val got = read(fd, buf[0].address(), buf.length as uint)
+process(buf[0].address().toSlice(got))     // checked from here on
+```
+
+Rules:
+
+* `p.toSlice(n)` states that `n` elements of `T` start at `p`. The compiler cannot check this, as it cannot check a C length. Every access through the slice is bounds-checked against `n`.
+* `n` must not be negative; `n == 0` gives an empty slice.
+* A `slice<var T>` is exclusive (`types.md` §6): while it is live, no other path may write the same elements. `toSlice` on memory that another thread or process writes concurrently breaks that promise — use the pointer and `atomic<T>` there instead (`std-api/ipc.md` §8.3).
+* `s.base()` is the address of element 0. On an empty slice it is a non-zero address aligned to `alignOf(T)`, which must not be read or written through.
 
 ---
 
@@ -776,7 +824,7 @@ val cc = c.address()     // ptr<const ptr<int>>    (const binding → read-only 
 
 **Pointer arithmetic** on a `ptr<ptr<T>>` strides by one machine word (`strideOf(ptr<T>)`), since the elements are pointers.
 
-**`T ?` and the niche (`memory-layout.md` §11):** only the **outermost** level is examined. A `ptr<…>` may legitimately hold the zero address, so `ptr<ptr<T>> ?` has **no niche** and uses an explicit tag, exactly like `ptr<T> ?`.
+**`T ?` and the niche (`memory-layout.md` §11):** a `ptr<…>` is never the zero address (§8.7), so `ptr<T> ?` and `ptr<ptr<T>> ?` are each one word, with absent stored as zero. Only the outermost level is used; the inner pointer is an ordinary non-zero pointer value. A pointer whose target may itself be missing is `ptr<ptr<T> ?>`, which is also one word at each level.
 
 ---
 
@@ -790,13 +838,24 @@ val same = (p == q)      // true iff p and q hold the same address
 
 **Ordering.** `<`, `<=`, `>`, `>=` are available and compare addresses numerically. Ordering pointers that derive from different allocations is permitted (this is the raw, low-level layer) but its meaning is the programmer's responsibility — only ordering within a single allocation or array is well-defined.
 
-**The zero address.** Bestie has no `null` (see `fp.md` §4). Safe Bestie code never produces a zero-address `ptr<T>`: every pointer from `.address()` targets live storage and is non-zero. A zero address can enter a program only across an explicit boundary — `foreign` code or `@trusted` operations. For testing at that boundary:
+**The zero address.** Bestie has no `null` (see `fp.md` §4). **A `ptr<T>` is never the zero address.** This is part of the type, like `own T`: every pointer from `.address()` targets live storage, and every other way to make a pointer checks for zero or cannot produce it. A pointer that may be missing is `ptr<T> ?`, and zero is how it stores absent — one word, the same bits as a C pointer that may be `NULL` (`memory-layout.md` §11). There is no zero test on `ptr<T>`, because there is nothing to test.
+
+**From an integer — `ptr<T>.fromAddr(u)`.** An address that does not come from a Bestie value — a device register, a symbol from a linker script, an address a kernel or loader hands over — becomes a pointer with:
 
 ```bestie
-fun isZero(): bool      // true if the pointer holds the zero address
+fun ptr<T>.fromAddr(u: uint): ptr<T> ?      // zero gives absent
 ```
 
-To model "a pointer that may be absent" in **safe** code, use `ptr<T> ?` — the FFI layer maps a C `NULL` to absent (see `foreign.md` §7). Reach for `isZero()` only inside `foreign` / `@trusted` code that handles raw addresses directly.
+```bestie
+const UART_BASE: uint = 0x4000_1000
+val uart = ptr<UartRegs>.fromAddr(UART_BASE) ?: panic("UART_BASE is zero")
+```
+
+`fromAddr` is the inverse of `p.addr` (§8.4.2): `ptr<T>.fromAddr(p.addr)` is `p`. When `u` is a non-zero compile-time constant, the compiler knows the result is present and emits no check. `fromAddr` is an ordinary call; whether the address holds a `T` is the programmer's to uphold, as with every `ptr<T>`.
+
+**A pointer is an address.** Bestie has no provenance model. Two pointers with the same address designate the same memory, however each was made; turning a pointer into an integer and back (`p.addr`, `fromAddr`) loses nothing. The optimizer takes aliasing facts only from what the language states — `own`, `val`, `const`, exclusive slices — never from guessing where a `ptr<T>` came from (`compiler/codegen-advantages.md` §2.1).
+
+**At the C boundary.** A C pointer that may be `NULL` is declared `ptr<T> ?` — in a `foreign fun` signature and in a `@repr(C)` field alike — and the bits pass through unchanged (`std-api/foreign.md` §8). A `foreign` declaration that says `ptr<T>` where C can produce `NULL` is a wrong declaration, like any other wrong `foreign` type.
 
 ---
 
@@ -813,6 +872,7 @@ Rules:
 
 * `cast<U>()` changes only the pointee type — the address value is unchanged. It performs **no conversion** of the pointed-to bytes (unlike numeric `as` conversion in `types.md` §2.1).
 * Casting to `ptr<byte>` is always permitted (every type is byte-addressable). `byte`-level access is the canonical way to inspect raw storage.
+* **Atomic access to existing memory** is a cast: `p.cast<atomic<T>>()`. `atomic<T>` has the size of `T` (`std-lib/concurrency.md` §5), so this reaches a word that C code or another process laid out as a plain `T`. Its alignment may be stricter than `T`'s, so test with `p.isAligned<atomic<T>>()` when the address is not known to satisfy it.
 * Casting **to a stricter alignment** than the address satisfies is undefined on access; alignment is the programmer's responsibility. The required alignment of `T` is compile-time known, and `p.isAligned<U>(): bool` tests an address before a stricter cast.
 * **Removing `const`** (`ptr<const T>` → `ptr<T>`) is a const violation and is permitted **only under `@trusted`**. Adding `const` is always allowed.
 * A reinterpret cast between unrelated pointee types is not, by itself, a compile-time error — it is the explicit low-level boundary — but statically provable misuse (e.g., access beyond a known size) is still rejected per §8.5.
@@ -842,7 +902,7 @@ Rules:
 * `f.addr` is the address word as a `uint`, as `p.addr` is for a `ptr<T>` (§8.4.2). `==` and `!=` compare code addresses.
 * Code is never written through a function pointer, and a function pointer has no `.val`, `.offset`, or `.cast`.
 * Calling a `foreign fn` is a foreign call: the compiler trusts its declared type, as it trusts a `foreign fun` declaration.
-* **Raw addresses to code.** Turning a data address or an integer into a code pointer is a reinterpretation, so it is `@trusted`: `p.toCode<F>()` on a `ptr<T>` yields an `F` that must be a `foreign fn` type. This exists for vector tables, run-time loaders, and JITs (`freestanding.md` §6.2).
+* **Raw addresses to code.** `p.toCode<F>()` on a `ptr<T>` reinterprets a data address as code and yields an `F` that must be a `foreign fn` type. It is an ordinary pointer operation: that the address holds code with that signature is the programmer's to uphold. An integer address becomes code through `ptr<byte>.fromAddr(u)` first (§8.7). This exists for vector tables, run-time loaders, and JITs (`freestanding.md` §6.2).
 * A function that cannot be called from Bestie code — an `export(interrupt)` handler (`freestanding.md` §5.2) — converts to no callable type. Its code address is `handler.addr`.
 
 ---
@@ -875,19 +935,26 @@ Every operation available on a `ptr<T>` value, in one place. This is the authori
 
 | Operation | Result | Section | Notes |
 | --------- | ------ | ------- | ----- |
-| `p.val` | `T` | §8.4 | Dereference (read). No implicit deref. On `ptr<const T>`, read-only. |
+| `x.address()` | `ptr<T>` / `ptr<const T>` | §8.3 | Pointer to a value. Const-ness per binding. On a `T ?` place, `ptr<T> ?`. |
+| `ptr<T>.fromAddr(u)` | `ptr<T> ?` | §8.7 | Integer address to pointer. Zero gives absent; a non-zero constant needs no check. |
+| `s.base()` | `ptr<T>` / `ptr<const T>` | §8.5.2 | First element of a slice. |
+| `p.val` | `T` | §8.4 | Dereference (read). A place: `p.val.f` reads one field, no copy of `T`. On `ptr<const T>`, read-only. |
 | `p.val = x` | — | §8.4 | Dereference (write). Forbidden on `ptr<const T>` and on `val` fields (§10.1.3). |
-| `p.addr` | `uint` | §8.4.2 | The address word `p` holds. Not a dereference. Valid on `ptr<const T>`. |
+| `p.readUnaligned()` | `T` | §8.4.3 | Read at any address. |
+| `p.writeUnaligned(x)` | — | §8.4.3 | Write at any address. Forbidden on `ptr<const T>`. |
+| `p.addr` | `uint` | §8.4.2 | The address word `p` holds. Not a dereference. Valid on `ptr<const T>`. Inverse of `fromAddr`. |
 | `p.toStr()` | `str` | §8.4.2 | Hex address (`0x…`), width = `target.bits`. Interpolation of `p` uses this. |
 | `p.address()` | `ptr<ptr<T>>` | §8.6 | Address of the pointer's own storage slot. Const-ness per binding (§10.1.2). |
 | `p.offset(n)` | `ptr<T>` | §8.5 | Pointer arithmetic in elements; strides by `strideOf(T)` (`memory-layout.md` §3). Negative `n` moves back. Provable OOB is a compile error. |
 | `p.distanceFrom(base)` | `int` | §8.5 | Element count from `base` to `p` (C `p - base`). Meaningful only within one allocation. |
-| `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. |
-| `p.toCode<F>()` | `F` | §8.9 | `@trusted`. Reinterpret the address as a `foreign fn` type `F`. |
+| `p.toSlice(n)` | `slice<var T>` / `slice<T>` | §8.5.2 | `n` elements starting at `p`; bounds-checked from then on. |
+| `p.cast<U>()` | `ptr<U>` | §8.8 | Reinterpret pointee type; address unchanged, no byte conversion. `cast<atomic<T>>()` gives atomic access. |
+| `p.toCode<F>()` | `F` | §8.9 | Reinterpret the address as a `foreign fn` type `F`. |
 | `p.isAligned<U>()` | `bool` | §8.8 | True if the address satisfies `U`'s alignment. |
-| `p.isZero()` | `bool` | §8.7 | True if the address is the zero address (FFI / `@trusted` boundary). |
-| `a == b`, `a != b` | `bool` | §8.7 | Address equality. Provenance not considered. |
+| `a == b`, `a != b` | `bool` | §8.7 | Address equality. A pointer is its address; there is no provenance. |
 | `a < b`, `<=`, `>`, `>=` | `bool` | §8.7 | Address ordering; well-defined only within one allocation. |
+
+There is no zero test: a `ptr<T>` is never zero, and a pointer that may be missing is `ptr<T> ?` (§8.7).
 
 Const and provenance rules:
 

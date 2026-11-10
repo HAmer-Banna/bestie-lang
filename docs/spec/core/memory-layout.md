@@ -297,9 +297,10 @@ A **niche** is a bit pattern that the type system guarantees is never a valid va
 | Tag-only `enum`, sealed tag | Every unused tag value |
 | Range-constrained type | Every pattern of the storage width outside the range |
 | `own T` / `ref T` field, heap-allocated class value | The zero address |
+| `ptr<T>`, `fn` / `foreign fn` | The zero address (`memory.md` §8.7, §8.9) |
 | The same references, below their alignment | The low address bits that alignment keeps zero — at least 3 on 64-bit targets. Used for the tags of enums whose variants carry references (`compiler/codegen-advantages.md` §3.2) |
 
-`ptr<T>` provides **no** niche, because a raw pointer may hold the zero address (`memory.md` §8.7).
+A `ptr<T>` is never the zero address (`memory.md` §8.7), so `ptr<T> ?` is one word, laid out exactly as a C pointer that may be `NULL`. Its low bits are **not** a niche: the programmer may use them (`compiler/codegen-advantages.md` §3.2).
 
 ### 11.2 Niches are found recursively
 

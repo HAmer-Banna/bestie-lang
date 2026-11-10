@@ -364,7 +364,7 @@ Invalid bit patterns of a payload encode the tag. No annotation.
 | ---- | -------------- | ------ |
 | `bool` | `0`, `1` | 2–255 |
 | `char` | Unicode scalars | surrogates and out-of-range |
-| `own T` / non-null heap address | non-zero | zero address (internal only — not a language `null`) |
+| `own T` / `ptr<T>` / `fn` / non-null heap address | non-zero | zero address (internal only — not a language `null`) |
 | `uint8 in 0..=200` | `0..=200` | 201–255 |
 
 The compiler assigns niches greedily: the inline field with the fewest niche values is used first, searching recursively through embedded value types. `bool` is 1 byte, not bit-packed (RMW cost). Consecutive `bool` fields are grouped by field reordering. Padding is never a niche (`spec/core/memory-layout.md` §11).

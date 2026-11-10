@@ -177,6 +177,7 @@ atomic<T>
 Rules:
 
 * `T` must be a primitive value type at most one machine word wide
+* `atomic<T>` has the size of `T` and an alignment equal to its size (stricter than `T`'s alone on some 32-bit targets), so it can overlay memory laid out as a plain `T`: `p.cast<atomic<T>>()` gives atomic access to a word that C code or another process owns (`core/memory.md` §8.8)
 * Operations are explicit
 * **Every operation names its ordering** — there is no default
 * No hidden fences

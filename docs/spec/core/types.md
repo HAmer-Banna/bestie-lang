@@ -701,6 +701,7 @@ Out-of-range bounds **panic** (consistent with `xs[i]`); `lo > hi` **panics**. W
 | `length` | `int` | Number of elements in the view — read like a field, as on `array<T>` (§5.6) |
 | `isEmpty()` | `bool` | True when `length == 0` |
 | `copyFrom(src: slice<T>)` | `void` | On `slice<var T>` only: copies `src` element-wise into this view — **panics** if the lengths differ. One `memmove` |
+| `base()` | `ptr<const T>` · `ptr<T>` on `slice<var T>` | Address of element 0; the inverse is `p.toSlice(n)` (`memory.md` §8.5.2). Non-zero even on an empty slice, but not to be read through then |
 
 An owned, escapable copy of a slice is a `list<T>` — `toList()`, an extension function in `bestie.lib.collections`. There is no `toArray()`: an array's length is a compile-time constant and a slice's is not. To fill an array from a slice, write `arr[..].copyFrom(s)`.
 

@@ -41,7 +41,7 @@ So the `NullPointerException` cannot happen in safe Bestie: there is no operatio
 Three things can still end a program around absence. Each is written in the source, at the point of failure, and none can be reached by accident:
 
 * **`x ?: panic("reason")`.** The programmer states that absence is impossible here, and why. That is an assertion, not a hidden crash: it is searchable, it carries a message, and it fails at the line that made the claim, not three calls later.
-* **Raw pointers.** `ptr<T>` may hold the zero address, like any C pointer (`memory.md` §8.7). This is the explicit low-level layer. Safe code meets C's `NULL` only as `ptr<T> ?`, which is absence like any other.
+* **Raw pointers.** A `ptr<T>` is never the zero address, but nothing checks that its target is alive or holds a `T` (`memory.md` §8). This is the explicit low-level layer. C's `NULL` reaches Bestie only as `ptr<T> ?`, which is absence like any other.
 * **`@trusted` and `foreign` code**, where the programmer has taken responsibility in writing.
 
 ### Rules that keep it that way
@@ -189,7 +189,7 @@ val own first = move this.head ?: return      // head is now absent
 
 ## 6. Absence at the Boundaries
 
-* **FFI.** A C pointer that may be `NULL` is `ptr<T> ?`. The foreign layer converts `NULL` to absent and back automatically (`std-api/foreign.md` §7).
+* **FFI.** A C pointer that may be `NULL` is `ptr<T> ?`. Absent is stored as the zero address, so `NULL` crosses in both directions with no conversion (`std-api/foreign.md` §8).
 * **Databases.** SQL `NULL` is absence (`std-api/db.md` §5.2).
 * **Formats.** A missing JSON field decodes to absent when the target field is `T ?`, and is an error otherwise (`std-lib/format.md`).
 
@@ -201,12 +201,12 @@ val own first = move this.head ?: return      // head is now absent
 
 | Type | Size of `T ?` | Absent is stored as |
 | ---- | ------------- | ------------------- |
-| `own T`, a `class` reference | One pointer | The zero address |
+| `own T`, a `class` reference, `ptr<T>`, `fn` | One pointer | The zero address |
 | `bool` | 1 byte | The value 2 |
 | `char` | 4 bytes | A surrogate code point |
 | An `enum` | Same as the enum | An unused tag value |
 | `int in 0..=200` | 1 byte | The value 201 |
-| `int`, `float64`, `ptr<T>` | One extra tag byte (placed in existing padding when there is any) | The tag |
+| `int`, `float64` | One extra tag byte (placed in existing padding when there is any) | The tag |
 
 Checking presence is one compare and branch, exactly as a C null check. `?.` chains and `?:` compile to that compare, never to a call.
 

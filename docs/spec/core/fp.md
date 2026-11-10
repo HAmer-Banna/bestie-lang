@@ -440,12 +440,11 @@ There is no null literal. There is no nullable type. There is no way to write nu
 
 ### 4.2 `ptr<T>` — Raw Pointer
 
-`ptr<T>` is Bestie's raw, low-level pointer for direct memory operations. It can physically hold any bit pattern, including the zero address. However:
+`ptr<T>` is Bestie's raw, low-level pointer for direct memory operations. It is **never the zero address** (`memory.md` §8.7):
 
-* The zero address in a `ptr<T>` is not called "null" — it is an **invalid address**
-* `own`/`ref` code never produces a zero-address `ptr<T>`
-* The compiler's niche optimization uses the zero address bit pattern internally — this is invisible to the programmer
-* Any `ptr<T>` that might hold the zero address comes from `foreign` code or `@trusted` operations — both are explicit in source
+* Every way to make a `ptr<T>` either targets live storage (`.address()`) or checks for zero (`ptr<T>.fromAddr(u)` returns `ptr<T> ?`)
+* A pointer that may be missing is `ptr<T> ?` — one word, with absent stored as zero, exactly as C stores `NULL`
+* There is no zero test on `ptr<T>`, and no "null pointer" to name
 
 ---
 
@@ -457,7 +456,7 @@ A library written in Bestie is structurally incapable of introducing null. It ca
 
 ### 4.4 FFI / Foreign C Libraries
 
-C functions that return nullable pointers are mapped to `ptr<T> ?` at the FFI boundary. The FFI layer converts C `NULL` (zero address) to absent automatically. The `null` keyword is not used in the foreign function declaration — see `std-api/foreign.md` §7.
+C functions that return nullable pointers are mapped to `ptr<T> ?` at the FFI boundary. `ptr<T> ?` stores absent as the zero address, so C `NULL` *is* absent, with no conversion. The `null` keyword is not used in the foreign function declaration — see `std-api/foreign.md` §8.
 
 ---
 

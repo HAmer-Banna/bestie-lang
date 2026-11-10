@@ -598,7 +598,7 @@ foreign var __ebss: byte
 
 @section(".vector_table") @used
 export(c) val VECTORS: array<foreign fn() -> void>[] = {
-    @trusted __stack_top.address().toCode<foreign fn() -> void>(),   // word 0: initial stack pointer
+    __stack_top.address().toCode<foreign fn() -> void>(),            // word 0: initial stack pointer
     reset,
     defaultHandler,                                                   // NMI
     defaultHandler,                                                   // HardFault

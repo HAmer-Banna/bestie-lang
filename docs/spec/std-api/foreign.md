@@ -245,7 +245,7 @@ defer buf.free()                  // runs deinit(), which calls C free()
 
 ## 8. No-Null Guarantee Preservation
 
-Bestie has no `null`, no `nil`, and no nullable pointer type. These concepts do not exist in the language. A `ptr<T>` in Bestie code is always treated as a valid address — it is programmer responsibility to not construct an invalid one.
+Bestie has no `null`, no `nil`, and no nullable pointer type. These concepts do not exist in the language. A `ptr<T>` is never the zero address (`core/memory.md` §8.7); a pointer that may be missing is `ptr<T> ?`.
 
 C APIs routinely return nullable pointers. At the FFI boundary, Bestie maps them to `ptr<T> ?`:
 
@@ -254,9 +254,11 @@ C APIs routinely return nullable pointers. At the FFI boundary, Bestie maps them
 foreign fun getenv(name: ptr<const byte>): ptr<byte> ?
 ```
 
-The FFI layer performs the mapping automatically:
-- C `NULL` (zero address) → absent
-- Any non-zero C pointer → present
+`ptr<T> ?` is one word and stores absent as the zero address (`core/memory-layout.md` §11), so the mapping costs nothing — the bits cross unchanged:
+- C `NULL` (zero address) ↔ absent
+- Any non-zero C pointer ↔ present
+
+The same holds inside data. A `@repr(C)` field that C may set to `NULL` is declared `ptr<T> ?` and keeps C's layout: one pointer, no tag byte.
 
 The caller handles the result like any other `T ?`:
 
@@ -271,7 +273,7 @@ if (val p = getenv(key[0].address())) {
 }
 ```
 
-**`null` is not a keyword, a type, a value, or a literal in Bestie.** It cannot appear anywhere in Bestie source code. Any C function that may return `NULL` must be declared with `ptr<T> ?` as its return type — the compiler rejects a bare `ptr<T>` return for known-nullable C functions.
+**`null` is not a keyword, a type, a value, or a literal in Bestie.** It cannot appear anywhere in Bestie source code. Any C function that may return `NULL` must be declared with `ptr<T> ?` as its return type — the compiler rejects a bare `ptr<T>` return for known-nullable C functions. A declaration that says `ptr<T>` where C can produce `NULL` breaks the never-zero rule, as any wrong `foreign` type breaks the program; `bestie bind` (`vision.md` C1) declares every C pointer it cannot prove non-null as `ptr<T> ?`.
 
 No implicit null propagation is possible because null does not exist to propagate.
 
