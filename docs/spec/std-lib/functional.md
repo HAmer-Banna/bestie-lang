@@ -221,7 +221,7 @@ Choose it only when the slot's callable type varies at run time. A field of one 
 
 Functional operations work on anything satisfying `Iterable<T>` (`utils.md` §2):
 
-* every `list` / `set` / `map` / `deque` / `heap` variation, including `.immutable`
+* every `list` / `set` / `map` / `deque` / `priorityQueue` variation, including `.immutable`
 * core `array<T>`, `slice<T>`, and `range<T>`
 
 That reach is the reason the constraint is written as `impl Iterable<T>` rather than as a concrete parameter type — a `list<int>` parameter could take none of the others.

@@ -99,6 +99,7 @@ The low-level features, placed by that rule:
 | `atomic<T>`, `Isolated<T>`, `Aligned<T, A>` | Std-lib | Types built on core |
 | `GlobalAllocator` | Std-lib | Cited by core, so its name and shape are frozen (§12) |
 | Typed allocation — `create`, `destroy`, `createSlice`, `destroySlice` | Std-lib | Methods on `GlobalAllocator` (`std-lib/allocators.md` §4a.1.1) |
+| `heap` — the program's allocator | Std-lib | A zero-sized forwarder to the registered or default allocator (`std-lib/allocators.md` §4a.3) |
 | `Arena`, `FixedBuffer`, `Debug` | Std-lib | Allocation strategies |
 | MMIO, volatile, barriers | Std-api (`bestie.api.memory`) | Device access, supplied by the platform; available freestanding |
 
@@ -141,7 +142,7 @@ Provides **high-level utilities** without system dependency.
 
 - `algorithms` — sorting, searching, utilities
 - `allocators` — Arena, FixedBuffer, Debug
-- `collections` — set, map, deque, heap
+- `collections` — list, set, map, deque, priorityQueue
 - `functional` — map, filter, fold, composition
 - `math` — numeric operations, matrices, linear algebra
 - `datetime` — date/time
@@ -158,7 +159,7 @@ Provides **high-level utilities** without system dependency.
 - Closed but not sealed
 - Evolves conservatively
 - Purely library-level (no OS/file/network runtime). `concurrency` may include a fiber scheduler, linked only when `fiber` is used.
-- Foundational abstractions use lowercase (`set`, `map`, `list`, `deque`, `heap`)
+- Foundational abstractions use lowercase (`set`, `map`, `list`, `deque`, `priorityQueue`, `heap`)
 - Nominal concrete types use PascalCase (`StringBuilder`, `Date`, `Command`)
 - Requires `import`
 - Imported via:

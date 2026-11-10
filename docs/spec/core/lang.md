@@ -604,7 +604,7 @@ All dynamic and higher-level collections live in `bestie.lib.collections`, inclu
 * `set<T>`
 * `map<K,V>`
 * `deque<T>`
-* `heap<T>`
+* `priorityQueue<T>` — `max` or `min` ordering
 
 Example:
 

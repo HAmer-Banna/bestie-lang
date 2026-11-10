@@ -204,7 +204,7 @@ An `immutable class` may not declare `var` fields or `var` properties, and may n
 
 ## 7. Std-Lib Collections
 
-`list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` are reference-type `class` instances. Immutability is selected as a **variation** (`std-lib/collections.md`):
+`list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, and `priorityQueue<T>` are reference-type `class` instances. Immutability is selected as a **variation** (`std-lib/collections.md`):
 
 | Declaration | Rebind? | Mutate? |
 | ----------- | ------- | ------- |
@@ -270,7 +270,7 @@ frozen.add(3)                        // ❌ 'add' is not available
 | `slice<T>` | core view | ❌ (`slice<var T>` ✅) | ✅ | n/a — use `slice<T>` | ❌ |
 | `class` / `open` / `abstract` | class | ✅ | ❌ reference only | ✅ `immutable class` | ❌ |
 | `list<T>` `set<T>` `map<K,V>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ✅ literal only |
-| `deque<T>` `heap<T>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ❌ |
+| `deque<T>` `priorityQueue<T>` | std-lib class | ✅ | ❌ binding only | ✅ `.immutable` variation | ❌ |
 | `ptr<T>` | raw pointer | ✅ | ❌ no rebind only | n/a — use `ptr<const T>` | ❌ |
 | `ptr<const T>` | pointer-to-const | ❌ through it | binding: depends | n/a | ❌ |
 | `T ?` / `T ! E` | core syntax | variant: ❌ / contents: depends | depends on `T` | follows `T` | ❌ |

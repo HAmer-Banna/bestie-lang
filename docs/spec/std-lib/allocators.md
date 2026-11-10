@@ -29,7 +29,7 @@ They do not change the core memory model.
 
 ## 1.1 Class Kinds and Ownership Rationale
 
-All three allocator types in this package are **`class`** — not `value class` or `data class`.
+The three strategy allocators in this package — `Arena`, `FixedBuffer`, `Debug` — are **`class`**, not `value class` or `data class`. (`Heap`, §4a.3, is a zero-sized `value class`: it holds no state, and forwards to the program's allocator.)
 
 The reasoning applies uniformly:
 
@@ -184,15 +184,16 @@ fun <T> destroySlice(s: slice<var T>): void
 ```
 
 ```bestie
-@globalAllocator
-val HEAP = BumpHeap.new()                // freestanding.md §3.4
+import bestie.lib.allocators.heap        // the program's allocator (§4a.3)
 
-val p   = HEAP.create(42) ?: panic("out of memory")                  // ptr<int>
-val buf = HEAP.createSlice(4096, fill: 0 as byte) ?: panic("out of memory")
+val p   = heap.create(42) ?: panic("out of memory")                  // ptr<int>
+val buf = heap.createSlice(4096, fill: 0 as byte) ?: panic("out of memory")
 buf[0] = 0x7F
-HEAP.destroySlice(buf)
-HEAP.destroy(p)
+heap.destroySlice(buf)
+heap.destroy(p)
 ```
+
+The same four methods exist on any other `GlobalAllocator`, so code written against one allocator moves to another by changing the receiver.
 
 | C | Bestie |
 |---|---|
@@ -210,8 +211,6 @@ Rules:
 * `createSlice` panics on negative `n`. `n == 0` gives an empty slice without allocating; `destroySlice` of an empty slice does nothing.
 * `destroy` and `destroySlice` must receive memory from the same allocator, unchanged. That is the programmer's to uphold; `Debug` (§4) reports violations.
 
-**Open:** the name under which a hosted program reaches its allocator when it registered none of its own — the default allocator — is not yet chosen.
-
 ### 4a.2 `Aligned<T, const A: int>`
 
 A `value class` holding one `T` with alignment `A`, a power of two from `1` to `65536`. Its size is `sizeOf(T)` rounded up to `A`.
@@ -223,11 +222,34 @@ table.val[0] = entry
 
 It exists for hardware that requires alignment — page tables, DMA descriptors, interrupt vector tables — and is the alignment counterpart of `Isolated<T>` (`concurrency.md` §5.2): the cost is visible in the type, never added by default, and there is no `@align` annotation (`core/memory-layout.md` §14).
 
+### 4a.3 `Heap` and `heap` — The Program's Allocator
+
+`heap` is the allocator every Bestie program already has: the one `Type.new()`, the collections, and `str` concatenation allocate from. It gives code a name for it, so raw memory comes from the same place as everything else.
+
+```bestie
+value class Heap impl GlobalAllocator     // no fields: sizeOf(Heap) == 0
+val heap = Heap.new()
+```
+
+```bestie
+import bestie.lib.allocators.heap
+
+val node = heap.create(Node.new(value: 1)) ?: panic("out of memory")   // Node is a value class
+```
+
+Rules:
+
+* **`heap` forwards to the registered allocator.** With a `@globalAllocator` binding (`core/freestanding.md` §3.4), `heap.alloc` and `heap.free` call it; without one, on a hosted target, they call the default allocator. The program has exactly one registration, known at compile time, so each call is a direct call — no indirection, no function pointer.
+* **`Heap` is zero-sized.** It has no state of its own, so `heap` costs nothing to copy or pass. A generic function that takes an allocator — `fun <A: GlobalAllocator> build(a: A)` — accepts `heap` like any other.
+* **Freestanding without an allocator.** Calling `heap` on a freestanding target with no registered allocator is the same compile-time error as any other heap allocation (`core/freestanding.md` §3.4).
+* **`heap` cannot be registered.** `@globalAllocator` on a binding of type `Heap` is a compile-time error: it would forward to itself.
+* **Naming.** `heap` is lowercase, like the other foundational names (`platform.md` §2); `Heap` is its nominal type. The priority-queue collection is `priorityQueue<T>` (`collections.md`), so the word has one meaning in Bestie: memory.
+
 ---
 
 ## 5. Relationship to Other Layers
 
-* `bestie.lib.allocators` provides strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`)
+* `bestie.lib.allocators` provides the program's allocator (`heap`), strategy-level allocators (`Arena`, `FixedBuffer`, `Debug`), and typed allocation on all of them
 * `bestie.api.memory` provides platform and hardware memory APIs (MMIO, regions, volatile operations)
 * Core language remains unchanged: ownership and explicit unsafe boundaries still define correctness
 
@@ -237,6 +259,8 @@ It exists for hardware that requires alignment — page tables, DMA descriptors,
 
 The allocators package provides:
 
+* The program's allocator (`heap`)
+* Typed allocation — `create`, `destroy`, `createSlice`, `destroySlice` — on every `GlobalAllocator`
 * Region allocation (`Arena`)
 * Fixed-capacity allocation (`FixedBuffer`)
 * Allocation diagnostics (`Debug`)

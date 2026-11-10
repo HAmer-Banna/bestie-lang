@@ -139,7 +139,7 @@ Heap allocation goes through the program's **global allocator**: the default siz
 import bestie.lib.allocators.GlobalAllocator
 
 @globalAllocator
-val HEAP = BumpHeap.new()
+val BUMP = BumpHeap.new()
 
 value class BumpHeap impl GlobalAllocator {
     fun alloc(size: uint, align: uint): ptr<byte> ? { ... }
@@ -152,6 +152,7 @@ Rules:
 * The registered binding is a module-level `val` whose type implements `GlobalAllocator` (`std-lib/allocators.md`). Its state lives in atomics or `global<T>` storage (§3.5), because the allocator may be called from any thread or interrupt.
 * `free` receives the size and alignment the object was allocated with. Deallocation is **sized** everywhere in Bestie (`memory-layout.md` §10), so an allocator never needs a header to find an object's size.
 * At most one `@globalAllocator` per program. On a hosted target, one replaces the default — the usual reason being a trading or game process that wants its own allocator for everything.
+* Code reaches the program's allocator — registered or default — as `heap` from `bestie.lib.allocators` (`std-lib/allocators.md` §4a.3): `heap.create(v)` takes raw memory from the same place `.new()` does.
 * **On a freestanding target with no allocator, any heap allocation is a compile-time error**, reported at the allocating call with the chain that reached it:
 
 ```

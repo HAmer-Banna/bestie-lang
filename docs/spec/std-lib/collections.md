@@ -4,7 +4,7 @@ This document defines the **Bestie collections** provided by the standard librar
 Collections are **generic, type-safe, deterministic, and ownership-aware**, with **explicit construction rules** and **compile-time guarantees**.
 
 Core Bestie provides `array<T>[N]` — a static, C-layout array whose length is part of its type, defined in `core/types.md` §5.
-This document covers the standard-library collection layer: `list<T>`, `set`, `map`, `deque`, and `heap`.
+This document covers the standard-library collection layer: `list<T>`, `set`, `map`, `deque`, and `priorityQueue`.
 
 ---
 
@@ -12,7 +12,7 @@ This document covers the standard-library collection layer: `list<T>`, `set`, `m
 
 ### Class kind
 
-All five standard-library collection types — `list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, `heap<T>` — are **`class`**.
+All five standard-library collection types — `list<T>`, `set<T>`, `map<K,V>`, `deque<T>`, `priorityQueue<T>` — are **`class`**.
 
 They are not `value class` or `data class` because:
 
@@ -34,7 +34,7 @@ A collection's ownership of its elements is determined by the element type's `ow
 | `set<own User>` | The set **owns** each `User` instance. `freeDeep()` frees all elements. |
 | `set<ref User>` | The set holds **non-owning handles**. It is not responsible for freeing them. |
 
-The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for both key and value types where applicable.
+The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `priorityQueue<T>` for both key and value types where applicable.
 
 ---
 
@@ -46,7 +46,7 @@ The same rule applies to `list<T>`, `map<K,V>`, `deque<T>`, and `heap<T>` for bo
 | `set<T>`   | `hash` `tree` `linked` | —      | `hash`  |
 | `map<K,V>` | `hash` `tree` `linked` | —      | `hash`  |
 | `deque<T>` | —              | `queue` `stack` | full deque |
-| `heap<T>`  | —              | —               | ❌ `max` or `min` required |
+| `priorityQueue<T>` | —        | —               | ❌ `max` or `min` required |
 | `bounded<T, N>` | inline, capacity `N` | — | — (a `value class`, §2b) |
 
 Every family also takes the `immutable` variation (§4).
@@ -206,7 +206,7 @@ A variation narrows a collection family to a concrete type. They are not all the
 | ---- | ---------- | ------- |
 | **Representation** | `list.linked` · `set.hash` `set.tree` `set.linked` · `map.hash` `map.tree` `map.linked` | Cost, not API |
 | **API restriction** | `deque.queue` · `deque.stack` | A narrower API, same representation |
-| **Mandatory discriminator** | `heap.max` · `heap.min` | Ordering; there is no bare `heap<T>` |
+| **Mandatory discriminator** | `priorityQueue.max` · `priorityQueue.min` | Ordering; there is no bare `priorityQueue<T>` |
 | **Mutability** | `.immutable` | Removes the mutation API (§4) |
 
 ### 3.2 Defaults
@@ -219,7 +219,7 @@ A variation narrows a collection family to a concrete type. They are not all the
 | `set<T>` | hash |
 | `map<K,V>` | hash |
 | `deque<T>` | full deque — `addFirst` / `addLast` / `removeFirst` / `removeLast` |
-| `heap<T>` | **none** — `max` or `min` must be named |
+| `priorityQueue<T>` | **none** — `max` or `min` must be named |
 
 `deque<T>.queue` restricts the API to `addLast` / `removeFirst`; `deque<T>.stack` restricts it to `addLast` / `removeLast`. The bare form is not "unrestricted queue-or-stack" — it is the full double-ended collection, and the two named variations are deliberate narrowings that make misuse a compile-time error.
 
@@ -388,7 +388,7 @@ All collections use **consistent method naming**.
 | ---------- | -------------------------------------------------------------------------- |
 | list       | `add`, `insert`, `get`, `remove`, `indexOf`, `size`, `isEmpty`             |
 | set        | `add`, `remove`, `contains`                                                |
-| heap       | `add`, `remove`, `peek`                                                    |
+| priorityQueue | `add`, `remove`, `peek`                                                  |
 | deque      | `addFirst`, `addLast`, `removeFirst`, `removeLast`, `peekFirst`, `peekLast` |
 | map        | `put`, `get`, `remove`, `containsKey`                                      |
 
